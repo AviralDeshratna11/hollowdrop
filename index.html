@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Hollowdrop: The Living Colony</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="theme-color" content="#0a1410" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<!-- On-screen error catcher: shows any JS error directly on the page, since mobile
+     devtools aren't always available. Registered before the module script so it
+     catches even a failure to load/execute main.js itself. Harmless on desktop -
+     it only ever appears if something actually throws. -->
+<div id="error-overlay"></div>
+<script>
+  (function () {
+    function showError(msg) {
+      var el = document.getElementById('error-overlay');
+      el.style.display = 'block';
+      el.textContent += msg + '\n\n';
+    }
+    window.addEventListener('error', function (e) {
+      var detail = e.error && e.error.stack ? e.error.stack : (e.message || 'Unknown error');
+      showError('ERROR: ' + detail + '\n  at ' + (e.filename || '?') + ':' + e.lineno + ':' + e.colno);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      var reason = e.reason && e.reason.stack ? e.reason.stack : e.reason;
+      showError('UNHANDLED PROMISE REJECTION: ' + reason);
+    });
+  })();
+</script>
+
+<div id="screen-fade"></div>
+<!-- One-shot warm pulse on Human Genome Fragment collection (UIManager.triggerGenomeFlash) -
+     a separate element from #screen-fade since that one is driven per-frame by death/respawn
+     and this one is a single CSS animation triggered by a class toggle. -->
+<div id="genome-flash"></div>
+
+<div id="ui-layer">
+  <!-- Single stacked column (not split left/right) so the three bars can never
+       collide horizontally, regardless of screen width or how long their text gets. -->
+  <div id="vitals-ui">
+    <div id="health-ui">
+      <span class="mass-label">Health</span>
+      <div class="mass-bar">
+        <div id="health-fill" class="mass-fill health-fill"></div>
+      </div>
+      <span id="health-text">100 / 100</span>
+    </div>
+
+    <div id="energy-ui">
+      <span class="mass-label">Energy</span>
+      <div class="mass-bar">
+        <div id="energy-fill" class="mass-fill energy-fill"></div>
+      </div>
+      <span id="energy-text">100</span>
+    </div>
+
+    <div id="mass-ui">
+      <span class="mass-label">Mass</span>
+      <div class="mass-bar">
+        <div id="mass-fill" class="mass-fill"></div>
+      </div>
+      <span id="mass-text">0 / 15</span>
+    </div>
+  </div>
+
+  <!-- Mutation countdown: hidden until Venom Rat transformation completes (see
+       PlayerFormController._startMutationTimer). Centered, stacked below the
+       Health/Energy/Mass column (see style.css) so it never overlaps it or the
+       movement area. -->
+  <div id="mutation-timer-ui">
+    <span class="mutation-timer-label">Venom Rat</span>
+    <div class="mutation-timer-bar">
+      <div id="mutation-timer-fill"></div>
+    </div>
+    <span id="mutation-timer-text">45s</span>
+  </div>
+
+  <!-- Boss HUD: hidden until an Apex encounter starts (ApexController.startEncounter),
+       stacked directly below the mutation timer per the spec's own HUD mockup. -->
+  <div id="boss-health-ui">
+    <span id="boss-health-name">Murkmaw — Apex</span>
+    <div class="boss-health-bar">
+      <div id="boss-health-fill"></div>
+    </div>
+  </div>
+
+  <!-- Rival escape channel: hidden until the Rival reaches its escape point while
+       carrying the Fragment (RivalController._beginEscapeChannel) - the player's
+       last chance to interrupt before the Fragment is lost for this attempt. -->
+  <div id="rival-escape-ui">
+    <span class="rival-escape-label">Rival Escaping</span>
+    <div class="rival-escape-bar">
+      <div id="rival-escape-fill"></div>
+    </div>
+  </div>
+
+  <div id="pickup-notification"></div>
+
+  <div id="consume-action">
+    <span id="consume-action-name"></span>
+    <button id="consume-action-button" type="button">Consume</button>
+  </div>
+
+  <div id="debug-recipe-panel"></div>
+</div>
+
+<button id="inventory-toggle" aria-label="Open inventory">
+  <span class="inventory-icon">
+    <span></span><span></span><span></span><span></span>
+  </span>
+</button>
+
+<button id="mutate-button" type="button" aria-label="Mutate">MUTATE</button>
+
+<!-- Combat: only ever visible while Venom Rat (see PlayerCombatController.setAvailable). -->
+<button id="bite-button" type="button" aria-label="Venom Bite">BITE</button>
+
+<!-- Screen-edge objective arrow (see objectiveIndicator.js) - points at extraction,
+     the Rival, or the dropped Fragment depending on who currently has it. Positioned
+     via inline style each frame, not CSS layout. -->
+<div id="objective-indicator">▲</div>
+
+<div id="inventory-overlay">
+  <div id="inventory-panel">
+    <div class="inventory-header">
+      <span class="inventory-title">Collected Items</span>
+      <button id="inventory-close" aria-label="Close inventory">
+        <span class="close-icon"></span>
+      </button>
+    </div>
+
+    <div id="inventory-grid"></div>
+
+    <div id="inventory-detail">
+      <span id="inventory-detail-name">Tap an item for details</span>
+      <span id="inventory-detail-meta"></span>
+    </div>
+
+    <div class="inventory-footer">
+      <span class="mass-label">Mass</span>
+      <div class="mass-bar">
+        <div id="inventory-mass-fill" class="mass-fill"></div>
+      </div>
+      <span id="inventory-mass-text">0 / 15</span>
+    </div>
+  </div>
+</div>
+
+<!-- Title screen: shown once on first load (see GameFlowController). The Three.js
+     world keeps rendering behind it (idle Hollowdrop at spawn) rather than a
+     separate scene, per spec section 56. -->
+<div id="title-screen">
+  <div class="title-content">
+    <h1 class="title-name">HOLLOWDROP</h1>
+    <p class="title-subtitle">The Living Colony</p>
+    <p class="title-tagline">Absorb. Adapt. Survive.</p>
+    <button id="title-begin-button" type="button">TAP TO BEGIN</button>
+  </div>
+</div>
+
+<!-- Memory Reveal: shown once, ~0.6s after the Human Genome Fragment is secured (see
+     MemorySequenceController / GameFlowController.onGenomeFragmentSecured). Content is
+     PLACEHOLDER NARRATIVE (see memorySequenceController.js's MEMORY_01) - final story
+     content is not yet defined. Captures its own input (full-screen, higher z-index
+     than every gameplay button) so a tap here can never reach movement/Bite/inventory. -->
+<div id="memory-overlay">
+  <div class="memory-visual">
+    <div class="memory-silhouette"></div>
+    <div class="memory-glow"></div>
+  </div>
+  <div class="memory-text-block">
+    <span class="memory-label">MEMORY FRAGMENT</span>
+    <h2 id="memory-title"></h2>
+    <p id="memory-text"></p>
+    <span class="memory-recovered">MEMORY RECOVERED</span>
+  </div>
+  <button id="memory-continue-button" type="button">TAP TO CONTINUE</button>
+</div>
+
+<!-- Run Complete: the prototype's ending screen (see RunCompleteController). Stats
+     rows are built in JS (UIManager._buildRunCompleteStatsHtml) since which rows show
+     depends on what actually happened this run. -->
+<div id="run-complete-overlay">
+  <div class="run-complete-panel">
+    <p class="run-complete-brand">HOLLOWDROP<br /><span>THE LIVING COLONY</span></p>
+    <h2 class="run-complete-heading">RUN COMPLETE</h2>
+    <div id="run-complete-stats"></div>
+    <button id="run-complete-play-again" type="button">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1225 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #0a1410;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
+}
+
+/* Hidden unless a JS error actually fires (see the inline script in index.html) -
+   shows the error text directly on the page for debugging without devtools access. */
+#error-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(5, 5, 8, 0.96);
+  color: #ff8080;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Death/respawn transition - opacity driven per-frame by DeathRespawnManager, not CSS. */
+#screen-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #05100c;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* UI overlay sits above the canvas but never intercepts swipe input. */
+#ui-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #eafff2;
+}
+
+/* Health, Energy, and Mass all stacked in ONE column (not split left/right) - two
+   pills anchored to opposite edges could still collide in the middle on a narrow
+   phone once their text got long enough (e.g. "7.5 / 15" + "100 / 100"), which is
+   exactly what happened. Stacking removes any possibility of horizontal collision
+   regardless of screen width. */
+#vitals-ui {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100vw - 28px);
+}
+
+#mass-ui,
+#health-ui,
+#energy-ui {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  backdrop-filter: blur(4px);
+}
+
+#mass-ui {
+  background: rgba(10, 20, 16, 0.55);
+  border: 1px solid rgba(124, 255, 178, 0.25);
+}
+
+#health-ui {
+  background: rgba(20, 10, 12, 0.55);
+  border: 1px solid rgba(255, 107, 107, 0.25);
+}
+
+#energy-ui {
+  background: rgba(20, 16, 6, 0.55);
+  border: 1px solid rgba(255, 200, 90, 0.25);
+}
+
+.health-fill {
+  background: linear-gradient(90deg, #ff6c6c, #ff9d6c);
+}
+
+.energy-fill {
+  background: linear-gradient(90deg, #ffd23f, #ffb84d);
+}
+
+/* Diegetic health mirrors onto the small HUD too: subtle at critical, a touch more urgent at severe. */
+#health-ui.health-ui--critical {
+  border-color: rgba(255, 107, 107, 0.5);
+}
+
+#health-ui.health-ui--severe {
+  border-color: rgba(255, 80, 80, 0.7);
+  animation: health-ui-pulse 1.1s ease-in-out infinite;
+}
+
+/* Same pattern for energy: low is a subtle border tint, critical/starving pulse. */
+#energy-ui.energy-ui--low {
+  border-color: rgba(255, 200, 90, 0.5);
+}
+
+#energy-ui.energy-ui--critical {
+  border-color: rgba(255, 160, 60, 0.65);
+  animation: health-ui-pulse 1.4s ease-in-out infinite;
+}
+
+#energy-ui.energy-ui--starving {
+  border-color: rgba(255, 120, 60, 0.8);
+  animation: health-ui-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes health-ui-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.mass-label {
+  opacity: 0.8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.mass-bar {
+  width: 72px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.mass-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #6cf2a4, #7cffb2);
+  transition: width 0.25s ease;
+}
+
+.mass-fill--full {
+  background: linear-gradient(90deg, #ff8f6c, #ff6c6c);
+}
+
+/* Burden urgency: 0-50% normal, 50-80% heavy, 80%+ overburdened (subtle pulse, not distracting) */
+#mass-ui.mass-ui--heavy {
+  border-color: rgba(255, 196, 108, 0.4);
+}
+
+#mass-ui.mass-ui--heavy .mass-fill {
+  background: linear-gradient(90deg, #e2d26c, #ffc46c);
+}
+
+#mass-ui.mass-ui--overburdened {
+  border-color: rgba(255, 138, 108, 0.55);
+  animation: mass-ui-pulse 1.6s ease-in-out infinite;
+}
+
+#mass-ui.mass-ui--overburdened .mass-fill {
+  background: linear-gradient(90deg, #ff8f6c, #ff6c6c);
+}
+
+@keyframes mass-ui-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+#mass-text {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  opacity: 0.9;
+  min-width: 44px;
+  text-align: right;
+}
+
+/* Mutation Timer HUD: a red metabolic countdown while Venom Rat is active - deliberately
+   distinct from the Energy bar's amber/cyan (this is mutation stability, not hunger -
+   the two are separate systems, see MUTATION_CONFIG in playerFormController.js).
+   Hidden until a mutation is actually active. */
+#mutation-timer-ui {
+  position: absolute;
+  /* Stacked below vitals-ui (Health/Energy/Mass), not top-center - at narrow mobile
+     widths the vitals column is wide enough to reach past screen-center, so a
+     centered top element would sit right on top of it (measured ~197px wide,
+     ~101px tall). Same calc(max(...) + offset) stacking idiom as #inventory-toggle. */
+  top: calc(max(14px, env(safe-area-inset-top)) + 109px);
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 18px;
+  border-radius: 14px;
+  background: rgba(20, 8, 10, 0.65);
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#mutation-timer-ui.mutation-timer-ui--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.mutation-timer-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ff8a8a;
+}
+
+.mutation-timer-bar {
+  width: 140px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+/* scaleX (not width) so the per-frame JS update stays cheap and smooth. */
+#mutation-timer-fill {
+  width: 100%;
+  height: 100%;
+  transform: scaleX(1);
+  transform-origin: left center;
+  background: linear-gradient(90deg, #ff5c5c, #ff2d2d);
+}
+
+#mutation-timer-text {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffb3b3;
+}
+
+/* LOW (<=30% remaining): subtle, controlled urgency - the Rat should still feel
+   powerful, just noticeably on the clock. */
+#mutation-timer-ui.mutation-timer-ui--low {
+  animation: mutation-timer-pulse 1.4s ease-in-out infinite;
+}
+
+/* CRITICAL (<=10% remaining): faster, stronger pulse and a brighter border. */
+#mutation-timer-ui.mutation-timer-ui--critical {
+  border-color: rgba(255, 60, 60, 0.7);
+  animation: mutation-timer-pulse 0.7s ease-in-out infinite;
+}
+
+@keyframes mutation-timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+/* Final <=3s: the number itself pulses in place - intentionally not a full-screen
+   countdown, just extra emphasis on the existing HUD element. */
+#mutation-timer-text.mutation-timer-text--final {
+  animation: mutation-timer-text-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes mutation-timer-text-pulse {
+  0%, 100% { transform: scale(1); color: #ffb3b3; }
+  50% { transform: scale(1.35); color: #ffffff; }
+}
+
+/* Boss HUD: a dedicated, more prominent bar for the Apex encounter - stacked directly
+   below the Mutation Timer (same centered stacking idiom), hidden until
+   ApexController.startEncounter() reveals it. A slightly bolder border/wider bar than
+   the mutation timer so it reads as "this is a bigger deal" without a different layout. */
+#boss-health-ui {
+  position: absolute;
+  top: calc(max(14px, env(safe-area-inset-top)) + 184px);
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 20px;
+  border-radius: 14px;
+  background: rgba(16, 6, 10, 0.7);
+  border: 1px solid rgba(255, 140, 60, 0.45);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#boss-health-ui.boss-health-ui--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#boss-health-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffb37a;
+}
+
+.boss-health-bar {
+  width: 180px;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+#boss-health-fill {
+  width: 100%;
+  height: 100%;
+  transform: scaleX(1);
+  transform-origin: left center;
+  background: linear-gradient(90deg, #ff8a3d, #ff3d3d);
+}
+
+/* Rival escape channel: stacked below the boss HUD (same centered idiom), hidden
+   until the Rival actually reaches its escape point while carrying the Fragment.
+   Smaller/more urgent-red than the boss bar - this is a ticking clock, not a fight. */
+#rival-escape-ui {
+  position: absolute;
+  top: calc(max(14px, env(safe-area-inset-top)) + 240px);
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  border-radius: 12px;
+  background: rgba(16, 6, 10, 0.7);
+  border: 1px solid rgba(255, 80, 60, 0.5);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  animation: rival-escape-pulse 0.8s ease-in-out infinite;
+}
+
+#rival-escape-ui.rival-escape-ui--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@keyframes rival-escape-pulse {
+  0%, 100% { border-color: rgba(255, 80, 60, 0.5); }
+  50% { border-color: rgba(255, 80, 60, 0.9); }
+}
+
+.rival-escape-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ff8a6a;
+}
+
+.rival-escape-bar {
+  width: 150px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+#rival-escape-fill {
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, #ff5c3d, #ff2d2d);
+}
+
+/* Screen-edge objective arrow (objectiveIndicator.js) - positioned via inline style
+   each frame (left/top/rotate), never through normal layout, since it needs to
+   track an arbitrary point clamped to the screen edge. */
+#objective-indicator {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 16;
+  font-size: 22px;
+  color: #ffcf6b;
+  text-shadow: 0 0 6px rgba(255, 207, 107, 0.7);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+#objective-indicator.objective-indicator--visible {
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   Title / Memory Reveal / Run Complete
+   ========================================================================== */
+
+/* Title screen: shown once on first load (GameFlowController). The Three.js world
+   keeps rendering behind it (idle Hollowdrop at spawn, see main.js) rather than a
+   separate scene - this is just a translucent gradient sitting on top of it. */
+#title-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 40%, rgba(10, 30, 22, 0.55), rgba(5, 10, 8, 0.92) 75%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #eafff2;
+  text-align: center;
+  padding: 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+#title-screen.title-screen--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.title-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.title-name {
+  font-size: clamp(32px, 10vw, 48px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #9dffcf;
+  text-shadow: 0 0 18px rgba(124, 255, 178, 0.55);
+  margin: 0;
+}
+
+.title-subtitle {
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  opacity: 0.75;
+  margin: 0 0 18px;
+}
+
+.title-tagline {
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.55;
+  margin: 0 0 34px;
+}
+
+#title-begin-button {
+  min-width: 220px;
+  min-height: 52px;
+  padding: 14px 32px;
+  border: 1px solid rgba(124, 255, 178, 0.5);
+  border-radius: 999px;
+  background: rgba(8, 32, 22, 0.75);
+  color: #9dffcf;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  animation: revert-button-pulse 1.8s ease-in-out infinite;
+}
+
+#title-begin-button:active {
+  background: rgba(124, 255, 178, 0.3);
+}
+
+/* Memory Reveal: full-screen, higher z-index than every gameplay button (spec section
+   19 - a tap here must never reach movement/Bite/inventory). The internal choreography
+   (fade darker -> pulse -> silhouette -> title -> text -> "MEMORY RECOVERED") is pure
+   CSS, staggered via animation-delay and triggered once by the --active class - no
+   per-frame JS drives any of it (see MemorySequenceController). */
+#memory-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 52;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: radial-gradient(circle at 50% 38%, rgba(20, 14, 30, 0.85), rgba(4, 6, 8, 0.97) 78%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+  padding: 24px;
+  font-family: system-ui, -apple-system, sans-serif;
+  text-align: center;
+  color: #eafff2;
+}
+
+#memory-overlay.memory-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.memory-visual {
+  position: relative;
+  width: 140px;
+  height: 140px;
+}
+
+/* Deliberately abstract (spec section 13/14) - no rendered figure, no specific canon,
+   just a soft human-shaped silhouette and a warm glow behind it. */
+.memory-silhouette {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 64px;
+  height: 96px;
+  border-radius: 50% 50% 45% 45% / 55% 55% 45% 45%;
+  background: rgba(234, 255, 242, 0.12);
+  filter: blur(6px);
+  opacity: 0;
+}
+
+.memory-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 224, 160, 0.5), rgba(255, 224, 160, 0) 70%);
+  opacity: 0;
+}
+
+#memory-overlay.memory-overlay--active .memory-glow {
+  animation: memory-glow-pulse 2.4s ease-out 0.15s forwards;
+}
+
+#memory-overlay.memory-overlay--active .memory-silhouette {
+  animation: memory-fade-up 1.2s ease-out 0.5s forwards;
+}
+
+@keyframes memory-glow-pulse {
+  0% { opacity: 0; transform: scale(0.7); }
+  30% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.4; transform: scale(1); }
+}
+
+.memory-text-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 340px;
+}
+
+.memory-label {
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: #ffcf6b;
+  opacity: 0;
+}
+
+#memory-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  opacity: 0;
+}
+
+#memory-text {
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-line;
+  opacity: 0.85;
+  margin: 0;
+  opacity: 0;
+}
+
+.memory-recovered {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: #9dffcf;
+  margin-top: 8px;
+  opacity: 0;
+}
+
+#memory-overlay.memory-overlay--active .memory-label { animation: memory-fade-up 0.7s ease-out 0.9s forwards; }
+#memory-overlay.memory-overlay--active #memory-title { animation: memory-fade-up 0.7s ease-out 1.15s forwards; }
+#memory-overlay.memory-overlay--active #memory-text { animation: memory-fade-up 0.7s ease-out 1.5s forwards; }
+#memory-overlay.memory-overlay--active .memory-recovered { animation: memory-fade-up 0.7s ease-out 2.4s forwards; }
+
+@keyframes memory-fade-up {
+  0% { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+#memory-continue-button {
+  min-width: 200px;
+  min-height: 48px;
+  padding: 12px 28px;
+  border: 1px solid rgba(234, 255, 242, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eafff2;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+#memory-overlay.memory-overlay--continuable #memory-continue-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#memory-continue-button:active {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Run Complete: the prototype's ending screen (RunCompleteController). */
+#run-complete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 54;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 7, 0.88);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  padding: 24px;
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+#run-complete-overlay.run-complete-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.run-complete-panel {
+  width: 100%;
+  max-width: 380px;
+  max-height: 100%;
+  overflow-y: auto;
+  background: rgba(10, 22, 18, 0.96);
+  border: 1px solid rgba(124, 255, 178, 0.25);
+  border-radius: 20px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #eafff2;
+  text-align: center;
+}
+
+.run-complete-brand {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  opacity: 0.55;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.run-complete-brand span {
+  font-size: 10px;
+}
+
+.run-complete-heading {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #9dffcf;
+  text-shadow: 0 0 14px rgba(124, 255, 178, 0.4);
+  margin: 0 0 18px;
+}
+
+#run-complete-stats {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.run-complete-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(124, 255, 178, 0.12);
+  font-size: 13px;
+}
+
+.run-complete-stat-label {
+  opacity: 0.65;
+}
+
+.run-complete-stat-value {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #ffcf6b;
+}
+
+#run-complete-play-again {
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: 999px;
+  background: #7cffb2;
+  color: #0a1410;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+#run-complete-play-again:active {
+  background: #6cf2a4;
+}
+
+#run-complete-play-again:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* One-shot warm pulse on Human Genome Fragment collection - a single CSS animation
+   triggered by toggling this class (see UIManager.triggerGenomeFlash), not driven
+   per-frame like #screen-fade. */
+#genome-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: radial-gradient(circle at center, rgba(255, 224, 160, 0.55), rgba(255, 224, 160, 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#genome-flash.genome-flash--active {
+  animation: genome-flash-pulse 0.9s ease-out;
+}
+
+@keyframes genome-flash-pulse {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+#pickup-notification {
+  position: absolute;
+  top: max(56px, calc(env(safe-area-inset-top) + 56px));
+  left: 50%;
+  transform: translate(-50%, -6px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(10, 20, 16, 0.6);
+  border: 1px solid rgba(124, 255, 178, 0.3);
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  white-space: nowrap;
+}
+
+#pickup-notification.notification--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#pickup-notification.notification--pickup {
+  color: #9dffcf;
+}
+
+#pickup-notification.notification--warning {
+  color: #ffb26c;
+  border-color: rgba(255, 178, 108, 0.35);
+}
+
+#pickup-notification.notification--hint {
+  color: #cdb8ff;
+  border-color: rgba(180, 150, 255, 0.35);
+}
+
+/* Consume action: a tiny contextual button that appears at the tapped item's own
+   screen position (set inline via JS each frame it's visible). Positioned by its
+   center so left/top can be the item's own point without extra offset math. */
+#consume-action {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -130%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: rgba(10, 20, 16, 0.85);
+  border: 1px solid rgba(124, 255, 178, 0.35);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+#consume-action.consume-action--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#consume-action-name {
+  opacity: 0.85;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#consume-action-button {
+  /* Visually small, but padding brings the real tap target up near the 44px minimum. */
+  min-width: 44px;
+  min-height: 32px;
+  padding: 6px 12px;
+  margin: -6px -2px -6px 0;
+  border: none;
+  border-radius: 999px;
+  background: #7cffb2;
+  color: #0a1410;
+  font-weight: 600;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+#consume-action-button:active {
+  background: #6cf2a4;
+}
+
+/* Inventory toggle button (bottom-right, always visible during gameplay) */
+/* Right-side stack, bottom to top: BITE (64px, the actual corner - the most
+   prominent action while it's available) -> MUTATE/REVERT (48px) -> this. */
+#inventory-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px + 12px + 48px + 12px);
+  z-index: 20;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(124, 255, 178, 0.3);
+  background: rgba(10, 20, 16, 0.6);
+  color: #9dffcf;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+#inventory-toggle:active,
+#inventory-toggle.inventory-toggle--active {
+  background: rgba(124, 255, 178, 0.25);
+  border-color: rgba(124, 255, 178, 0.6);
+}
+
+/* MUTATE/REVERT: stacked above BITE, which now takes the actual bottom-right corner
+   (see #bite-button below). Hidden until a recipe is ready / the player is the Rat. */
+#mutate-button {
+  position: fixed;
+  right: 16px;
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px + 12px);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 45, 158, 0.5);
+  border-radius: 999px;
+  background: rgba(40, 8, 28, 0.75);
+  color: #ff8ecf;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  font-family: inherit;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  animation: mutate-button-pulse 1.6s ease-in-out infinite;
+}
+
+#mutate-button.mutate-button--visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+#mutate-button:active {
+  background: rgba(255, 45, 158, 0.3);
+}
+
+@keyframes mutate-button-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 45, 158, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 45, 158, 0); }
+}
+
+/* REVERT: same button, recolored to match Slime (teal/green) instead of the venom
+   pink - a clear visual cue that tapping it undoes the mutation. */
+#mutate-button.mutate-button--revert {
+  border-color: rgba(124, 255, 178, 0.5);
+  background: rgba(8, 32, 22, 0.75);
+  color: #9dffcf;
+  animation: revert-button-pulse 1.6s ease-in-out infinite;
+}
+
+#mutate-button.mutate-button--revert:active {
+  background: rgba(124, 255, 178, 0.3);
+}
+
+@keyframes revert-button-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 255, 178, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(124, 255, 178, 0); }
+}
+
+/* BITE: the actual bottom-right corner - the primary, most-reachable action during a
+   hunt. Large (64px) per the "comfortable touch target" spec. Hidden entirely outside
+   Venom Rat form (PlayerCombatController.setAvailable). The ::after radial overlay is
+   the cooldown sweep - driven by the --cd custom property (1 = just used, 0 = ready),
+   set every frame in updateBiteCooldown(). */
+#bite-button {
+  position: fixed;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 20;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 92, 92, 0.6);
+  background: radial-gradient(circle at 35% 30%, #ff6b6b, #b3241f 70%);
+  color: #fff0ec;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+  --cd: 0;
+}
+
+#bite-button.bite-button--visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+#bite-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(rgba(5, 5, 8, 0.72) calc(var(--cd) * 360deg), transparent 0deg);
+  pointer-events: none;
+}
+
+#bite-button.bite-button--cooldown {
+  filter: saturate(0.55) brightness(0.82);
+}
+
+#bite-button:active {
+  transform: scale(0.94);
+}
+
+/* Dev-only recipe checklist (DEBUG_MUTATION). */
+#debug-recipe-panel {
+  position: absolute;
+  left: 14px;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  padding: 6px 10px;
+  background: rgba(10, 20, 16, 0.7);
+  border: 1px solid rgba(124, 255, 178, 0.25);
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-line;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#debug-recipe-panel.debug-recipe-panel--visible {
+  opacity: 1;
+}
+
+.inventory-icon {
+  display: grid;
+  grid-template-columns: repeat(2, 6px);
+  grid-template-rows: repeat(2, 6px);
+  gap: 3px;
+}
+
+.inventory-icon span {
+  background: currentColor;
+  border-radius: 2px;
+}
+
+/* Inventory panel: backdrop + bottom sheet */
+#inventory-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(4, 10, 8, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+#inventory-overlay.inventory-overlay--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#inventory-panel {
+  width: 100%;
+  max-width: 480px;
+  max-height: 72vh;
+  background: rgba(10, 22, 18, 0.96);
+  border: 1px solid rgba(124, 255, 178, 0.25);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transform: translateY(12px);
+  transition: transform 0.25s ease;
+  color: #eafff2;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+#inventory-overlay.inventory-overlay--open #inventory-panel {
+  transform: translateY(0);
+}
+
+.inventory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inventory-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+#inventory-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(124, 255, 178, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eafff2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.close-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+}
+
+.close-icon::before,
+.close-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: currentColor;
+}
+
+.close-icon::before { transform: rotate(45deg); }
+.close-icon::after { transform: rotate(-45deg); }
+
+#inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.inventory-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(124, 255, 178, 0.15);
+  border-radius: 12px;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.inventory-cell:active {
+  background: rgba(124, 255, 178, 0.15);
+}
+
+.inventory-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.inventory-cell-name {
+  font-size: 10px;
+  text-align: center;
+  opacity: 0.9;
+  line-height: 1.2;
+}
+
+.inventory-cell-count {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.inventory-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 24px 0;
+}
+
+#inventory-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  min-height: 40px;
+  justify-content: center;
+}
+
+#inventory-detail-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#inventory-detail-meta {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.inventory-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
