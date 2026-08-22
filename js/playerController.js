@@ -8,6 +8,15 @@ const LEAN_MAX_ANGLE = 0.16;              // radians, subtle lean into movement
 const SQUASH_STRETCH_AMOUNT = 0.12;       // subtle squash/stretch by speed
 const FEEL_SMOOTHING = 8.0;               // lean/squash smoothing rate
 
+// Jelly wobble (Slime form only - squashStretchMultiplier stays 1 for every other
+// form, set fresh each frame in main.js): a slow idle breathing pulse so the body
+// reads as alive even at rest, plus a bigger damped-sine jiggle (reusing the exact
+// same pulse mechanism triggerAbsorbPulse() already drives) whenever it comes to a
+// sudden stop - the classic jello overshoot-and-settle.
+const IDLE_WOBBLE_SPEED = 2.4;
+const IDLE_WOBBLE_AMOUNT = 0.03;
+const STOP_JIGGLE_DECEL_THRESHOLD = 10.0; // units/sec^2 - only a real stop triggers it, not normal easing
+
 // Yaw: rotates the root to face the direction of travel. Invisible on the symmetric
 // slime sphere, but required once an asymmetric visual (Venom Rat) is active - without
 // it the model would always face its default -Z regardless of which way it's moving.
@@ -73,6 +82,12 @@ export class PlayerController {
     this._pulseTime = null;
     this._load = 0;
     this._facingAngle = 0; // rotation.y - which way the model is facing
+
+    // Set fresh every frame by main.js from the current form (1 for everything except
+    // Slime) - see the jelly-wobble constants above.
+    this.squashStretchMultiplier = 1.0;
+    this._wobbleTime = 0;
+    this._lastSpeed = 0;
 
     this._hitFlashTime = null;
     this._healthRatio = 1;
@@ -184,6 +199,7 @@ export class PlayerController {
     this._currentBurdenScale.set(1, 1, 1);
     this._targetBurdenScale.set(1, 1, 1);
     this._load = 0;
+    this._lastSpeed = 0;
   }
 
   _applyDeathAnimation(deltaTime) {
@@ -356,11 +372,26 @@ export class PlayerController {
       this.mesh.rotation.y = this._facingAngle;
     }
 
+    // Jelly wobble - idle breathing pulse (only meaningfully visible at rest, since
+    // the speed-driven squash below dominates while moving) plus an automatic jiggle
+    // on a sudden stop. Both gated behind squashStretchMultiplier > 1 so every other
+    // form (multiplier left at the default 1) is completely unaffected.
+    this._wobbleTime += deltaTime;
+    const idleWobble =
+      this.squashStretchMultiplier > 1
+        ? Math.sin(this._wobbleTime * IDLE_WOBBLE_SPEED) * IDLE_WOBBLE_AMOUNT * (this.squashStretchMultiplier - 1)
+        : 0;
+    const decelRate = deltaTime > 0 ? (this._lastSpeed - speed) / deltaTime : 0;
+    if (this.squashStretchMultiplier > 1 && decelRate > STOP_JIGGLE_DECEL_THRESHOLD && this._pulseTime === null) {
+      this.triggerAbsorbPulse();
+    }
+    this._lastSpeed = speed;
+
     // Single combined scale point: movement squash/stretch * absorb-or-expel pulse * burden body shape.
     this._currentBurdenScale.lerp(this._targetBurdenScale, smooth);
     const pulse = this._getPulseFactor(deltaTime);
-    const squashY = 1 - speedRatio * SQUASH_STRETCH_AMOUNT * wobbleBoost * 0.6;
-    const stretchXZ = 1 + speedRatio * SQUASH_STRETCH_AMOUNT * wobbleBoost;
+    const squashY = 1 - speedRatio * SQUASH_STRETCH_AMOUNT * wobbleBoost * this.squashStretchMultiplier * 0.6 + idleWobble;
+    const stretchXZ = 1 + speedRatio * SQUASH_STRETCH_AMOUNT * wobbleBoost * this.squashStretchMultiplier - idleWobble * 0.5;
 
     const targetScaleY = this._baseScale.y * squashY * (1 + pulse) * this._currentBurdenScale.y;
     const targetScaleXZ = this._baseScale.x * stretchXZ * (1 - pulse * 0.5) * this._currentBurdenScale.x;

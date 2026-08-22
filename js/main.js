@@ -14,6 +14,7 @@ import { MetabolismSystem, DEBUG_METABOLISM } from './metabolismSystem.js';
 import { MutationSystem, DEBUG_MUTATION } from './mutationSystem.js';
 import { PlayerFormController, MUTATION_CONFIG, PLAYER_FORMS, DEBUG_MUTATION_TIMER } from './playerFormController.js';
 import { createRatMesh } from './ratModel.js';
+import { loadRimuruSlimeVisual } from './playerSlimeModel.js';
 import { PreyManager, DEBUG_PREY } from './preyManager.js';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js';
 import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js';
@@ -76,6 +77,16 @@ const player = new THREE.Group();
 player.position.set(0, PLAYER_RADIUS, 0);
 scene.add(player);
 
+// Slime form visual - a wrapper Group (not a bare Mesh) so the Rimuru Slime GLB can be
+// dropped in once it finishes loading (see the loadRimuruSlimeVisual() call below)
+// without touching anything else that references slimeVisual - PlayerFormController
+// only ever touches .visible/.scale, both plain Object3D properties present on a
+// Group exactly like a Mesh. Starts holding a plain sphere placeholder (identical to
+// the model it replaces) so the player is never invisible even on a slow load; it's
+// swapped out in-place the moment the GLB is ready.
+const slimeVisual = new THREE.Group();
+player.add(slimeVisual);
+
 const slimeMaterial = new THREE.MeshStandardMaterial({
   color: 0x7cffb2,
   transparent: true,
@@ -85,8 +96,8 @@ const slimeMaterial = new THREE.MeshStandardMaterial({
   emissive: 0x1c6b45,
   emissiveIntensity: 0.4,
 });
-const slimeVisual = new THREE.Mesh(new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32), slimeMaterial);
-player.add(slimeVisual);
+const slimePlaceholderMesh = new THREE.Mesh(new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32), slimeMaterial);
+slimeVisual.add(slimePlaceholderMesh);
 
 const ratVisual = createRatMesh();
 const ratMaterial = ratVisual.userData.bodyMaterial;
@@ -213,6 +224,32 @@ const playerFormController = new PlayerFormController({
   ratVisual,
   ratMaterial,
 });
+
+// Swap the placeholder sphere for the real Rimuru Slime model once it's loaded
+// (usually well under a second locally - the Title screen's own "Tap To Begin" wait
+// naturally masks this in practice). Reaches directly into the already-constructed
+// playerFormController/playerController instances rather than re-plumbing their
+// constructors, since main.js's own `slimeMaterial` const was only ever a snapshot
+// passed in at construction time - reassigning it here wouldn't update either.
+loadRimuruSlimeVisual(PLAYER_RADIUS)
+  .then(({ group, bodyMaterial }) => {
+    slimeVisual.remove(slimePlaceholderMesh);
+    slimePlaceholderMesh.geometry.dispose();
+    slimeMaterial.dispose();
+    slimeVisual.add(group);
+
+    playerFormController.slimeMaterial = bodyMaterial;
+    // Only re-point the live glow/hit-flash target if Slime is actually showing right
+    // now - if the player somehow already mutated before the load finished, the new
+    // material takes effect correctly the next time they revert (forceResetToSlime()/
+    // _updateReverting() both read playerFormController.slimeMaterial fresh).
+    if (playerFormController.currentForm === PLAYER_FORMS.SLIME) {
+      playerController.setActiveMaterial(bodyMaterial);
+    }
+  })
+  .catch((err) => {
+    console.error('Failed to load Rimuru Slime model - keeping the placeholder sphere.', err);
+  });
 
 // Wired here (not at MutationSystem construction) so the callback can close over
 // playerFormController, which doesn't exist yet at that point.
@@ -667,6 +704,9 @@ function animate() {
   // never multiplied onto a running total, so repeated mutate/revert cycles can't stack.
   playerController.movementSpeedMultiplier = playerFormController.getSpeedMultiplier() * burdenSystem.speedMultiplier;
   playerController.accelerationMultiplier = playerFormController.getAccelerationMultiplier() * burdenSystem.accelerationMultiplier;
+  // Jelly wobble only for Slime (the Rimuru model) - Venom Rat keeps its own leg-swing/
+  // bob idle animation untouched (PlayerFormController._updateRatIdle).
+  playerController.squashStretchMultiplier = playerFormController.currentForm === PLAYER_FORMS.SLIME ? 1.8 : 1.0;
 
   playerHealth.update(deltaTime);
   // Same "recompute fresh every frame" rule as the movement multipliers above - the
