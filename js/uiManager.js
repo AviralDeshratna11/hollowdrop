@@ -113,10 +113,12 @@ export class UIManager {
   }
 
   /** Shows the MUTATE button. `onMutate` is (re)bound each call so callers don't
-   *  need to manage their own listener lifecycle. */
+   *  need to manage their own listener lifecycle. The button's markup carries both the
+   *  mutate and revert icons already (index.html) - which one is visible is pure CSS,
+   *  keyed off the same mutate-button--revert class this toggles, so recipe.name isn't
+   *  needed here any more (the icon doesn't vary per-recipe; this prototype only has one). */
   showMutationReady(recipe, onMutate) {
     if (!this.mutateButton) return;
-    this.mutateButton.textContent = `MUTATE: ${recipe.name}`;
     this.mutateButton.classList.remove('mutate-button--revert');
     this.mutateButton.classList.add('mutate-button--visible');
     this._bindActionButton(onMutate);
@@ -130,7 +132,6 @@ export class UIManager {
    *  action slot in the bottom-right corner rather than two buttons competing for it. */
   showRevertReady(onRevert) {
     if (!this.mutateButton) return;
-    this.mutateButton.textContent = 'REVERT';
     this.mutateButton.classList.add('mutate-button--revert', 'mutate-button--visible');
     this._bindActionButton(onRevert);
   }
@@ -312,6 +313,17 @@ export class UIManager {
 
   hideTitleScreen() {
     this.titleScreen?.classList.remove('title-screen--visible');
+  }
+
+  /** Toggled while GameFlowController is waiting on the player model to finish loading
+   *  after a tap (see main.js's `slimeReady` wiring) - keeps the Title screen up with a
+   *  clear "still working" state instead of the button looking unresponsive to a second
+   *  tap. Text is restored on the way out so a later run (there is only ever one Title
+   *  screen per session, but this keeps the button honest regardless) doesn't inherit it. */
+  setTitleLoading(isLoading) {
+    if (!this.titleBeginButton) return;
+    this.titleBeginButton.disabled = isLoading;
+    this.titleBeginButton.textContent = isLoading ? 'LOADING…' : 'TAP TO BEGIN';
   }
 
   /**

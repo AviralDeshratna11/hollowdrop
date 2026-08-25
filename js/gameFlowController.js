@@ -32,12 +32,17 @@ export const GAME_FLOW_CONFIG = {
  * ApexController.startEncounter() rather than owning the encounter itself.
  */
 export class GameFlowController {
-  constructor({ uiManager, memorySequenceController, runCompleteController, runStats, resetGame }) {
+  constructor({ uiManager, memorySequenceController, runCompleteController, runStats, resetGame, slimeReady }) {
     this.uiManager = uiManager;
     this.memorySequenceController = memorySequenceController;
     this.runCompleteController = runCompleteController;
     this.runStats = runStats;
     this._resetGame = resetGame;
+    // Resolves once the player's real model has loaded (or failed to - it always
+    // resolves, see playerSlimeModel.js) - defaults to already-resolved so this class
+    // still works if a caller doesn't have a model load to wait on.
+    this._slimeReady = slimeReady ?? Promise.resolve();
+    this._awaitingSlime = false;
 
     this.state = GAME_STATES.TITLE;
     this._runEndingStarted = false;
@@ -46,7 +51,23 @@ export class GameFlowController {
     this._resetPhase = null; // 'fadeOut' | 'fadeIn' | null
     this._resetTimer = 0;
 
-    this.uiManager.showTitleScreen(() => this._beginFirstRun());
+    this.uiManager.showTitleScreen(() => this._handleBeginTap());
+  }
+
+  /** The Title button's actual tap handler - only ever transitions to PLAYING through
+   *  _beginFirstRun() below, but first makes sure the player's real model has actually
+   *  arrived, so a fast tap never leaves the placeholder sphere as the first thing the
+   *  player ever sees in-game (see playerSlimeModel.js's own note on why `ready` is
+   *  guaranteed to resolve either way, never hang). */
+  _handleBeginTap() {
+    if (this.state !== GAME_STATES.TITLE || this._awaitingSlime) return;
+    this._awaitingSlime = true;
+    this.uiManager.setTitleLoading(true);
+    this._slimeReady.then(() => {
+      this._awaitingSlime = false;
+      this.uiManager.setTitleLoading(false);
+      this._beginFirstRun();
+    });
   }
 
   _beginFirstRun() {

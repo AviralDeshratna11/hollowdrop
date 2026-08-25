@@ -651,6 +651,14 @@ html, body {
   background: rgb(var(--accent-rgb) / 0.3);
 }
 
+/* Shown briefly while GameFlowController waits on the player model to finish loading
+   after a tap (see uiManager.setTitleLoading) - reads as "still working", not broken. */
+#title-begin-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+  animation: none;
+}
+
 /* Memory Reveal: full-screen, higher z-index than every gameplay button (spec section
    19 - a tap here must never reach movement/Bite/inventory). The internal choreography
    (fade darker -> pulse -> silhouette -> title -> text -> "MEMORY RECOVERED") is pure
@@ -1074,25 +1082,31 @@ html, body {
   border-color: rgb(var(--accent-rgb) / 0.6);
 }
 
+/* Shared icon sizing for every action-stack button's inline SVG - fill: currentColor
+   means each button's own `color` (set per state below) tints its icon automatically,
+   with no separate icon-color rule needed anywhere. */
+.action-icon {
+  width: 60%;
+  height: 60%;
+  overflow: visible;
+}
+
 /* MUTATE/REVERT: stacked above BITE, which now takes the actual bottom-right corner
-   (see #bite-button below). Hidden until a recipe is ready / the player is the Rat. */
+   (see #bite-button below). Hidden until a recipe is ready / the player is the Rat.
+   No fill background by request - just the ring + icon, so the game world stays
+   visible through it like the reference badge style. */
 #mutate-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-width: 60px;
-  min-height: 60px;
-  padding: 10px 18px;
-  border: 1px solid rgb(var(--mutation-rgb) / 0.5);
-  border-radius: var(--radius-pill);
-  background: var(--surface-mutate);
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 2px solid rgb(var(--mutation-rgb) / 0.6);
+  border-radius: 50%;
+  background: none;
   color: var(--mutation-text);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.03em;
-  font-family: inherit;
-  backdrop-filter: blur(var(--blur-hud));
   cursor: pointer;
   opacity: 0;
   transform: scale(0.85);
@@ -1108,7 +1122,7 @@ html, body {
 }
 
 #mutate-button:active {
-  background: rgb(var(--mutation-rgb) / 0.3);
+  background: rgb(var(--mutation-rgb) / 0.18);
 }
 
 @keyframes mutate-button-pulse {
@@ -1117,17 +1131,22 @@ html, body {
 }
 
 /* REVERT: same button, recolored to match Slime (teal/green) instead of the venom
-   pink - a clear visual cue that tapping it undoes the mutation. */
+   pink - a clear visual cue that tapping it undoes the mutation. Which of the two
+   layered icons shows is decided here too, purely by CSS - showMutationReady()/
+   showRevertReady() only ever toggle this one class. */
 #mutate-button.mutate-button--revert {
-  border-color: rgb(var(--accent-rgb) / 0.5);
-  background: var(--surface-button);
+  border-color: rgb(var(--accent-rgb) / 0.6);
   color: var(--accent-bright);
   animation: revert-button-pulse 1.6s ease-in-out infinite;
 }
 
 #mutate-button.mutate-button--revert:active {
-  background: rgb(var(--accent-rgb) / 0.3);
+  background: rgb(var(--accent-rgb) / 0.18);
 }
+
+.action-icon--revert { display: none; }
+#mutate-button.mutate-button--revert .action-icon--mutate { display: none; }
+#mutate-button.mutate-button--revert .action-icon--revert { display: block; }
 
 @keyframes revert-button-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / 0.35); }
@@ -1136,20 +1155,16 @@ html, body {
 
 /* BITE: the actual bottom-right corner - the primary, most-reachable action during a
    hunt. Large (64px) per the "comfortable touch target" spec. Hidden entirely outside
-   Venom Rat form (PlayerCombatController.setAvailable). The ::after radial overlay is
-   the cooldown sweep - driven by the --cd custom property (1 = just used, 0 = ready),
-   set every frame in updateBiteCooldown(). */
+   Venom Rat form (PlayerCombatController.setAvailable). No fill background by request -
+   the ::after cooldown sweep still works the same way, just over a transparent button
+   instead of the old red gradient. */
 #bite-button {
   width: 64px;
   height: 64px;
   border-radius: 50%;
   border: 2px solid var(--border-bite);
-  background: radial-gradient(circle at 35% 30%, var(--danger-btn), var(--danger-deep) 70%);
-  color: var(--danger-text);
-  font-weight: 800;
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  font-family: inherit;
+  background: none;
+  color: var(--danger-btn);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1184,6 +1199,7 @@ html, body {
 
 #bite-button:active {
   transform: scale(0.94);
+  background: rgb(var(--danger-hot-rgb) / 0.18);
 }
 
 /* Dev-only recipe checklist (DEBUG_MUTATION). */
