@@ -1,5 +1,8 @@
 const NOTIFICATION_VISIBLE_MS = 700;
+const NOTIFICATION_GAP_MS = 140;  // breathing room between queued toasts
+const NOTIFICATION_QUEUE_MAX = 4; // past this, older messages describe a state that has moved on
 const HINT_VISIBLE_MS = 1600;
+const HEAVY_HINT_VISIBLE_MS = 2600; // longer: it is the one hint that teaches a hidden gesture
 const DISSOLVED_VISIBLE_MS = 1800;
 const NOT_EDIBLE_VISIBLE_MS = 900;
 const ENERGY_FULL_VISIBLE_MS = 900;
@@ -33,6 +36,15 @@ export class UIManager {
     this.notification = document.getElementById('pickup-notification');
     this.screenFade = document.getElementById('screen-fade');
     this._notificationTimeout = null;
+    this.infoCard = document.getElementById('info-card');
+    this.infoCardKicker = document.getElementById('info-card-kicker');
+    this.infoCardTitle = document.getElementById('info-card-title');
+    this.infoCardBody = document.getElementById('info-card-body');
+    this.infoCardList = document.getElementById('info-card-list');
+    this.infoCardCost = document.getElementById('info-card-cost');
+    this.infoCardContinue = document.getElementById('info-card-continue');
+    this._notificationQueue = [];
+    this._notificationActive = false;
     // Only for dismissTransientUI()'s defensive hide - InventoryInteractionController
     // remains the sole owner of this element's content/positioning/candidate state.
     this.consumeActionEl = document.getElementById('consume-action');
@@ -302,6 +314,45 @@ export class UIManager {
     this.titleScreen?.classList.remove('title-screen--visible');
   }
 
+  /**
+   * Shows the shared info card - used for the opening objective and for the
+   * post-transformation reveal. One element serves both because they are the same
+   * shape and GameFlowController's states guarantee only one can be up at a time.
+   *
+   * @param kicker  small label above the heading
+   * @param title   heading
+   * @param body    one or two sentences
+   * @param list    optional bullet points (what a form grants)
+   * @param cost    optional emphasised line (what it costs you)
+   */
+  showInfoCard({ kicker = '', title = '', body = '', list = [], cost = '' }, onContinue) {
+    if (!this.infoCard) return;
+    this.infoCardKicker.textContent = kicker;
+    this.infoCardTitle.textContent = title;
+    this.infoCardBody.textContent = body;
+    this.infoCardCost.textContent = cost;
+    this.infoCardCost.style.display = cost ? '' : 'none';
+
+    this.infoCardList.innerHTML = '';
+    for (const entry of list) {
+      const li = document.createElement('li');
+      li.textContent = entry;
+      this.infoCardList.appendChild(li);
+    }
+    this.infoCardList.style.display = list.length ? '' : 'none';
+
+    this.infoCard.classList.add('info-card--visible');
+    this.infoCardContinue.onclick = (e) => {
+      e.preventDefault();
+      onContinue?.();
+    };
+  }
+
+  hideInfoCard() {
+    this.infoCard?.classList.remove('info-card--visible');
+    if (this.infoCardContinue) this.infoCardContinue.onclick = null;
+  }
+
   /** Reveals the Memory overlay and fills in its (placeholder) content - the actual
    *  reveal choreography (fade/pulse/silhouette/staggered text) is pure CSS, driven
    *  entirely by the --active class toggle here (see style.css). `onContinue` is
@@ -384,6 +435,10 @@ export class UIManager {
    *  separate, deliberately session-persistent concern (see MetabolismSystem). */
   dismissTransientUI() {
     clearTimeout(this._notificationTimeout);
+    // The queue has to be emptied too, not just the visible toast - otherwise messages
+    // pending from the previous run drain into the new one seconds after Play Again.
+    this._notificationQueue.length = 0;
+    this._notificationActive = false;
     this.notification?.classList.remove('notification--visible');
     this.consumeActionEl?.classList.remove('consume-action--visible');
     this.debugRecipePanel?.classList.remove('debug-recipe-panel--visible');
@@ -482,15 +537,46 @@ export class UIManager {
 
   /** One-time tutorial hint the first time BurdenSystem reports the heavy threshold reached. */
   showHeavyHint() {
-    this._showNotification('Swipe an item out to move faster', 'notification--hint', HINT_VISIBLE_MS);
+    // Teaches the long-press wheel at the exact moment it becomes useful, which is the
+    // only genuinely undiscoverable control in the game. This previously read "Swipe an
+    // item out to move faster" and was simply false once swipe-to-expel was removed - it
+    // sent the player hunting for a gesture that no longer exists.
+    this._showNotification('Too heavy \u2014 hold on your body to open the wheel and drop something', 'notification--hint', HEAVY_HINT_VISIBLE_MS);
   }
 
   // Reuses a single element so rapid messages update/restart the toast instead of stacking.
+  /**
+   * Queues a toast rather than replacing whatever is on screen.
+   *
+   * This used to clearTimeout the previous message and overwrite it immediately, which
+   * meant that in a busy moment - absorbing an item while going heavy while energy runs
+   * low while the Rival arrives - the player saw only whichever fired last and every
+   * other hint was silently destroyed. Several of those are one-time tutorial hints that
+   * never come back, so they were being lost permanently.
+   *
+   * The queue is capped: past a few pending messages the information is stale by the
+   * time it would appear, and a long backlog would keep talking about things that
+   * stopped being true. Newest wins in that case, since it describes the current state.
+   */
   _showNotification(text, variant, duration) {
     if (!this.notification) return;
-    clearTimeout(this._notificationTimeout);
 
-    this.notification.textContent = text;
+    this._notificationQueue.push({ text, variant, duration });
+    if (this._notificationQueue.length > NOTIFICATION_QUEUE_MAX) {
+      this._notificationQueue.splice(0, this._notificationQueue.length - NOTIFICATION_QUEUE_MAX);
+    }
+    if (!this._notificationActive) this._drainNotificationQueue();
+  }
+
+  _drainNotificationQueue() {
+    const next = this._notificationQueue.shift();
+    if (!next) {
+      this._notificationActive = false;
+      return;
+    }
+    this._notificationActive = true;
+
+    this.notification.textContent = next.text;
     this.notification.classList.remove(
       'notification--pickup',
       'notification--warning',
@@ -498,10 +584,13 @@ export class UIManager {
       'notification--visible'
     );
     void this.notification.offsetWidth; // force reflow so re-triggering the same variant still animates
-    this.notification.classList.add(variant, 'notification--visible');
+    this.notification.classList.add(next.variant, 'notification--visible');
 
+    clearTimeout(this._notificationTimeout);
     this._notificationTimeout = setTimeout(() => {
       this.notification.classList.remove('notification--visible');
-    }, duration);
+      // Short beat between messages so two in a row read as two, not as one flicker.
+      this._notificationTimeout = setTimeout(() => this._drainNotificationQueue(), NOTIFICATION_GAP_MS);
+    }, next.duration);
   }
 }

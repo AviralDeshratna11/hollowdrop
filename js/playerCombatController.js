@@ -47,6 +47,10 @@ export class PlayerCombatController {
   constructor({ playerController, damageableSources, uiManager }) {
     this.playerController = playerController;
     this.damageableSources = damageableSources;
+    // Optional feedback hooks, assigned post-construction in main.js. Declared here
+    // so the shape of this class is visible without reading performHitCheck().
+    this.onHit = null;             // (entity, damage) - once per target per attack
+    this.onAttackConnected = null; // () - once per attack that hit anything
     this.uiManager = uiManager;
 
     this.attackState = ATTACK_STATES.READY;
@@ -168,6 +172,11 @@ export class PlayerCombatController {
           attackType: 'venom_bite',
           knockbackForce: VENOM_BITE_CONFIG.knockbackForce,
         });
+        // Per-target feedback hook (optional, assigned in main.js like this project's
+        // other post-construction wiring). Fires once per entity per attack - the
+        // _hitTargetsThisAttack guard above already prevents repeats - so a damage
+        // number can't double up on a single target from one bite.
+        this.onHit?.(entity, VENOM_BITE_CONFIG.damage);
         hitAny = true;
       }
     }
@@ -175,6 +184,10 @@ export class PlayerCombatController {
     if (hitAny) {
       playBiteHitSound();
       triggerCombatHaptic();
+      // Aggregate hook: fires once per connecting attack no matter how many targets
+      // were caught, so impact feedback (hitstop, shake) doesn't multiply when a
+      // single bite happens to clip two beetles at once.
+      this.onAttackConnected?.();
     }
     // Miss: cooldown/animation still ran, nothing refunded (spec section 24) - simply nothing more to do here.
   }

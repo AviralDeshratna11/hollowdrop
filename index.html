@@ -112,16 +112,23 @@
   <div id="debug-recipe-panel"></div>
 </div>
 
-<button id="inventory-toggle" aria-label="Open inventory">
-  <span class="inventory-icon">
-    <span></span><span></span><span></span><span></span>
-  </span>
-</button>
+<!-- Bottom-right action stack. These three were previously three independently
+     position:fixed buttons, each hand-adding the pixel heights of the ones below it
+     to its own `bottom` offset - so changing any button's height silently broke the
+     others' alignment. They're a flex column now: DOM order IS stack order (top to
+     bottom), and spacing comes from one `gap`. -->
+<div id="action-stack">
+  <button id="inventory-toggle" aria-label="Open inventory">
+    <span class="inventory-icon">
+      <span></span><span></span><span></span><span></span>
+    </span>
+  </button>
 
-<button id="mutate-button" type="button" aria-label="Mutate">MUTATE</button>
+  <button id="mutate-button" type="button" aria-label="Mutate">MUTATE</button>
 
-<!-- Combat: only ever visible while Venom Rat (see PlayerCombatController.setAvailable). -->
-<button id="bite-button" type="button" aria-label="Venom Bite">BITE</button>
+  <!-- Combat: only ever visible while Venom Rat (see PlayerCombatController.setAvailable). -->
+  <button id="bite-button" type="button" aria-label="Venom Bite">BITE</button>
+</div>
 
 <!-- Screen-edge objective arrow (see objectiveIndicator.js) - points at extraction,
      the Rival, or the dropped Fragment depending on who currently has it. Positioned
@@ -138,6 +145,16 @@
     </div>
 
     <div id="inventory-grid"></div>
+
+    <!-- Mutation codex. The panel already exists as the "what am I carrying" view; this
+         makes it also the "what can I become" reference, rather than adding a third
+         inventory UI on top of the grid and the radial wheel. Division of labour: the
+         WHEEL is the fast in-play action (long-press, expel under pressure), the PANEL
+         is what you open when you are safe and want to read. -->
+    <div id="codex-section">
+      <span class="codex-heading">Mutations</span>
+      <div id="codex-list"></div>
+    </div>
 
     <div id="inventory-detail">
       <span id="inventory-detail-name">Tap an item for details</span>
@@ -183,6 +200,22 @@
     <span class="memory-recovered">MEMORY RECOVERED</span>
   </div>
   <button id="memory-continue-button" type="button">TAP TO CONTINUE</button>
+</div>
+
+<!-- Info card: one reusable overlay for both the opening objective and the
+     post-transformation reveal. Deliberately a single element rather than two, because
+     they are the same shape - heading, body, tap to continue - and only ever one can be
+     on screen at a time (GameFlowController's state machine guarantees it). Sits above
+     every gameplay button so a tap here can never reach movement or the action stack. -->
+<div id="info-card">
+  <div class="info-card-panel">
+    <span id="info-card-kicker" class="info-card-kicker"></span>
+    <h2 id="info-card-title"></h2>
+    <p id="info-card-body"></p>
+    <ul id="info-card-list"></ul>
+    <p id="info-card-cost" class="info-card-cost"></p>
+    <button id="info-card-continue" type="button">CONTINUE</button>
+  </div>
 </div>
 
 <!-- Run Complete: the prototype's ending screen (see RunCompleteController). Stats

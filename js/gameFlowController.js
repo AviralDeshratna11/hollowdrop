@@ -4,6 +4,10 @@ export const GAME_STATES = {
   TITLE: 'title',
   PLAYING: 'playing',
   MEMORY: 'memory',
+  // A transformation reveal. Separate from MEMORY rather than reusing it so the two can
+  // never fight over the same state: MEMORY belongs to the run's ending and hands off to
+  // RUN_COMPLETE, whereas a REVEAL always returns to PLAYING.
+  REVEAL: 'reveal',
   RUN_COMPLETE: 'run_complete',
   RESETTING: 'resetting',
 };
@@ -37,6 +41,7 @@ export class GameFlowController {
 
     this.state = GAME_STATES.TITLE;
     this._runEndingStarted = false;
+    this._hasShownOpening = false;
     this._memoryDelayTimer = null;
     this._resetPhase = null; // 'fadeOut' | 'fadeIn' | null
     this._resetTimer = 0;
@@ -50,6 +55,7 @@ export class GameFlowController {
     this.state = GAME_STATES.PLAYING;
     resetRunStats(this.runStats);
     this.runStats.runStartTime = performance.now();
+    this.onFirstRunBegun?.();
   }
 
   /** The ONE authoritative entry point for the ending - wire this to
@@ -102,6 +108,7 @@ export class GameFlowController {
       if (this._resetTimer >= duration) {
         this._resetGame();
         this._runEndingStarted = false;
+    this._hasShownOpening = false;
         resetRunStats(this.runStats);
         this.runStats.runStartTime = performance.now();
         this._resetPhase = 'fadeIn';
@@ -123,5 +130,37 @@ export class GameFlowController {
   /** Wired from MemorySequenceController's onFinished. */
   handleMemoryFinished() {
     this._showResults();
+  }
+
+  /**
+   * Pauses play and shows a card describing a form the player just became.
+   *
+   * Refuses while the run is ending. Securing the Fragment can land in the same breath as
+   * a mutation completing, and the ending must win - a reveal that interrupted it would
+   * strand the player in REVEAL with no path back to the results screen.
+   */
+  showReveal(card) {
+    if (this._runEndingStarted) return false;
+    if (this.state !== GAME_STATES.PLAYING) return false;
+
+    this.state = GAME_STATES.REVEAL; // freezes gameplay THIS frame, same gate as MEMORY
+    this.uiManager.showInfoCard(card, () => {
+      this.uiManager.hideInfoCard();
+      // Only resume if nothing else claimed the state while the card was up.
+      if (this.state === GAME_STATES.REVEAL) this.state = GAME_STATES.PLAYING;
+    });
+    return true;
+  }
+
+  /** The opening objective card. Shown once per session, not once per run - a player
+   *  hitting Play Again does not need to be told the goal again. */
+  showOpeningObjective(card) {
+    if (this._hasShownOpening) return;
+    this._hasShownOpening = true;
+    this.state = GAME_STATES.REVEAL;
+    this.uiManager.showInfoCard(card, () => {
+      this.uiManager.hideInfoCard();
+      if (this.state === GAME_STATES.REVEAL) this.state = GAME_STATES.PLAYING;
+    });
   }
 }
