@@ -1,15 +1,9 @@
 import * as THREE from 'three';
 import { RESOURCE_TYPES } from './resourceTypes.js';
-import { EXPEL_PHYSICS } from './resourceManager.js';
 import { DEBUG_BURDEN } from './burdenSystem.js';
 
-export const EXPEL_CONFIG = {
+export const ITEM_TOUCH_CONFIG = {
   itemTouchRadiusPx: 34, // generous screen-space touch target - items render only a few px across
-  minDistance: 40, // px
-  minSpeed: 0.25, // px/ms
-  maxGestureTime: 700, // ms
-  outwardDot: 0.3,
-  previewMaxOffset: 0.22, // local units the item shifts toward the membrane while dragging
   selectionScaleBoost: 1.1,
 };
 
@@ -20,22 +14,28 @@ export const CONSUME_CONFIG = {
   digestionDuration: 0.45, // seconds, item-toward-core shrink/fade
 };
 
-// Reused scratch objects - hit-testing and the world-direction conversion only run
-// on pointerdown/pointerup (not per-frame), but kept allocation-free regardless.
+// Reused scratch objects - hit-testing runs on pointerdown/up rather than per frame,
+// but is kept allocation-free regardless.
 const tempProjectVec = new THREE.Vector3();
-const tempWorldRight = new THREE.Vector3();
-const tempWorldForward = new THREE.Vector3();
-const tempWorldDir = new THREE.Vector3();
-const tempSpawnPos = new THREE.Vector3();
-const tempLocalDir = new THREE.Vector3();
 const ZERO_VECTOR = new THREE.Vector3(0, 0, 0); // digestion target: the slime's own local core
 
 /**
- * Owns the second swipe gesture: touching a resource visible inside Hollowdrop
- * and dragging it back out through the membrane. Registers its own
- * pointermove/up/cancel listeners on the canvas, but only acts on the pointer it
- * claimed via tryBeginExpel() - which InputController calls as a gesture guard
- * before starting a movement drag, giving item-selection priority over movement.
+ * Touching a resource visible inside Hollowdrop, to eat it.
+ *
+ * Registers its own pointermove/up/cancel listeners on the canvas but only acts on the
+ * pointer it claimed via tryBeginItemTouch() - which InputController calls as a gesture
+ * guard before starting a movement drag, giving item selection priority over movement.
+ *
+ * SWIPE-TO-EXPEL WAS REMOVED. This class used to own a second gesture: drag an item
+ * outward through the membrane to eject it. It is gone at the user's request, which
+ * frees the outward-drag on the body for other gestures.
+ *
+ * Consequence worth knowing: dropping cargo is now only possible by dying
+ * (DeathRespawnManager scatters a fraction of the inventory via
+ * resourceManager.spawnDroppedResource, a separate path that is unaffected). A player
+ * who over-collects has no deliberate way to shed weight and recover speed, which is
+ * the mechanic Stage 2 of the Player Journey Map is built on. If expelling comes back,
+ * it should hang off the inventory UI rather than a body gesture.
  */
 export class InventoryInteractionController {
   constructor({ canvas, camera, player, inventoryManager, resourceManager, uiManager, playerController, metabolismSystem, mutationSystem, playerRadius }) {
@@ -57,7 +57,6 @@ export class InventoryInteractionController {
     this.currentX = 0;
     this.currentY = 0;
     this.startTime = 0;
-    this.outwardScreenDir = { x: 0, y: -1 };
     this.hasExpelledOnce = false;
     this.hasConsumedOnce = false;
 
@@ -95,7 +94,7 @@ export class InventoryInteractionController {
   }
 
   /** Gesture guard called by InputController on pointerdown. Returns true if claimed. */
-  tryBeginExpel(event) {
+  tryBeginItemTouch(event) {
     // Any new touch elsewhere dismisses a pending Consume action (tap-elsewhere,
     // movement-start, and another item gesture are all just "a new pointerdown").
     this._hideConsumeAction();
@@ -111,20 +110,6 @@ export class InventoryInteractionController {
     this.startX = this.currentX = event.clientX;
     this.startY = this.currentY = event.clientY;
     this.startTime = performance.now();
-
-    const playerScreen = this._worldPositionToScreen(this.player.position);
-    let dx = this.startX - playerScreen.x;
-    let dy = this.startY - playerScreen.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1e-3) {
-      dx = 0;
-      dy = -1;
-    } else {
-      dx /= len;
-      dy /= len;
-    }
-    this.outwardScreenDir.x = dx;
-    this.outwardScreenDir.y = dy;
 
     if (this.canvas.setPointerCapture) {
       try {
@@ -144,7 +129,7 @@ export class InventoryInteractionController {
   _hitTestItem(clientX, clientY) {
     let nearest = null;
     let nearestDistSq = Infinity;
-    const thresholdSq = EXPEL_CONFIG.itemTouchRadiusPx * EXPEL_CONFIG.itemTouchRadiusPx;
+    const thresholdSq = ITEM_TOUCH_CONFIG.itemTouchRadiusPx * ITEM_TOUCH_CONFIG.itemTouchRadiusPx;
 
     for (const item of this.inventoryManager.items) {
       item.visualMesh.getWorldPosition(tempProjectVec);
@@ -169,34 +154,15 @@ export class InventoryInteractionController {
     };
   }
 
+  // Tracked only so _onPointerEnd can tell a tap from a drag; nothing is previewed
+  // any more now that dragging an item outward does nothing.
   _onPointerMove(event) {
     if (this.selectedItem === null || event.pointerId !== this.pointerId) return;
     event.preventDefault();
     this.currentX = event.clientX;
     this.currentY = event.clientY;
-    this._updatePreview();
   }
 
-  /** Anticipation while dragging: item shifts toward the membrane along its own resting
-   *  direction from the slime's center, clamped - it doesn't follow the finger exactly
-   *  and can't escape until the gesture is confirmed. */
-  _updatePreview() {
-    const item = this.selectedItem;
-    const dx = this.currentX - this.startX;
-    const dy = this.currentY - this.startY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const t = Math.min(dist / EXPEL_CONFIG.minDistance, 1);
-
-    tempLocalDir.copy(item.basePosition);
-    if (tempLocalDir.lengthSq() < 1e-6) tempLocalDir.set(0, 1, 0);
-    tempLocalDir.normalize();
-
-    item.visualMesh.position.set(
-      item.basePosition.x + tempLocalDir.x * EXPEL_CONFIG.previewMaxOffset * t,
-      item.basePosition.y + tempLocalDir.y * EXPEL_CONFIG.previewMaxOffset * t,
-      item.basePosition.z + tempLocalDir.z * EXPEL_CONFIG.previewMaxOffset * t
-    );
-  }
 
   _onPointerEnd(event) {
     if (this.selectedItem === null || event.pointerId !== this.pointerId) return;
@@ -207,36 +173,19 @@ export class InventoryInteractionController {
     const dy = this.currentY - this.startY;
     const dist = Math.sqrt(dx * dx + dy * dy);
     const elapsed = performance.now() - this.startTime;
-    const speed = elapsed > 0 ? dist / elapsed : 0;
 
-    let outwardDot = -1;
-    if (dist > 1e-3) {
-      outwardDot = (dx / dist) * this.outwardScreenDir.x + (dy / dist) * this.outwardScreenDir.y;
-    }
-
-    const validSwipe =
-      dist >= EXPEL_CONFIG.minDistance &&
-      speed >= EXPEL_CONFIG.minSpeed &&
-      elapsed <= EXPEL_CONFIG.maxGestureTime &&
-      outwardDot > EXPEL_CONFIG.outwardDot;
-
-    // A tap (small travel, short duration) and a valid swipe (>= minDistance) are
-    // mutually exclusive by threshold, so there's no ambiguity between the two branches.
+    // Only one outcome left: a tap brings up Consume. Anything draggier is simply
+    // released, since there is no longer an outward gesture for it to become.
     const isTap = dist <= CONSUME_CONFIG.tapMaxDistancePx && elapsed <= CONSUME_CONFIG.tapMaxDurationMs;
 
-    if (validSwipe) {
-      if (DEBUG_BURDEN) console.log('Expel gesture valid');
-      this._confirmExpel(item, dx, dy, dist);
-    } else if (isTap) {
-      this._cancelExpel(item); // snap back to resting position - tap doesn't expel
+    this._returnItemToRest(item);
+    if (isTap) {
       const config = RESOURCE_TYPES[item.type];
       if (config.edible) {
         this._showConsumeAction(item);
       } else {
         this.uiManager.showNotEdible(item.name);
       }
-    } else {
-      this._cancelExpel(item); // ambiguous gesture (too slow/far to be a tap, not far enough to expel)
     }
 
     this._resetGestureState();
@@ -245,7 +194,7 @@ export class InventoryInteractionController {
   /** Safety hook for external callers (e.g. the inventory panel opening mid-gesture,
    *  or DeathRespawnManager when the player dies). */
   cancelActiveGesture() {
-    if (this.selectedItem) this._cancelExpel(this.selectedItem);
+    if (this.selectedItem) this._returnItemToRest(this.selectedItem);
     this._resetGestureState();
     this._hideConsumeAction();
     this._digestingItem = null; // death already wipes the whole inventory separately
@@ -330,7 +279,7 @@ export class InventoryInteractionController {
     if (DEBUG_BURDEN) console.log(`Consumed ${item.name} (+${config.energyValue} energy)`);
   }
 
-  _cancelExpel(item) {
+  _returnItemToRest(item) {
     item.visualMesh.position.copy(item.basePosition);
   }
 
@@ -346,41 +295,6 @@ export class InventoryInteractionController {
     this.pointerId = null;
   }
 
-  _confirmExpel(item, screenDx, screenDy, screenDist) {
-    const dirX = screenDx / screenDist;
-    const dirY = screenDy / screenDist;
-
-    // Screen swipe -> world ground direction via the camera's own basis (section 24):
-    // camera-right maps to screen-right, camera-forward (flattened) maps to screen-up.
-    this.camera.getWorldDirection(tempWorldForward);
-    tempWorldForward.y = 0;
-    tempWorldForward.normalize();
-    tempWorldRight.crossVectors(tempWorldForward, this.camera.up).normalize();
-
-    tempWorldDir
-      .set(0, 0, 0)
-      .addScaledVector(tempWorldRight, dirX)
-      .addScaledVector(tempWorldForward, -dirY)
-      .normalize();
-
-    tempSpawnPos.set(
-      this.player.position.x + tempWorldDir.x * this.playerRadius,
-      EXPEL_PHYSICS.groundRestHeight + 0.25,
-      this.player.position.z + tempWorldDir.z * this.playerRadius
-    );
-
-    this.resourceManager.spawnDroppedResource(item.type, tempSpawnPos, tempWorldDir);
-    this.resourceManager.particles.spawnOutwardBurst(tempSpawnPos, tempWorldDir, RESOURCE_TYPES[item.type].color);
-
-    this.inventoryManager.removeItem(item.id);
-    this.uiManager.updateMassUI(this.inventoryManager.getInventoryWeight(), this.inventoryManager.maxWeight);
-    this.playerController.triggerAbsorbPulse();
-    this.mutationSystem?.onInventoryChanged();
-    this.hasExpelledOnce = true;
-    this._scaleAnimItem = null; // that mesh is disposed now, stop animating its scale
-
-    if (DEBUG_BURDEN) console.log(`Expelled ${item.name}`);
-  }
 
   /** Smoothly scales the selected item up (and back down again after release) - the
    *  only visual selection feedback, kept diegetic per spec (no menus/outlines). Also
@@ -390,7 +304,7 @@ export class InventoryInteractionController {
 
     if (this.selectedItem) {
       this._scaleAnimItem = this.selectedItem;
-      this._lerpItemScale(this.selectedItem, EXPEL_CONFIG.selectionScaleBoost, smooth);
+      this._lerpItemScale(this.selectedItem, ITEM_TOUCH_CONFIG.selectionScaleBoost, smooth);
     } else if (this._scaleAnimItem) {
       const done = this._lerpItemScale(this._scaleAnimItem, 1, smooth);
       if (done) this._scaleAnimItem = null;

@@ -1,16 +1,46 @@
 export const DEBUG_MUTATION = false;
 
+/**
+ * Every player transformation, its cost in absorbed material, and what it actually does.
+ *
+ * `grants` and `cost` exist so the codex and the post-transformation reveal can describe
+ * a form without either of them hardcoding strings about game balance. The numbers they
+ * describe live in playerFormController.js's FORM_CONFIG - if those change, these lines
+ * must change with them; they are documentation of behaviour, not the source of it.
+ */
 export const MUTATION_RECIPES = {
   venomRat: {
     id: 'venomRat',
     name: 'Venom Rat',
+    tagline: 'A hunter\u2019s body, borrowed.',
     ingredients: {
       rat_dna: 1,
       toxic_spore: 1,
       mushroom: 1,
     },
+    grants: [
+      '25% faster, and quicker to accelerate',
+      'Venom Bite \u2014 the only way to kill',
+      'Prey flees from you at a distance',
+    ],
+    cost: 'Burns energy 50% faster, and holds for only 45 seconds.',
   },
 };
+
+/**
+ * Forms the player cannot become yet.
+ *
+ * These are shown in the codex as locked, deliberately. The design doc names the Stage 3
+ * hook as "wanting to find the ingredients to mutate again" - an empty codex with one
+ * entry gives that nothing to aim at, whereas a visible locked slot does exactly the job
+ * the document asks for. They are NOT implemented: nothing here is craftable, and
+ * FIRE_LIZARD in particular currently belongs to the Rival (see RIVAL_FORMS in
+ * rivalController.js), not to the player.
+ */
+export const LOCKED_MUTATIONS = [
+  { name: 'Ember Lizard', hint: 'Something the Rival knows and you do not.' },
+  { name: 'Unknown Strain', hint: 'Undiscovered.' },
+];
 
 // Optional hooks, currently silent - lets audio be added later without touching this logic.
 function playMutationReadySound() {}

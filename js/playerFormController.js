@@ -110,6 +110,9 @@ export class PlayerFormController {
     // (getBitePose()) from _updateRatIdle, never written to - keeps this class the
     // sole writer of ratVisual's transform even while a bite animation is playing.
     this.playerCombatController = null;
+    // Optional, wired in main.js - fires when a transformation completes.
+    this.onTransformed = null;
+    this._completedRecipe = null;
 
     this.currentForm = PLAYER_FORMS.SLIME;
     this.state = TRANSFORM_STATES.SLIME;
@@ -385,6 +388,10 @@ export class PlayerFormController {
         this.uiManager.showRevertReady(() => this.revertToSlime());
         this._startMutationTimer(); // movement is already unlocked by this point (state left MUTATING)
         playMutationCompleteSound();
+        // The single moment a transformation is actually complete - not the MUTATE press,
+        // which can still be interrupted. Fires once per form per run; the recipe is
+        // consumed by now so _pendingRecipe is read before it is cleared.
+        this.onTransformed?.(this._completedRecipe ?? null);
         if (DEBUG_MUTATION) console.log('Form changed:\nSLIME -> VENOM_RAT');
       }
     }
@@ -394,6 +401,7 @@ export class PlayerFormController {
    *  where they're actually removed (exactly once) and the visual swap happens. */
   _completeFusionPhase() {
     for (const item of this._fusingItems) item.isFusing = false;
+    this._completedRecipe = this._pendingRecipe; // kept for the post-transform reveal
     this.mutationSystem.consumeIngredients(this._pendingRecipe);
     this._fusingItems = [];
     this._fusingStartPositions.clear();

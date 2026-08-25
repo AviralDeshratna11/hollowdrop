@@ -22,6 +22,7 @@ export function createFireLizardMesh() {
   const group = new THREE.Group();
 
   const bodyMaterial = new THREE.MeshStandardMaterial({
+    flatShading: true,
     color: 0x1c0e0a,
     roughness: 0.55,
     metalness: 0.1,
@@ -72,7 +73,7 @@ export function createFireLizardMesh() {
   cheekRight.scale.setScalar(0.7);
   group.add(throatGland, cheekLeft, cheekRight);
 
-  const legMaterial = new THREE.MeshStandardMaterial({ color: 0x140a08, roughness: 0.85 });
+  const legMaterial = new THREE.MeshStandardMaterial({ flatShading: true, color: 0x140a08, roughness: 0.85 });
   const legOffsets = [
     [-0.26, 0.22],
     [0.26, 0.22],
@@ -89,6 +90,7 @@ export function createFireLizardMesh() {
   });
 
   const spikeMaterial = new THREE.MeshStandardMaterial({
+    flatShading: true,
     color: 0x1c0e0a,
     roughness: 0.6,
     emissive: 0xb2340f,
@@ -105,7 +107,7 @@ export function createFireLizardMesh() {
     spikes.push(spike);
   }
 
-  const tailMaterial = new THREE.MeshStandardMaterial({ color: 0x1c0e0a, roughness: 0.6, emissive: 0x8a2a0f, emissiveIntensity: 0.3 });
+  const tailMaterial = new THREE.MeshStandardMaterial({ flatShading: true, color: 0x1c0e0a, roughness: 0.6, emissive: 0x8a2a0f, emissiveIntensity: 0.3 });
   const tailPivot = new THREE.Group();
   tailPivot.position.set(0, 0.3, 0.55);
   group.add(tailPivot);

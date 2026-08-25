@@ -1,3 +1,141 @@
+/* ==========================================================================
+   Typefaces (self-hosted)
+   --------------------------------------------------------------------------
+   Syne for display, Space Grotesk for UI. Both are SIL Open Font License 1.1
+   and are served from this repo's own fonts/ directory rather than a CDN - the
+   project already can't run offline because three.js and GLTFLoader are loaded
+   from jsdelivr, and adding a third remote origin (plus a render-blocking font
+   fetch) would make that worse on exactly the flaky mobile connections this
+   game is built for. Both files are variable fonts covering their whole weight
+   range, so the entire typographic system is two files, 36KB combined.
+
+   font-display: swap so text paints immediately in the fallback and re-renders
+   when the face arrives - never an invisible HUD on a slow connection.
+   ========================================================================== */
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('fonts/space-grotesk-latin.woff2') format('woff2');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Syne';
+  src: url('fonts/syne-latin.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ==========================================================================
+   Design tokens
+   --------------------------------------------------------------------------
+   Every colour in this file resolves from here. Two kinds of token:
+
+   *-rgb tokens hold bare channels and are consumed as rgb(var(--x) / <alpha>).
+   That exists because the accent green alone was written out at ten different
+   opacities as ten separate rgba() literals; now one hue drives all of them.
+
+   Named solids are one colour each. Where several tokens are obvious neighbours
+   (--danger, --danger-alt, --danger-mid, --danger-hot ... nine reds in total,
+   and eight ambers) that is NOT a mistake being preserved for its own sake - the
+   file really did accumulate that many near-duplicates, and giving each a name
+   keeps the current pixels exactly as they were while making the drift visible.
+   Collapsing them is a deliberate design decision, and now a one-line one.
+   ========================================================================== */
+:root {
+  /* Channel families - use as rgb(var(--accent-rgb) / 0.25) */
+  --accent-rgb: 124 255 178;
+  --white-rgb: 255 255 255;
+  --text-rgb: 234 255 242;
+  --mutation-rgb: 255 45 158;
+  --glow-warm-rgb: 255 224 160;
+  --surface-rgb: 10 20 16;
+  --danger-soft-rgb: 255 107 107;
+  --danger-hot-rgb: 255 80 60;
+  --danger-flat-rgb: 255 80 80;
+  --warning-amber-rgb: 255 200 90;
+  --shadow-rgb: 5 5 8;
+
+  /* Core */
+  --bg: #0a1410;
+  --bg-deep: #05100c;
+  --text: #eafff2;
+  --white: #ffffff;
+
+  /* Accent - the player's own identity colour */
+  --accent: #7cffb2;
+  --accent-bright: #9dffcf;
+  --accent-dim: #6cf2a4;
+
+  /* Danger / health */
+  --danger: #ff6c6c;
+  --danger-bright: #ff2d2d;
+  --danger-warm: #ff8f6c;
+  --danger-pale: #ffb3b3;
+  --danger-btn: #ff6b6b;
+  --danger-alt: #ff5c5c;
+  --danger-hot: #ff3d3d;
+  --danger-soft: #ff8a8a;
+  --danger-mid: #ff8080;
+  --danger-deep: #b3241f;
+  --danger-text: #fff0ec;
+  --danger-ember: #ff8a6a;
+  --danger-flame: #ff5c3d;
+
+  /* Warning / energy / extraction */
+  --warning: #ffcf6b;
+  --warning-soft: #ffc46c;
+  --warning-warm: #ffb26c;
+  --warning-ember: #ff9d6c;
+  --warning-pale: #ffb37a;
+  --warning-hot: #ff8a3d;
+  --warning-dim: #e2d26c;
+  --energy: #ffd23f;
+  --energy-warm: #ffb84d;
+
+  /* Identity accents */
+  --mutation-text: #ff8ecf;
+  --memory: #cdb8ff;
+  --memory-glow: rgba(180, 150, 255, 0.35);
+
+  /* Component surfaces - each is the background of exactly one element */
+  --surface-panel: rgba(10, 22, 18, 0.96);
+  --surface-button: rgba(8, 32, 22, 0.75);
+  --surface-memory: rgba(4, 6, 8, 0.97);
+  --surface-memory-visual: rgba(20, 14, 30, 0.85);
+  --surface-title: rgba(5, 10, 8, 0.92);
+  --surface-title-glow: rgba(10, 30, 22, 0.55);
+  --surface-run-complete: rgba(4, 8, 7, 0.88);
+  --surface-inventory-scrim: rgba(4, 10, 8, 0.6);
+  --surface-mutate: rgba(40, 8, 28, 0.75);
+  --surface-boss: rgba(16, 6, 10, 0.7);
+  --surface-mutation-timer: rgba(20, 8, 10, 0.65);
+  --surface-health: rgba(20, 10, 12, 0.55);
+  --surface-energy: rgba(20, 16, 6, 0.55);
+
+  /* Single-use state borders + glows */
+  --border-starving: rgba(255, 120, 60, 0.8);
+  --border-energy-critical: rgba(255, 160, 60, 0.65);
+  --border-extraction: rgba(255, 207, 107, 0.7);
+  --border-danger-hot: rgba(255, 60, 60, 0.7);
+  --border-bite: rgba(255, 92, 92, 0.6);
+  --glow-energy-critical: rgba(255, 140, 60, 0.45);
+  --glow-extraction: rgba(255, 196, 108, 0.4);
+  --glow-warning-soft: rgba(255, 178, 108, 0.35);
+  --glow-warning-ember: rgba(255, 138, 108, 0.55);
+
+  /* Typography */
+  --font-ui: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-display: 'Syne', 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Geometry - the HUD's shared shape language */
+  --radius-pill: 999px;
+  --blur-hud: 4px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -9,10 +147,18 @@ html, body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  background: #0a1410;
+  background: var(--bg);
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* The UI font belongs on the root, not only on #ui-layer. #inventory-toggle,
+     #mutate-button and #bite-button are direct children of <body> - outside
+     #ui-layer entirely - and each declares `font-family: inherit`. With no font set
+     here, all three inherited the document default and rendered in TIMES: the three
+     most-pressed buttons in the game were in a serif. Setting it here fixes them
+     through the inheritance they already asked for, rather than by adding another
+     per-button declaration. */
+  font-family: var(--font-ui);
 }
 
 #game-canvas {
@@ -29,9 +175,9 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 999;
-  background: rgba(5, 5, 8, 0.96);
-  color: #ff8080;
-  font-family: monospace;
+  background: rgb(var(--shadow-rgb) / 0.96);
+  color: var(--danger-mid);
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
   padding: 16px;
@@ -46,7 +192,7 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: #05100c;
+  background: var(--bg-deep);
   opacity: 0;
   pointer-events: none;
 }
@@ -57,8 +203,8 @@ html, body {
   inset: 0;
   pointer-events: none;
   z-index: 10;
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #eafff2;
+  font-family: var(--font-ui);
+  color: var(--text);
 }
 
 /* Health, Energy, and Mass all stacked in ONE column (not split left/right) - two
@@ -84,56 +230,56 @@ html, body {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--blur-hud));
 }
 
 #mass-ui {
-  background: rgba(10, 20, 16, 0.55);
-  border: 1px solid rgba(124, 255, 178, 0.25);
+  background: rgb(var(--surface-rgb) / 0.55);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
 }
 
 #health-ui {
-  background: rgba(20, 10, 12, 0.55);
-  border: 1px solid rgba(255, 107, 107, 0.25);
+  background: var(--surface-health);
+  border: 1px solid rgb(var(--danger-soft-rgb) / 0.25);
 }
 
 #energy-ui {
-  background: rgba(20, 16, 6, 0.55);
-  border: 1px solid rgba(255, 200, 90, 0.25);
+  background: var(--surface-energy);
+  border: 1px solid rgb(var(--warning-amber-rgb) / 0.25);
 }
 
 .health-fill {
-  background: linear-gradient(90deg, #ff6c6c, #ff9d6c);
+  background: linear-gradient(90deg, var(--danger), var(--warning-ember));
 }
 
 .energy-fill {
-  background: linear-gradient(90deg, #ffd23f, #ffb84d);
+  background: linear-gradient(90deg, var(--energy), var(--energy-warm));
 }
 
 /* Diegetic health mirrors onto the small HUD too: subtle at critical, a touch more urgent at severe. */
 #health-ui.health-ui--critical {
-  border-color: rgba(255, 107, 107, 0.5);
+  border-color: rgb(var(--danger-soft-rgb) / 0.5);
 }
 
 #health-ui.health-ui--severe {
-  border-color: rgba(255, 80, 80, 0.7);
+  border-color: rgb(var(--danger-flat-rgb) / 0.7);
   animation: health-ui-pulse 1.1s ease-in-out infinite;
 }
 
 /* Same pattern for energy: low is a subtle border tint, critical/starving pulse. */
 #energy-ui.energy-ui--low {
-  border-color: rgba(255, 200, 90, 0.5);
+  border-color: rgb(var(--warning-amber-rgb) / 0.5);
 }
 
 #energy-ui.energy-ui--critical {
-  border-color: rgba(255, 160, 60, 0.65);
+  border-color: var(--border-energy-critical);
   animation: health-ui-pulse 1.4s ease-in-out infinite;
 }
 
 #energy-ui.energy-ui--starving {
-  border-color: rgba(255, 120, 60, 0.8);
+  border-color: var(--border-starving);
   animation: health-ui-pulse 0.9s ease-in-out infinite;
 }
 
@@ -152,38 +298,38 @@ html, body {
 .mass-bar {
   width: 72px;
   height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgb(var(--white-rgb) / 0.12);
   overflow: hidden;
 }
 
 .mass-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #6cf2a4, #7cffb2);
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
   transition: width 0.25s ease;
 }
 
 .mass-fill--full {
-  background: linear-gradient(90deg, #ff8f6c, #ff6c6c);
+  background: linear-gradient(90deg, var(--danger-warm), var(--danger));
 }
 
 /* Burden urgency: 0-50% normal, 50-80% heavy, 80%+ overburdened (subtle pulse, not distracting) */
 #mass-ui.mass-ui--heavy {
-  border-color: rgba(255, 196, 108, 0.4);
+  border-color: var(--glow-extraction);
 }
 
 #mass-ui.mass-ui--heavy .mass-fill {
-  background: linear-gradient(90deg, #e2d26c, #ffc46c);
+  background: linear-gradient(90deg, var(--warning-dim), var(--warning-soft));
 }
 
 #mass-ui.mass-ui--overburdened {
-  border-color: rgba(255, 138, 108, 0.55);
+  border-color: var(--glow-warning-ember);
   animation: mass-ui-pulse 1.6s ease-in-out infinite;
 }
 
 #mass-ui.mass-ui--overburdened .mass-fill {
-  background: linear-gradient(90deg, #ff8f6c, #ff6c6c);
+  background: linear-gradient(90deg, var(--danger-warm), var(--danger));
 }
 
 @keyframes mass-ui-pulse {
@@ -218,9 +364,9 @@ html, body {
   gap: 4px;
   padding: 8px 18px;
   border-radius: 14px;
-  background: rgba(20, 8, 10, 0.65);
-  border: 1px solid rgba(255, 80, 80, 0.35);
-  backdrop-filter: blur(4px);
+  background: var(--surface-mutation-timer);
+  border: 1px solid rgb(var(--danger-flat-rgb) / 0.35);
+  backdrop-filter: blur(var(--blur-hud));
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, -6px);
@@ -237,14 +383,14 @@ html, body {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #ff8a8a;
+  color: var(--danger-soft);
 }
 
 .mutation-timer-bar {
   width: 140px;
   height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgb(var(--white-rgb) / 0.12);
   overflow: hidden;
 }
 
@@ -254,14 +400,14 @@ html, body {
   height: 100%;
   transform: scaleX(1);
   transform-origin: left center;
-  background: linear-gradient(90deg, #ff5c5c, #ff2d2d);
+  background: linear-gradient(90deg, var(--danger-alt), var(--danger-bright));
 }
 
 #mutation-timer-text {
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   font-weight: 700;
-  color: #ffb3b3;
+  color: var(--danger-pale);
 }
 
 /* LOW (<=30% remaining): subtle, controlled urgency - the Rat should still feel
@@ -272,7 +418,7 @@ html, body {
 
 /* CRITICAL (<=10% remaining): faster, stronger pulse and a brighter border. */
 #mutation-timer-ui.mutation-timer-ui--critical {
-  border-color: rgba(255, 60, 60, 0.7);
+  border-color: var(--border-danger-hot);
   animation: mutation-timer-pulse 0.7s ease-in-out infinite;
 }
 
@@ -288,8 +434,8 @@ html, body {
 }
 
 @keyframes mutation-timer-text-pulse {
-  0%, 100% { transform: scale(1); color: #ffb3b3; }
-  50% { transform: scale(1.35); color: #ffffff; }
+  0%, 100% { transform: scale(1); color: var(--danger-pale); }
+  50% { transform: scale(1.35); color: var(--white); }
 }
 
 /* Boss HUD: a dedicated, more prominent bar for the Apex encounter - stacked directly
@@ -307,9 +453,9 @@ html, body {
   gap: 5px;
   padding: 8px 20px;
   border-radius: 14px;
-  background: rgba(16, 6, 10, 0.7);
-  border: 1px solid rgba(255, 140, 60, 0.45);
-  backdrop-filter: blur(4px);
+  background: var(--surface-boss);
+  border: 1px solid var(--glow-energy-critical);
+  backdrop-filter: blur(var(--blur-hud));
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, -6px);
@@ -326,14 +472,14 @@ html, body {
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #ffb37a;
+  color: var(--warning-pale);
 }
 
 .boss-health-bar {
   width: 180px;
   height: 9px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgb(var(--white-rgb) / 0.12);
   overflow: hidden;
 }
 
@@ -342,7 +488,7 @@ html, body {
   height: 100%;
   transform: scaleX(1);
   transform-origin: left center;
-  background: linear-gradient(90deg, #ff8a3d, #ff3d3d);
+  background: linear-gradient(90deg, var(--warning-hot), var(--danger-hot));
 }
 
 /* Rival escape channel: stacked below the boss HUD (same centered idiom), hidden
@@ -359,9 +505,9 @@ html, body {
   gap: 4px;
   padding: 6px 16px;
   border-radius: 12px;
-  background: rgba(16, 6, 10, 0.7);
-  border: 1px solid rgba(255, 80, 60, 0.5);
-  backdrop-filter: blur(4px);
+  background: var(--surface-boss);
+  border: 1px solid rgb(var(--danger-hot-rgb) / 0.5);
+  backdrop-filter: blur(var(--blur-hud));
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, -6px);
@@ -375,8 +521,8 @@ html, body {
 }
 
 @keyframes rival-escape-pulse {
-  0%, 100% { border-color: rgba(255, 80, 60, 0.5); }
-  50% { border-color: rgba(255, 80, 60, 0.9); }
+  0%, 100% { border-color: rgb(var(--danger-hot-rgb) / 0.5); }
+  50% { border-color: rgb(var(--danger-hot-rgb) / 0.9); }
 }
 
 .rival-escape-label {
@@ -384,14 +530,14 @@ html, body {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #ff8a6a;
+  color: var(--danger-ember);
 }
 
 .rival-escape-bar {
   width: 150px;
   height: 7px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgb(var(--white-rgb) / 0.12);
   overflow: hidden;
 }
 
@@ -400,7 +546,7 @@ html, body {
   height: 100%;
   transform: scaleX(0);
   transform-origin: left center;
-  background: linear-gradient(90deg, #ff5c3d, #ff2d2d);
+  background: linear-gradient(90deg, var(--danger-flame), var(--danger-bright));
 }
 
 /* Screen-edge objective arrow (objectiveIndicator.js) - positioned via inline style
@@ -412,8 +558,8 @@ html, body {
   top: 0;
   z-index: 16;
   font-size: 22px;
-  color: #ffcf6b;
-  text-shadow: 0 0 6px rgba(255, 207, 107, 0.7);
+  color: var(--warning);
+  text-shadow: 0 0 6px var(--border-extraction);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -437,12 +583,12 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 50% 40%, rgba(10, 30, 22, 0.55), rgba(5, 10, 8, 0.92) 75%);
+  background: radial-gradient(circle at 50% 40%, var(--surface-title-glow), var(--surface-title) 75%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #eafff2;
+  font-family: var(--font-ui);
+  color: var(--text);
   text-align: center;
   padding: 24px;
   padding-bottom: max(24px, env(safe-area-inset-bottom));
@@ -461,11 +607,12 @@ html, body {
 }
 
 .title-name {
+  font-family: var(--font-display);
   font-size: clamp(32px, 10vw, 48px);
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: #9dffcf;
-  text-shadow: 0 0 18px rgba(124, 255, 178, 0.55);
+  color: var(--accent-bright);
+  text-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.55);
   margin: 0;
 }
 
@@ -487,21 +634,21 @@ html, body {
   min-width: 220px;
   min-height: 52px;
   padding: 14px 32px;
-  border: 1px solid rgba(124, 255, 178, 0.5);
-  border-radius: 999px;
-  background: rgba(8, 32, 22, 0.75);
-  color: #9dffcf;
+  border: 1px solid rgb(var(--accent-rgb) / 0.5);
+  border-radius: var(--radius-pill);
+  background: var(--surface-button);
+  color: var(--accent-bright);
   font-family: inherit;
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.06em;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--blur-hud));
   cursor: pointer;
   animation: revert-button-pulse 1.8s ease-in-out infinite;
 }
 
 #title-begin-button:active {
-  background: rgba(124, 255, 178, 0.3);
+  background: rgb(var(--accent-rgb) / 0.3);
 }
 
 /* Memory Reveal: full-screen, higher z-index than every gameplay button (spec section
@@ -518,14 +665,14 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 28px;
-  background: radial-gradient(circle at 50% 38%, rgba(20, 14, 30, 0.85), rgba(4, 6, 8, 0.97) 78%);
+  background: radial-gradient(circle at 50% 38%, var(--surface-memory-visual), var(--surface-memory) 78%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.5s ease;
   padding: 24px;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui);
   text-align: center;
-  color: #eafff2;
+  color: var(--text);
 }
 
 #memory-overlay.memory-overlay--visible {
@@ -548,7 +695,7 @@ html, body {
   width: 64px;
   height: 96px;
   border-radius: 50% 50% 45% 45% / 55% 55% 45% 45%;
-  background: rgba(234, 255, 242, 0.12);
+  background: rgb(var(--text-rgb) / 0.12);
   filter: blur(6px);
   opacity: 0;
 }
@@ -557,7 +704,7 @@ html, body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 224, 160, 0.5), rgba(255, 224, 160, 0) 70%);
+  background: radial-gradient(circle, rgb(var(--glow-warm-rgb) / 0.5), rgb(var(--glow-warm-rgb) / 0) 70%);
   opacity: 0;
 }
 
@@ -586,11 +733,12 @@ html, body {
 .memory-label {
   font-size: 12px;
   letter-spacing: 0.24em;
-  color: #ffcf6b;
+  color: var(--warning);
   opacity: 0;
 }
 
 #memory-title {
+  font-family: var(--font-display);
   font-size: 20px;
   font-weight: 700;
   margin: 0;
@@ -609,7 +757,7 @@ html, body {
 .memory-recovered {
   font-size: 12px;
   letter-spacing: 0.18em;
-  color: #9dffcf;
+  color: var(--accent-bright);
   margin-top: 8px;
   opacity: 0;
 }
@@ -628,10 +776,10 @@ html, body {
   min-width: 200px;
   min-height: 48px;
   padding: 12px 28px;
-  border: 1px solid rgba(234, 255, 242, 0.3);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #eafff2;
+  border: 1px solid rgb(var(--text-rgb) / 0.3);
+  border-radius: var(--radius-pill);
+  background: rgb(var(--white-rgb) / 0.06);
+  color: var(--text);
   font-family: inherit;
   font-weight: 600;
   font-size: 13px;
@@ -648,7 +796,7 @@ html, body {
 }
 
 #memory-continue-button:active {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgb(var(--white-rgb) / 0.16);
 }
 
 /* Run Complete: the prototype's ending screen (RunCompleteController). */
@@ -659,7 +807,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(4, 8, 7, 0.88);
+  background: var(--surface-run-complete);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;
@@ -678,20 +826,21 @@ html, body {
   max-width: 380px;
   max-height: 100%;
   overflow-y: auto;
-  background: rgba(10, 22, 18, 0.96);
-  border: 1px solid rgba(124, 255, 178, 0.25);
+  background: var(--surface-panel);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
   border-radius: 20px;
   padding: 28px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #eafff2;
+  font-family: var(--font-ui);
+  color: var(--text);
   text-align: center;
 }
 
 .run-complete-brand {
+  font-family: var(--font-display);
   font-size: 11px;
   letter-spacing: 0.14em;
   opacity: 0.55;
@@ -704,11 +853,12 @@ html, body {
 }
 
 .run-complete-heading {
+  font-family: var(--font-display);
   font-size: 22px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: #9dffcf;
-  text-shadow: 0 0 14px rgba(124, 255, 178, 0.4);
+  color: var(--accent-bright);
+  text-shadow: 0 0 14px rgb(var(--accent-rgb) / 0.4);
   margin: 0 0 18px;
 }
 
@@ -726,7 +876,7 @@ html, body {
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(124, 255, 178, 0.12);
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.12);
   font-size: 13px;
 }
 
@@ -737,16 +887,16 @@ html, body {
 .run-complete-stat-value {
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: #ffcf6b;
+  color: var(--warning);
 }
 
 #run-complete-play-again {
   width: 100%;
   min-height: 52px;
   border: none;
-  border-radius: 999px;
-  background: #7cffb2;
-  color: #0a1410;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--bg);
   font-family: inherit;
   font-weight: 800;
   font-size: 14px;
@@ -755,7 +905,7 @@ html, body {
 }
 
 #run-complete-play-again:active {
-  background: #6cf2a4;
+  background: var(--accent-dim);
 }
 
 #run-complete-play-again:disabled {
@@ -770,7 +920,7 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 45;
-  background: radial-gradient(circle at center, rgba(255, 224, 160, 0.55), rgba(255, 224, 160, 0) 70%);
+  background: radial-gradient(circle at center, rgb(var(--glow-warm-rgb) / 0.55), rgb(var(--glow-warm-rgb) / 0) 70%);
   opacity: 0;
   pointer-events: none;
 }
@@ -791,9 +941,9 @@ html, body {
   left: 50%;
   transform: translate(-50%, -6px);
   padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(10, 20, 16, 0.6);
-  border: 1px solid rgba(124, 255, 178, 0.3);
+  border-radius: var(--radius-pill);
+  background: rgb(var(--surface-rgb) / 0.6);
+  border: 1px solid rgb(var(--accent-rgb) / 0.3);
   font-size: 13px;
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
@@ -806,17 +956,17 @@ html, body {
 }
 
 #pickup-notification.notification--pickup {
-  color: #9dffcf;
+  color: var(--accent-bright);
 }
 
 #pickup-notification.notification--warning {
-  color: #ffb26c;
-  border-color: rgba(255, 178, 108, 0.35);
+  color: var(--warning-warm);
+  border-color: var(--glow-warning-soft);
 }
 
 #pickup-notification.notification--hint {
-  color: #cdb8ff;
-  border-color: rgba(180, 150, 255, 0.35);
+  color: var(--memory);
+  border-color: var(--memory-glow);
 }
 
 /* Consume action: a tiny contextual button that appears at the tapped item's own
@@ -831,9 +981,9 @@ html, body {
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 10px;
-  border-radius: 999px;
-  background: rgba(10, 20, 16, 0.85);
-  border: 1px solid rgba(124, 255, 178, 0.35);
+  border-radius: var(--radius-pill);
+  background: rgb(var(--surface-rgb) / 0.85);
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
   font-size: 11px;
   white-space: nowrap;
   opacity: 0;
@@ -854,15 +1004,18 @@ html, body {
 }
 
 #consume-action-button {
-  /* Visually small, but padding brings the real tap target up near the 44px minimum. */
+  /* The box is border-box (see the `*` reset), so the padding below is INSIDE
+     min-height rather than adding to it - this measured 32px tall, not the 44 its
+     previous comment claimed. Set to 44 outright; the negative margins keep it from
+     pushing the surrounding row taller. */
   min-width: 44px;
-  min-height: 32px;
-  padding: 6px 12px;
-  margin: -6px -2px -6px 0;
+  min-height: 44px;
+  padding: 6px 14px;
+  margin: -8px -2px -8px 0;
   border: none;
-  border-radius: 999px;
-  background: #7cffb2;
-  color: #0a1410;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--bg);
   font-weight: 600;
   font-size: 11px;
   font-family: inherit;
@@ -870,27 +1023,46 @@ html, body {
 }
 
 #consume-action-button:active {
-  background: #6cf2a4;
+  background: var(--accent-dim);
 }
 
 /* Inventory toggle button (bottom-right, always visible during gameplay) */
 /* Right-side stack, bottom to top: BITE (64px, the actual corner - the most
    prominent action while it's available) -> MUTATE/REVERT (48px) -> this. */
-#inventory-toggle {
+/* The bottom-right action stack. One anchor point and one gap replace what used to be
+   three separate `bottom: calc(...)` expressions in which each button hardcoded the
+   heights of the buttons beneath it - resizing BITE used to require editing two other
+   rules or the stack drifted apart. Children keep their opacity/pointer-events
+   visibility handling, so a hidden MUTATE still holds its slot exactly as before. */
+#action-stack {
   position: fixed;
   right: 16px;
-  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px + 12px + 48px + 12px);
+  bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 20;
-  width: 52px;
-  height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: none; /* the gaps between buttons must not eat movement swipes */
+}
+
+#action-stack > * {
+  pointer-events: auto;
+}
+
+#inventory-toggle {
+  /* 60px, not the previous 52: this is pressed mid-hunt, and 52 sat under the
+     comfortable-target size for a control you reach for under pressure. */
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  border: 1px solid rgba(124, 255, 178, 0.3);
-  background: rgba(10, 20, 16, 0.6);
-  color: #9dffcf;
+  border: 1px solid rgb(var(--accent-rgb) / 0.3);
+  background: rgb(var(--surface-rgb) / 0.6);
+  color: var(--accent-bright);
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--blur-hud));
   cursor: pointer;
   padding: 0;
   font-family: inherit;
@@ -898,33 +1070,29 @@ html, body {
 
 #inventory-toggle:active,
 #inventory-toggle.inventory-toggle--active {
-  background: rgba(124, 255, 178, 0.25);
-  border-color: rgba(124, 255, 178, 0.6);
+  background: rgb(var(--accent-rgb) / 0.25);
+  border-color: rgb(var(--accent-rgb) / 0.6);
 }
 
 /* MUTATE/REVERT: stacked above BITE, which now takes the actual bottom-right corner
    (see #bite-button below). Hidden until a recipe is ready / the player is the Rat. */
 #mutate-button {
-  position: fixed;
-  right: 16px;
-  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px + 12px);
-  z-index: 20;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-width: 48px;
-  min-height: 48px;
-  padding: 10px 16px;
-  border: 1px solid rgba(255, 45, 158, 0.5);
-  border-radius: 999px;
-  background: rgba(40, 8, 28, 0.75);
-  color: #ff8ecf;
+  min-width: 60px;
+  min-height: 60px;
+  padding: 10px 18px;
+  border: 1px solid rgb(var(--mutation-rgb) / 0.5);
+  border-radius: var(--radius-pill);
+  background: var(--surface-mutate);
+  color: var(--mutation-text);
   font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.03em;
   font-family: inherit;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--blur-hud));
   cursor: pointer;
   opacity: 0;
   transform: scale(0.85);
@@ -940,30 +1108,30 @@ html, body {
 }
 
 #mutate-button:active {
-  background: rgba(255, 45, 158, 0.3);
+  background: rgb(var(--mutation-rgb) / 0.3);
 }
 
 @keyframes mutate-button-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 45, 158, 0.35); }
-  50% { box-shadow: 0 0 0 6px rgba(255, 45, 158, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--mutation-rgb) / 0.35); }
+  50% { box-shadow: 0 0 0 6px rgb(var(--mutation-rgb) / 0); }
 }
 
 /* REVERT: same button, recolored to match Slime (teal/green) instead of the venom
    pink - a clear visual cue that tapping it undoes the mutation. */
 #mutate-button.mutate-button--revert {
-  border-color: rgba(124, 255, 178, 0.5);
-  background: rgba(8, 32, 22, 0.75);
-  color: #9dffcf;
+  border-color: rgb(var(--accent-rgb) / 0.5);
+  background: var(--surface-button);
+  color: var(--accent-bright);
   animation: revert-button-pulse 1.6s ease-in-out infinite;
 }
 
 #mutate-button.mutate-button--revert:active {
-  background: rgba(124, 255, 178, 0.3);
+  background: rgb(var(--accent-rgb) / 0.3);
 }
 
 @keyframes revert-button-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 255, 178, 0.35); }
-  50% { box-shadow: 0 0 0 6px rgba(124, 255, 178, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / 0.35); }
+  50% { box-shadow: 0 0 0 6px rgb(var(--accent-rgb) / 0); }
 }
 
 /* BITE: the actual bottom-right corner - the primary, most-reachable action during a
@@ -972,16 +1140,12 @@ html, body {
    the cooldown sweep - driven by the --cd custom property (1 = just used, 0 = ready),
    set every frame in updateBiteCooldown(). */
 #bite-button {
-  position: fixed;
-  right: 16px;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 20;
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 92, 92, 0.6);
-  background: radial-gradient(circle at 35% 30%, #ff6b6b, #b3241f 70%);
-  color: #fff0ec;
+  border: 2px solid var(--border-bite);
+  background: radial-gradient(circle at 35% 30%, var(--danger-btn), var(--danger-deep) 70%);
+  color: var(--danger-text);
   font-weight: 800;
   font-size: 13px;
   letter-spacing: 0.04em;
@@ -1010,7 +1174,7 @@ html, body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(rgba(5, 5, 8, 0.72) calc(var(--cd) * 360deg), transparent 0deg);
+  background: conic-gradient(rgb(var(--shadow-rgb) / 0.72) calc(var(--cd) * 360deg), transparent 0deg);
   pointer-events: none;
 }
 
@@ -1028,8 +1192,8 @@ html, body {
   left: 14px;
   bottom: max(14px, env(safe-area-inset-bottom));
   padding: 6px 10px;
-  background: rgba(10, 20, 16, 0.7);
-  border: 1px solid rgba(124, 255, 178, 0.25);
+  background: rgb(var(--surface-rgb) / 0.7);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
   border-radius: 8px;
   font-size: 10px;
   line-height: 1.5;
@@ -1062,7 +1226,7 @@ html, body {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(4, 10, 8, 0.6);
+  background: var(--surface-inventory-scrim);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
@@ -1077,8 +1241,8 @@ html, body {
   width: 100%;
   max-width: 480px;
   max-height: 72vh;
-  background: rgba(10, 22, 18, 0.96);
-  border: 1px solid rgba(124, 255, 178, 0.25);
+  background: var(--surface-panel);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
   border-bottom: none;
   border-radius: 20px 20px 0 0;
   padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
@@ -1087,8 +1251,8 @@ html, body {
   gap: 12px;
   transform: translateY(12px);
   transition: transform 0.25s ease;
-  color: #eafff2;
-  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  font-family: var(--font-ui);
 }
 
 #inventory-overlay.inventory-overlay--open #inventory-panel {
@@ -1108,12 +1272,14 @@ html, body {
 }
 
 #inventory-close {
-  width: 28px;
-  height: 28px;
+  /* 44px, up from 28. The visible glyph is drawn by .close-icon and is unchanged -
+     this only grows the pressable box to the minimum comfortable target. */
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  border: 1px solid rgba(124, 255, 178, 0.25);
-  background: rgba(255, 255, 255, 0.06);
-  color: #eafff2;
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  background: rgb(var(--white-rgb) / 0.06);
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1157,8 +1323,8 @@ html, body {
   align-items: center;
   gap: 4px;
   padding: 10px 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(124, 255, 178, 0.15);
+  background: rgb(var(--white-rgb) / 0.05);
+  border: 1px solid rgb(var(--accent-rgb) / 0.15);
   border-radius: 12px;
   color: inherit;
   font-family: inherit;
@@ -1166,7 +1332,7 @@ html, body {
 }
 
 .inventory-cell:active {
-  background: rgba(124, 255, 178, 0.15);
+  background: rgb(var(--accent-rgb) / 0.15);
 }
 
 .inventory-swatch {
@@ -1201,7 +1367,7 @@ html, body {
   flex-direction: column;
   gap: 2px;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgb(var(--white-rgb) / 0.04);
   border-radius: 10px;
   min-height: 40px;
   justify-content: center;
@@ -1222,4 +1388,456 @@ html, body {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+/* ==========================================================================
+   Damage numbers (damageNumbers.js)
+   --------------------------------------------------------------------------
+   Positioned per-frame via transform from world-space projection, never by CSS
+   layout - so translate() is the only thing that moves, keeping these off the
+   layout path entirely during combat. Pointer-events are off on the container
+   AND the numbers: they spawn directly over enemies, which is exactly where the
+   player is tapping.
+   ========================================================================== */
+#damage-numbers {
+  position: fixed;
+  inset: 0;
+  z-index: 15; /* above the HUD's readouts, below the action buttons (20) */
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.damage-number {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  will-change: transform, opacity;
+}
+
+/* Damage the player DEALT - the accent green they already read as "self". */
+.damage-number--player {
+  color: var(--accent-bright);
+  text-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.55), 0 1px 2px var(--bg-deep);
+}
+
+/* Damage the player TOOK - danger red, and larger, because this is the one the
+   player must not miss while it's happening. */
+.damage-number--incoming {
+  color: var(--danger-pale);
+  font-size: 24px;
+  text-shadow: 0 0 12px rgb(var(--danger-soft-rgb) / 0.6), 0 1px 2px var(--bg-deep);
+}
+
+/* ==========================================================================
+   Radial inventory wheel (inventoryWheel.js)
+   --------------------------------------------------------------------------
+   Press and hold on Hollowdrop to open; tap a segment to expel that item. This
+   replaces the swipe-to-expel gesture, and is closer to the design doc's
+   "menu-less, diegetic" framing than a grid panel - the wheel is anchored to the
+   creature itself, positioned in JS each time it opens.
+   ========================================================================== */
+#inventory-wheel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  background: rgb(var(--shadow-rgb) / 0.35);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+#inventory-wheel-backdrop.inventory-wheel-backdrop--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Positioned at the creature's screen coordinates by JS, so `left`/`top` are set
+   inline and everything inside is laid out relative to that point. */
+#inventory-wheel {
+  position: fixed;
+  z-index: 25;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
+  transform-origin: center;
+  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.2, 1.4, 0.5, 1);
+}
+
+#inventory-wheel.inventory-wheel--visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.wheel-segment {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 1.5px solid var(--seg-color, var(--accent));
+  background: var(--surface-panel);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  cursor: pointer;
+  backdrop-filter: blur(var(--blur-hud));
+  box-shadow: 0 0 12px rgb(var(--shadow-rgb) / 0.6);
+}
+
+.wheel-segment:active {
+  background: var(--seg-color, var(--accent));
+  color: var(--bg);
+}
+
+.wheel-seg-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--seg-color, var(--accent));
+  box-shadow: 0 0 8px var(--seg-color, var(--accent));
+}
+
+.wheel-seg-name {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  text-align: center;
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wheel-seg-meta {
+  font-size: 7px;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+/* Mass readout at the centre of the ring - the one number that matters while you
+   are deciding what to throw away. */
+.wheel-hub {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  min-width: 62px;
+  padding: 7px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
+  background: var(--surface-panel);
+  color: var(--accent-bright);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  backdrop-filter: blur(var(--blur-hud));
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Info card (uiManager.showInfoCard)
+   --------------------------------------------------------------------------
+   One overlay serving two moments: the opening objective, and the reveal after a
+   transformation completes. They share a shape - kicker, heading, body, optional
+   bullets, optional cost line - and GameFlowController's states guarantee only one
+   is ever up, so a single element is correct rather than two near-identical ones.
+
+   Sits at z-index 30: above the action stack (20) and the inventory wheel (25), so a
+   tap can never fall through to a gameplay control while the game is paused behind it.
+   ========================================================================== */
+#info-card {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--surface-memory);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+
+#info-card.info-card--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.info-card-panel {
+  width: 100%;
+  max-width: 360px;
+  padding: 26px 24px 22px;
+  border-radius: 18px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  background: var(--surface-panel);
+  backdrop-filter: blur(var(--blur-hud));
+  text-align: center;
+  transform: translateY(10px) scale(0.97);
+  transition: transform 0.32s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+#info-card.info-card--visible .info-card-panel {
+  transform: translateY(0) scale(1);
+}
+
+.info-card-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  opacity: 0.9;
+  margin-bottom: 10px;
+}
+
+#info-card-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--accent-bright);
+  margin: 0 0 12px;
+  text-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.4);
+}
+
+#info-card-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  opacity: 0.85;
+  margin: 0;
+}
+
+/* Bullets are what a form GRANTS - the reason to care about it. */
+#info-card-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+}
+
+#info-card-list li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+#info-card-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgb(var(--accent-rgb) / 0.7);
+}
+
+/* The cost line is warned, not celebrated - a different colour from the grants above
+   so the tradeoff reads at a glance rather than needing to be parsed. */
+.info-card-cost {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgb(var(--white-rgb) / 0.08);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--warning);
+}
+
+#info-card-continue {
+  margin-top: 20px;
+  min-width: 150px;
+  min-height: 48px;
+  padding: 12px 26px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.5);
+  border-radius: var(--radius-pill);
+  background: var(--surface-button);
+  color: var(--accent-bright);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+#info-card-continue:active {
+  background: rgb(var(--accent-rgb) / 0.3);
+}
+
+/* ==========================================================================
+   Mutation codex (inventoryUI._renderCodex)
+   --------------------------------------------------------------------------
+   Lives inside the existing inventory panel rather than being a third UI. The
+   radial wheel is the fast in-play action; this is the reference you read when
+   you are safe.
+   ========================================================================== */
+#codex-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgb(var(--white-rgb) / 0.08);
+}
+
+.codex-heading {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+  margin-bottom: 9px;
+}
+
+#codex-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.codex-entry {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgb(var(--white-rgb) / 0.08);
+  background: rgb(var(--white-rgb) / 0.04);
+}
+
+/* A craftable form is called out, since that is the actionable state. */
+.codex-entry--ready {
+  border-color: rgb(var(--accent-rgb) / 0.45);
+  background: rgb(var(--accent-rgb) / 0.08);
+}
+
+.codex-entry--locked {
+  opacity: 0.45;
+}
+
+.codex-entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.codex-entry-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--accent-bright);
+}
+
+.codex-entry-state {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text);
+  opacity: 0.5;
+}
+
+.codex-entry--ready .codex-entry-state {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.codex-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+/* Each ingredient carries its own resource colour, so the chip matches the thing
+   the player is actually looking for in the world. */
+.codex-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgb(var(--white-rgb) / 0.1);
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.codex-chip--have {
+  opacity: 1;
+  border-color: var(--chip-color);
+}
+
+.codex-chip i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--chip-color);
+}
+
+.codex-grants {
+  list-style: none;
+  margin: 9px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.codex-grants li {
+  position: relative;
+  padding-left: 12px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.codex-grants li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.codex-cost {
+  margin: 8px 0 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--warning);
+  opacity: 0.85;
+}
+
+.codex-locked-hint {
+  margin: 6px 0 0;
+  font-size: 10.5px;
+  font-style: italic;
+  color: var(--text);
+  opacity: 0.7;
 }

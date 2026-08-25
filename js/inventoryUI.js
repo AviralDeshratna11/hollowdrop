@@ -1,4 +1,5 @@
 import { RESOURCE_TYPES } from './resourceTypes.js';
+import { MUTATION_RECIPES, LOCKED_MUTATIONS } from './mutationSystem.js';
 
 function colorToCss(hex) {
   return `#${hex.toString(16).padStart(6, '0')}`;
@@ -10,8 +11,11 @@ function colorToCss(hex) {
  * open(); while open, updateMass() cheaply refreshes just the footer text.
  */
 export class InventoryUI {
-  constructor(inventoryManager, { onOpen, onClose } = {}) {
+  constructor(inventoryManager, { onOpen, onClose, mutationSystem = null } = {}) {
     this.inventoryManager = inventoryManager;
+    // Optional: without it the codex still lists recipes, just without live
+    // missing-ingredient counts.
+    this.mutationSystem = mutationSystem;
     this.onOpen = onOpen;
     this.onClose = onClose;
     this.isOpen = false;
@@ -20,6 +24,7 @@ export class InventoryUI {
     this.closeButton = document.getElementById('inventory-close');
     this.overlay = document.getElementById('inventory-overlay');
     this.grid = document.getElementById('inventory-grid');
+    this.codexList = document.getElementById('codex-list');
     this.detailName = document.getElementById('inventory-detail-name');
     this.detailMeta = document.getElementById('inventory-detail-meta');
     this.massFill = document.getElementById('inventory-mass-fill');
@@ -40,6 +45,7 @@ export class InventoryUI {
   open() {
     this.isOpen = true;
     this._render();
+    this._renderCodex();
     this.overlay?.classList.add('inventory-overlay--open');
     this.toggleButton?.classList.add('inventory-toggle--active');
     this.onOpen?.();
@@ -60,6 +66,65 @@ export class InventoryUI {
     const ratio = Math.min(current / max, 1);
     this.massFill.style.width = `${ratio * 100}%`;
     this.massText.textContent = `${Math.round(current * 10) / 10} / ${max}`;
+  }
+
+  /**
+   * The mutation codex: every form, what it costs, and what it grants.
+   *
+   * Missing-ingredient counts come from MutationSystem.getMissingIngredients(), which
+   * already exists and was already being computed for the debug recipe panel - this
+   * surfaces it to the player rather than duplicating the logic.
+   *
+   * Locked entries are listed deliberately. The design doc names the Stage 3 hook as
+   * "wanting to find the ingredients to mutate again"; with exactly one real recipe in
+   * the game, an honest "there is more, you have not found it" is what gives that hook
+   * something to point at.
+   */
+  _renderCodex() {
+    if (!this.codexList) return;
+    this.codexList.innerHTML = '';
+
+    for (const recipe of Object.values(MUTATION_RECIPES)) {
+      const missing = this.mutationSystem ? this.mutationSystem.getMissingIngredients(recipe) : [];
+      const missingByType = new Map(missing.map((m) => [m.type, m.missing]));
+      const available = missing.length === 0;
+
+      const entry = document.createElement('div');
+      entry.className = `codex-entry${available ? ' codex-entry--ready' : ''}`;
+
+      const chips = Object.entries(recipe.ingredients).map(([type, qty]) => {
+        const config = RESOURCE_TYPES[type];
+        const short = missingByType.get(type) ?? 0;
+        const have = qty - short;
+        return `<span class="codex-chip${short ? '' : ' codex-chip--have'}"
+          style="--chip-color:${colorToCss(config.color)}">
+          <i></i>${config.name} ${have}/${qty}</span>`;
+      }).join('');
+
+      entry.innerHTML = `
+        <div class="codex-entry-head">
+          <span class="codex-entry-name">${recipe.name}</span>
+          <span class="codex-entry-state">${available ? 'READY' : 'INCOMPLETE'}</span>
+        </div>
+        <div class="codex-chips">${chips}</div>
+        <ul class="codex-grants">${(recipe.grants ?? []).map((g) => `<li>${g}</li>`).join('')}</ul>
+        ${recipe.cost ? `<p class="codex-cost">${recipe.cost}</p>` : ''}
+      `;
+      this.codexList.appendChild(entry);
+    }
+
+    for (const locked of LOCKED_MUTATIONS) {
+      const entry = document.createElement('div');
+      entry.className = 'codex-entry codex-entry--locked';
+      entry.innerHTML = `
+        <div class="codex-entry-head">
+          <span class="codex-entry-name">${locked.name}</span>
+          <span class="codex-entry-state">LOCKED</span>
+        </div>
+        <p class="codex-locked-hint">${locked.hint}</p>
+      `;
+      this.codexList.appendChild(entry);
+    }
   }
 
   _render() {
