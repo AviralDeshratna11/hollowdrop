@@ -1067,7 +1067,7 @@ function animate() {
   // having to know the shader exists. Real delta, same reasoning as the player's: bodies
   // keep breathing through a hitstop freeze. Creatures removed from the scene are
   // dropped from the registry automatically.
-  updateSlimeCreatures(realDeltaTime);
+  updateSlimeCreatures(realDeltaTime, camera);
 
   amoeba.update(realDeltaTime, {
     speedRatio: playerController.currentVelocity.length() / PLAYER_MAX_SPEED,
