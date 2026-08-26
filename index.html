@@ -9,6 +9,30 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="theme-color" content="#0a1410" />
 <link rel="stylesheet" href="style.css" />
+<!-- Must precede the modulepreload hints below: a module preload that itself resolves
+     a bare specifier (FBXLoader.js does `import * as THREE from 'three'`) needs the
+     importmap already registered in the document, or the browser can't resolve "three"
+     and the preload - and everything after it - fails outright. Moved here from just
+     before js/main.js's own script tag for exactly that reason. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<!-- FBXLoader (used by ratModel.js/playerSlimeModel.js via fbxCharacterLoader.js) has
+     its own further imports (fflate, NURBSCurve -> NURBSUtils) that main.js's module
+     graph can only discover one file at a time as each parent finishes parsing - ES
+     modules link fully before ANY top-level code runs, so this was a sequential
+     multi-hop CDN round-trip standing entirely BEFORE the player's own model even
+     started fetching, independent of that fetch's own size. Preloading the whole chain
+     here lets the browser fetch every hop in parallel from the very start of page load
+     instead of discovering them one at a time. -->
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/FBXLoader.js" />
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/fflate.module.js" />
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSCurve.js" />
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSUtils.js" />
 </head>
 <body>
 <canvas id="game-canvas"></canvas>
@@ -124,10 +148,29 @@
     </span>
   </button>
 
-  <button id="mutate-button" type="button" aria-label="Mutate">MUTATE</button>
+  <!-- Icon-only badge, no fill background (see style.css) - two icons layered in the
+       same button, toggled via the existing mutate-button--revert class so JS never
+       needs to touch their markup (see uiManager.js's showMutationReady/showRevertReady -
+       neither writes textContent any more). -->
+  <button id="mutate-button" type="button" aria-label="Mutate">
+    <svg class="action-icon action-icon--mutate" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M16 16 L11 8 L19 13 Z" fill="currentColor" />
+      <path d="M31 13 L36 8 L33 16 Z" fill="currentColor" />
+      <path d="M10 30 C10 19 16 13 24 13 C32 13 38 20 38 28 C38 35 32 39 24 39 C16 39 10 37 10 30 Z" fill="currentColor" />
+      <path d="M37 29 C41 29 43 25 41 21" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+    </svg>
+    <svg class="action-icon action-icon--revert" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M11 39 V22 a13 13 0 0 1 26 0 V39" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M24 33 C21.5 29.5 16 29 16 24.5 C16 21.7 18.4 20 20.7 20.9 C22 21.4 23.1 22.4 24 24 C24.9 22.4 26 21.4 27.3 20.9 C29.6 20 32 21.7 32 24.5 C32 29 26.5 29.5 24 33 Z" fill="currentColor" />
+    </svg>
+  </button>
 
   <!-- Combat: only ever visible while Venom Rat (see PlayerCombatController.setAvailable). -->
-  <button id="bite-button" type="button" aria-label="Venom Bite">BITE</button>
+  <button id="bite-button" type="button" aria-label="Venom Bite">
+    <svg class="action-icon action-icon--bite" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M8 33 L11 13 L17 25 L24 9 L31 25 L37 13 L40 33 C40 39 33 42 24 42 C15 42 8 39 8 33 Z" fill="currentColor" />
+    </svg>
+  </button>
 </div>
 
 <!-- Screen-edge objective arrow (see objectiveIndicator.js) - points at extraction,
@@ -230,13 +273,6 @@
   </div>
 </div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-  }
-}
-</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -15,7 +15,7 @@ import { MetabolismSystem, DEBUG_METABOLISM } from './metabolismSystem.js';
 import { MutationSystem, DEBUG_MUTATION, MUTATION_RECIPES } from './mutationSystem.js';
 import { PlayerFormController, MUTATION_CONFIG, PLAYER_FORMS, DEBUG_MUTATION_TIMER } from './playerFormController.js';
 import { createRatMesh } from './ratModel.js';
-import { createAmoebaVisual } from './playerSlimeModel.js';
+import { createPlayerSlimeVisual } from './playerSlimeModel.js';
 import { PreyManager, DEBUG_PREY } from './preyManager.js';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js';
 import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js';
@@ -169,7 +169,7 @@ scene.add(player);
 const slimeVisual = new THREE.Group();
 player.add(slimeVisual);
 
-const amoeba = createAmoebaVisual(PLAYER_RADIUS);
+const amoeba = createPlayerSlimeVisual(PLAYER_RADIUS);
 const slimeMaterial = amoeba.bodyMaterial;
 slimeVisual.add(amoeba.group);
 
@@ -330,6 +330,23 @@ const playerFormController = new PlayerFormController({
   ratVisual,
   ratMaterial,
 });
+
+// Both visuals above (Meshy AI FBX imports, see playerSlimeModel.js/ratModel.js) load
+// their real model asynchronously and start out showing a small placeholder sphere -
+// slimeMaterial/ratMaterial above were captured from that placeholder at construction
+// time, and playerFormController just copied those same stale references into its own
+// fields. Once each one's real material actually arrives, re-point that field (read
+// fresh every time PlayerFormController calls setActiveMaterial()) and, if that form
+// happens to be the one currently showing, switch PlayerController to it immediately
+// rather than waiting for the next mutate/revert to pick it up on its own.
+amoeba.onReady = (material) => {
+  playerFormController.slimeMaterial = material;
+  if (playerFormController.currentForm === PLAYER_FORMS.SLIME) playerController.setActiveMaterial(material);
+};
+ratVisual.userData.onReady = (material) => {
+  playerFormController.ratMaterial = material;
+  if (playerFormController.currentForm === PLAYER_FORMS.VENOM_RAT) playerController.setActiveMaterial(material);
+};
 
 // Wired here (not at MutationSystem construction) so the callback can close over
 // playerFormController, which doesn't exist yet at that point.
@@ -836,6 +853,11 @@ const gameFlowController = new GameFlowController({
   runCompleteController,
   runStats,
   resetGame,
+  // Gates leaving the Title screen on the player's real model actually being loaded
+  // (see gameFlowController.js's _handleBeginTap) - the placeholder sphere should
+  // never be the first thing seen in gameplay, only (briefly, if at all) behind the
+  // Title card itself.
+  slimeReady: amoeba.ready,
 });
 
 // --- Guided moments -------------------------------------------------------------
@@ -875,7 +897,7 @@ genomeFragmentController.onSecured = () => {
 // Dev-only inspection hook (devtools console): window.__hollowdrop
 window.__hollowdrop = {
   player,
-  amoeba, // exposed for live shader tuning: __hollowdrop.amoeba.uniforms.uLobeAmplitude.value = 0.5
+  amoeba, // debug: __hollowdrop.amoeba.bodyMaterial reflects the loaded Jellybean Slime once ready
   camera,
   resourceManager,
   inventoryManager,

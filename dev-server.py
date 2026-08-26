@@ -20,8 +20,19 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
 
-class ReusableTCPServer(socketserver.TCPServer):
+class ReusableTCPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    # Plain TCPServer handles exactly one request at a time - fine for the JS/CSS/HTML
+    # this server was built for, but the FBX character models each pull in 5 large
+    # files (a multi-MB mesh plus 4 textures) via Promise.all, all requested together.
+    # Single-threaded, those 10 files (two models) queue up and get served ONE AT A
+    # TIME regardless of the browser trying to fetch them in parallel - measured over
+    # 4 seconds before the second model's very first byte, even on localhost, entirely
+    # from this queuing rather than any actual network transfer time. ThreadingMixIn
+    # lets the OS-level connection-accept order (which the browser can't fully control
+    # anyway) resolve into real concurrent transfers instead of an artificial serial
+    # bottleneck this file was itself introducing.
     allow_reuse_address = True
+    daemon_threads = True  # worker threads die with the process - no hung threads on Ctrl+C
 
 
 if __name__ == '__main__':

@@ -492,6 +492,185 @@ vec3 amoebaDisplace(vec3 dir, float baseRadius) {
 `;
 
 /**
+ * Applies just the FRAGMENT half of the amoeba's jelly look - the thickness tint (fake
+ * subsurface: pale at the silhouette, deeper/saturated through the middle) and the
+ * fresnel rim glow added to emissive - to an arbitrary existing MeshStandardMaterial,
+ * without the vertex displacement above.
+ *
+ * Exists for imported character meshes (see playerSlimeModel.js) that have their own
+ * fixed, artist-authored shape: running the lobe-displacement noise over their vertices
+ * would melt that shape, but the material-only glassy/translucent treatment is exactly
+ * what "read as jelly" actually depends on, and applies to any geometry unchanged.
+ *
+ * Mutates and returns `material`. Chains onto any onBeforeCompile the material already
+ * has (rather than overwriting it) so this can layer on top of, e.g., a caller's own map
+ * setup without either clobbering the other.
+ */
+export function applyJellyRimTreatment(material, options = {}) {
+  const uniforms = {
+    uRimStrength: { value: options.rimStrength ?? SLIME_DEFAULTS.rimStrength },
+    uRimPower: { value: options.rimPower ?? SLIME_DEFAULTS.rimPower },
+    uCoreTint: { value: new THREE.Color(options.coreTint ?? SLIME_DEFAULTS.coreTint) },
+    uCoreStrength: { value: options.coreStrength ?? SLIME_DEFAULTS.coreStrength },
+  };
+
+  const previousOnBeforeCompile = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    previousOnBeforeCompile?.call(material, shader, renderer);
+    Object.assign(shader.uniforms, uniforms);
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `
+        #include <common>
+        uniform float uRimStrength;
+        uniform float uRimPower;
+        uniform vec3 uCoreTint;
+        uniform float uCoreStrength;
+        `
+      )
+      // Same thickness-tint trick as amoebaDisplace's fragment half above - see that
+      // function's comment for why this is a per-pixel dot product rather than real
+      // transmission.
+      .replace(
+        '#include <color_fragment>',
+        /* glsl */ `
+        #include <color_fragment>
+        float jellyFacing = saturate(dot(normalize(vNormal), normalize(vViewPosition)));
+        diffuseColor.rgb = mix(diffuseColor.rgb, uCoreTint, jellyFacing * uCoreStrength);
+        `
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        /* glsl */ `
+        #include <emissivemap_fragment>
+        float jellyFresnel = pow(1.0 - saturate(dot(normalize(vNormal), normalize(vViewPosition))), uRimPower);
+        totalEmissiveRadiance += emissive * jellyFresnel * uRimStrength;
+        `
+      );
+  };
+  // Distinct key from the amoeba's own ('hollowdrop-amoeba') - different injected code,
+  // and unlike the amoeba this compiles onto whatever base chunks the caller's own maps
+  // (normalMap, roughnessMap, etc.) already pulled in, which the amoeba's material never had.
+  material.customProgramCacheKey = () => 'hollowdrop-jelly-rim';
+  material.needsUpdate = true;
+  return material;
+}
+
+/**
+ * Applies the VERTEX half of the amoeba's jelly look - the same lobe/pseudopod noise
+ * displacement and speed-driven tail stretch amoebaDisplace() above uses - to an
+ * arbitrary existing MeshStandardMaterial, for callers who DO want the imported mesh's
+ * surface to actually wobble rather than just its material reading as glassy (see
+ * applyJellyRimTreatment for the material-only version, and its own comment for why that
+ * one exists separately).
+ *
+ * Works on non-spherical geometry because the displacement is expressed as a
+ * PROPORTIONAL push along each vertex's own direction/distance from the mesh's local
+ * origin, not an absolute radius - centering the mesh at its own bounding-box center
+ * (see fbxCharacterLoader.js) is what makes "direction from origin" a sane per-vertex
+ * basis for an arbitrary artist-authored shape. It will still read differently than on
+ * the amoeba's own icosphere: a lower-density or very unevenly-shaped mesh will show the
+ * noise less smoothly, and concave regions can self-intersect under enough amplitude -
+ * this is why the defaults below are much gentler than SLIME_DEFAULTS.
+ *
+ * Chains onto any onBeforeCompile the material already has (rather than overwriting it),
+ * the same way applyJellyRimTreatment does, so both can be layered on the same material
+ * regardless of which is applied first.
+ *
+ * @returns {{ uniforms, update: (deltaTime, speedRatio, load) => void }} - caller must
+ *   tick `update()` every frame (see playerSlimeModel.js) since, unlike createSlimeCreature's
+ *   own creature object, this has no update loop of its own to hook into.
+ */
+export function applyJellyDisplacement(material, options = {}) {
+  const cfg = { ...SLIME_DEFAULTS, ...options };
+  const uniforms = {
+    uTime: { value: 0 },
+    uSpeedRatio: { value: 0 },
+    uLoad: { value: 0 },
+    uLobeFrequency: { value: cfg.lobeFrequency },
+    uLobeSpeed: { value: cfg.lobeSpeed },
+    uLobeAmplitude: { value: cfg.lobeAmplitude },
+    uLobeGain: { value: cfg.lobeGain },
+    uLobeSharpness: { value: cfg.lobeSharpness },
+    uInwardFactor: { value: cfg.inwardFactor },
+    uDetailFrequency: { value: cfg.detailFrequency },
+    uDetailSpeed: { value: cfg.detailSpeed },
+    uDetailAmplitude: { value: cfg.detailAmplitude },
+    uTailLength: { value: cfg.tailLength },
+    uTailPinch: { value: cfg.tailPinch },
+    uStreamlining: { value: cfg.streamlining },
+    uLoadSwell: { value: cfg.loadSwell },
+  };
+
+  const previousOnBeforeCompile = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    previousOnBeforeCompile?.call(material, shader, renderer);
+    Object.assign(shader.uniforms, uniforms);
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `
+        #include <common>
+        uniform float uTime;
+        uniform float uSpeedRatio;
+        uniform float uLoad;
+        uniform float uLobeFrequency;
+        uniform float uLobeSpeed;
+        uniform float uLobeAmplitude;
+        uniform float uLobeGain;
+        uniform float uLobeSharpness;
+        uniform float uInwardFactor;
+        uniform float uDetailFrequency;
+        uniform float uDetailSpeed;
+        uniform float uDetailAmplitude;
+        uniform float uTailLength;
+        uniform float uTailPinch;
+        uniform float uStreamlining;
+        uniform float uLoadSwell;
+        ${GLSL_SIMPLEX}
+        ${GLSL_DISPLACE}
+        `
+      )
+      // Same ordering requirement as amoebaDisplace's own use above - beginnormal_vertex
+      // runs before begin_vertex, so all the work happens here and begin_vertex just
+      // consumes amoebaPos.
+      .replace(
+        '#include <beginnormal_vertex>',
+        /* glsl */ `
+        vec3 amoebaDir = normalize(position);
+        float amoebaRadius = length(position);
+        vec3 amoebaPos = amoebaDisplace(amoebaDir, amoebaRadius);
+
+        vec3 amoebaTangent = normalize(abs(amoebaDir.y) < 0.99
+          ? cross(vec3(0.0, 1.0, 0.0), amoebaDir)
+          : vec3(1.0, 0.0, 0.0));
+        vec3 amoebaBitangent = cross(amoebaDir, amoebaTangent);
+        float amoebaEps = 0.035;
+        vec3 amoebaPA = amoebaDisplace(normalize(amoebaDir + amoebaTangent * amoebaEps), amoebaRadius);
+        vec3 amoebaPB = amoebaDisplace(normalize(amoebaDir + amoebaBitangent * amoebaEps), amoebaRadius);
+        vec3 objectNormal = normalize(cross(amoebaPA - amoebaPos, amoebaPB - amoebaPos));
+        objectNormal *= sign(dot(objectNormal, amoebaDir));
+        `
+      )
+      .replace('#include <begin_vertex>', 'vec3 transformed = amoebaPos;');
+  };
+  material.customProgramCacheKey = () => 'hollowdrop-jelly-displace';
+  material.needsUpdate = true;
+
+  return {
+    uniforms,
+    update(deltaTime, speedRatio = 0, load = 0) {
+      uniforms.uTime.value += deltaTime;
+      uniforms.uSpeedRatio.value = THREE.MathUtils.clamp(speedRatio, 0, 1);
+      uniforms.uLoad.value = THREE.MathUtils.clamp(load, 0, 1);
+    },
+  };
+}
+
+/**
  * Builds the amoeba. Synchronous by design - there is no asset to fetch, so unlike the
  * imported model this replaces there is no placeholder-then-swap dance for main.js.
  *
