@@ -47,6 +47,30 @@ export class CollisionSystem {
     this.staticColliders.length = 0;
   }
 
+  /** True if a circle at (x, z) with `radius` overlaps NO collider (static or dynamic) -
+   *  a read-only query for placement validation (random respawn, dropped-item scatter),
+   *  distinct from resolve() which mutates a position. Re-queries dynamic providers so it
+   *  reflects moving colliders (e.g. the Murkmaw body) at call time. */
+  isClear(x, z, radius) {
+    for (const c of this.staticColliders) {
+      const dx = x - c.x;
+      const dz = z - c.z;
+      const min = radius + c.radius;
+      if (dx * dx + dz * dz < min * min) return false;
+    }
+    for (const provider of this._providers) {
+      const list = provider();
+      if (!list) continue;
+      for (const c of list) {
+        const dx = x - c.x;
+        const dz = z - c.z;
+        const min = radius + c.radius;
+        if (dx * dx + dz * dz < min * min) return false;
+      }
+    }
+    return true;
+  }
+
   /**
    * Pushes `position` out of every overlapping collider and cancels the part of
    * `velocity` heading into them.
