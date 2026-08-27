@@ -44,6 +44,7 @@ export class RadarHUD {
     this.display = document.getElementById('radar-display');
     this.blipsContainer = document.getElementById('radar-blips');
     this.compass = document.getElementById('radar-compass');
+    this.beam = document.getElementById('radar-beam');
     this.nearestEl = document.getElementById('radar-nearest');
     this.closeButton = document.getElementById('radar-close');
 
@@ -52,6 +53,13 @@ export class RadarHUD {
     this._radiusPx = 1;
     this._blipPool = new Map(); // id -> { el, x, y, targetX, targetY, type }
     this._hasShownApexSignal = false;
+
+    // One-time fill for the compact mini-legend's badges (index.html) - the SAME icon
+    // svg each matching blip uses, so "what's that dot" and "what's in the legend"
+    // never drift apart.
+    this.root?.querySelectorAll('[data-radar-icon]').forEach((el) => {
+      el.innerHTML = BLIP_ICONS[el.dataset.radarIcon] ?? '';
+    });
 
     this._measureRadius();
     this._attachInteraction();
@@ -75,6 +83,7 @@ export class RadarHUD {
     this._blipPool.clear();
     this._hasShownApexSignal = false;
     if (this.nearestEl) this.nearestEl.textContent = '';
+    if (this.beam) this.beam.style.opacity = '0';
   }
 
   update(deltaTime) {
@@ -92,6 +101,7 @@ export class RadarHUD {
 
     this._updateCompass();
     this._updateNearestLabel();
+    this._updateBeam();
   }
 
   // --- Blip pooling --------------------------------------------------------------
@@ -164,6 +174,25 @@ export class RadarHUD {
     };
     ping.addEventListener('animationend', remove, { once: true });
     setTimeout(remove, PING_ANIMATION_MS); // safety net - a backgrounded tab can miss animationend entirely
+  }
+
+  /** Directional lock-on beam toward the current highest-priority signal (spec-inspired
+   *  addition matching the reference art's beam toward its Boss blip). getNearestSignal()
+   *  already returns that target's x/y in the SAME player-relative screen space a blip's
+   *  own translate() uses, so - like a blip - this needs no separate heading correction,
+   *  just the angle from center to that point. atan2(x, -y) rather than the more usual
+   *  atan2(y, x): 0 rad must mean "pointing up" (screen -y) to match both the player
+   *  marker's own resting orientation and rotate()'s clockwise-positive convention. */
+  _updateBeam() {
+    if (!this.beam) return;
+    const nearest = this.radarController.getNearestSignal();
+    if (!nearest) {
+      this.beam.style.opacity = '0';
+      return;
+    }
+    const angle = Math.atan2(nearest.x, -nearest.y);
+    this.beam.style.transform = `rotate(${angle}rad)`;
+    this.beam.style.opacity = '1';
   }
 
   // --- Compass / nearest-signal readout --------------------------------------------

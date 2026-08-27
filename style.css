@@ -640,18 +640,43 @@ html, body {
   gap: 5px;
 }
 
+/* A small badge (icon + colored glow ring), not a bare dot - JS (radarHUD.js) fills
+   each [data-radar-icon] with the SAME svg its matching blip uses, once at startup. */
 .radar-mini-legend-icon {
-  width: 8px;
-  height: 8px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 0 5px currentColor;
 }
 
-.radar-mini-legend-icon--enemy { background: var(--radar-enemy); color: var(--radar-enemy); }
-.radar-mini-legend-icon--boss { background: var(--radar-boss); color: var(--radar-boss); }
-.radar-mini-legend-icon--dna { background: var(--radar-dna); color: var(--radar-dna); }
+.radar-mini-legend-icon svg {
+  width: 68%;
+  height: 68%;
+}
+
+.radar-mini-legend-icon--enemy {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 64, 88, 0.45), rgba(255, 64, 88, 0.1) 70%);
+  border: 1px solid rgba(255, 64, 88, 0.6);
+  box-shadow: 0 0 4px rgba(255, 64, 88, 0.5);
+  color: var(--radar-enemy);
+}
+
+.radar-mini-legend-icon--boss {
+  background: radial-gradient(circle at 34% 30%, rgba(176, 92, 255, 0.45), rgba(176, 92, 255, 0.1) 70%);
+  border: 1px solid rgba(176, 92, 255, 0.6);
+  box-shadow: 0 0 4px rgba(176, 92, 255, 0.5);
+  color: var(--radar-boss);
+}
+
+.radar-mini-legend-icon--dna {
+  background: radial-gradient(circle at 34% 30%, rgba(114, 255, 98, 0.45), rgba(114, 255, 98, 0.1) 70%);
+  border: 1px solid rgba(114, 255, 98, 0.6);
+  box-shadow: 0 0 4px rgba(114, 255, 98, 0.5);
+  color: var(--radar-dna);
+}
 
 /* Expanded: a centered full-screen overlay rather than growing in place toward the
    top-right corner, which would run the larger circle off the edge of a narrow phone
@@ -673,6 +698,115 @@ html, body {
   display: none;
 }
 
+/* Compact-only decorative housing around the dial: a real (if simplified) vine/wood
+   ring plus leaf accents (all one inline SVG, .radar-frame-vine), two glowing mushroom
+   clusters, and three non-functional satellite badges - approximating the reference
+   concept art's fuller frame. Sized 34px larger than the dial itself in each dimension
+   so the ring/leaves have somewhere to sit outside #radar-display's own circle without
+   overlapping it. Hidden entirely in expanded mode (below) - at that larger size this
+   fixed-proportion decoration would look thin/misplaced, and the full legend takes over
+   the "extra detail" role there anyway. */
+.radar-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(clamp(125px, 32vw, 180px) + 34px);
+  height: calc(clamp(125px, 32vw, 180px) + 34px);
+}
+
+.radar-frame-vine {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
+}
+
+.radar-mushroom {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.radar-mushroom i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
+  background: radial-gradient(circle at 35% 30%, #cdf1ff, #4aa9e0 70%);
+  box-shadow: 0 0 6px rgba(120, 210, 255, 0.9);
+}
+
+.radar-mushroom i:nth-child(2) {
+  width: 9px;
+  height: 9px;
+}
+
+.radar-mushroom--1 {
+  top: -2%;
+  left: 12%;
+}
+
+.radar-mushroom--2 {
+  bottom: 2%;
+  left: -2%;
+}
+
+/* Purely decorative badges echoing the reference's non-functional compass/crosshair/
+   water-drop trio - never interactive (pointer-events: none), never gated to any
+   gameplay state beyond compact-mode itself. */
+.radar-satellite {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 35% 30%, rgba(34, 54, 48, 0.95), rgba(6, 16, 14, 0.96));
+  border: 2px solid #6b4a2a;
+  box-shadow: 0 0 6px rgba(70, 247, 255, 0.25), inset 0 0 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.radar-satellite svg {
+  width: 58%;
+  height: 58%;
+}
+
+.radar-satellite--compass {
+  top: -4%;
+  right: -4%;
+  color: var(--radar-cyan);
+}
+
+.radar-satellite--target {
+  bottom: -2%;
+  left: -4%;
+  color: rgba(210, 235, 255, 0.85);
+}
+
+.radar-satellite--drop {
+  bottom: -8%;
+  right: 12%;
+  color: #6fc8ff;
+}
+
+.species-radar--expanded .radar-frame-vine,
+.species-radar--expanded .radar-mushroom,
+.species-radar--expanded .radar-satellite {
+  display: none;
+}
+
+.species-radar--expanded .radar-frame {
+  width: auto;
+  height: auto;
+}
+
 /* The circular glass itself. An organic "vine-wrapped" frame is faked cheaply via
    several concentric box-shadow rings (moss green -> dark wood -> cyan glow) layered
    outward from the border, rather than a literal vine texture - box-shadow paints
@@ -680,7 +814,9 @@ html, body {
    frame without extra DOM (spec section 63 allows this kind of substitution:
    "functionality is more important than pixel-perfect replication"). The background
    itself got a third, off-center green bloom to feel more like a living/swirling medium
-   instead of a flat two-tone gradient. */
+   instead of a flat two-tone gradient. Now layered UNDER the real vine-ring SVG above
+   (.radar-frame-vine) in compact mode - this box-shadow stack becomes the frame's only
+   ring again once that SVG is hidden in expanded mode. */
 #radar-display {
   position: relative;
   width: clamp(125px, 32vw, 180px);
@@ -753,6 +889,26 @@ html, body {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Directional lock-on beam toward the current highest-priority signal (spec-inspired
+   addition matching the reference art's beam toward its Boss blip) - JS (radarHUD.js)
+   rotates this every frame from the SAME already-player-relative x/y a blip uses, so
+   like the blips it needs no extra heading correction here. Points straight up (toward
+   the player marker's own resting direction) at rotate(0). Hidden via opacity when
+   there's no signal to point at, rather than toggling display, so the fade reads as a
+   beam winking out instead of popping. */
+#radar-beam {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  clip-path: polygon(50% 50%, 43% 0%, 57% 0%);
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.4), rgba(200, 245, 255, 0.12) 65%, transparent 100%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 2;
 }
 
 /* Player-up mode (spec section 16-17): this whole layer's rotation is set every frame
@@ -911,6 +1067,32 @@ html, body {
   background: radial-gradient(circle at 34% 30%, rgba(176, 92, 255, 0.42), rgba(176, 92, 255, 0.08) 70%);
   border: 1px solid rgba(176, 92, 255, 0.65);
   animation-duration: 2.2s;
+}
+
+/* Ornate diamond/compass-star frame behind the Boss badge, echoing the reference art's
+   octopus-in-compass-star treatment - a rotated square plus four small corner ticks,
+   slowly spinning independently of the badge's own pulse. */
+.radar-blip--boss .radar-blip-inner::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border: 1px solid rgba(176, 92, 255, 0.55);
+  transform: rotate(45deg);
+  animation: radar-boss-frame-spin 9s linear infinite;
+}
+
+.radar-blip--boss .radar-blip-inner::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 227, 138, 0.4);
+  animation: radar-boss-frame-spin 14s linear infinite reverse;
+}
+
+@keyframes radar-boss-frame-spin {
+  from { transform: rotate(45deg); }
+  to { transform: rotate(405deg); }
 }
 
 .radar-blip--dna .radar-blip-inner {

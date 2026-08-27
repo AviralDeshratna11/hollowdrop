@@ -188,27 +188,62 @@
        panel permanently visible beside the dial, so unlike the rest of the HUD this one
        is never gated to expanded-only. Positioned to the LEFT of the dial in compact
        mode (row layout) and hidden once expanded, where the full #radar-legend below
-       takes over with room to spell out every category. -->
+       takes over with room to spell out every category. Each row is an icon BADGE (same
+       SVG as its blip) plus a label, matching the reference's dark glass side panel. -->
   <div id="radar-mini-legend">
-    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--enemy"></span>Enemy</div>
-    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--boss"></span>Boss</div>
-    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--dna"></span>DNA</div>
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--enemy" data-radar-icon="enemy"></span>Enemy</div>
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--boss" data-radar-icon="boss"></span>Boss</div>
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--dna" data-radar-icon="dna"></span>Resource</div>
   </div>
 
   <div class="radar-column">
-    <div id="radar-display">
-      <div class="radar-grid"></div>
-      <div class="radar-sweep"></div>
-      <div id="radar-compass">
-        <span class="radar-compass-mark radar-compass-mark--n">N</span>
-        <span class="radar-compass-mark radar-compass-mark--e">E</span>
-        <span class="radar-compass-mark radar-compass-mark--s">S</span>
-        <span class="radar-compass-mark radar-compass-mark--w">W</span>
+    <!-- Compact-only decorative frame around the dial (organic vine ring, leaf/mushroom
+         accents, and three non-functional satellite badges) - approximates the reference
+         concept art's wood-and-vine housing. Hidden in expanded mode (style.css), where
+         the dial grows past what this frame's fixed proportions were tuned for and the
+         full legend below takes over the "readable detail" role instead. -->
+    <div class="radar-frame">
+      <svg class="radar-frame-vine" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#3a2a16" stroke-width="13" />
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#8a6a3f" stroke-width="8" stroke-dasharray="11 7" stroke-linecap="round" />
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#5c8f5c" stroke-width="3" stroke-dasharray="3 12" stroke-linecap="round" opacity="0.8" />
+        <g fill="#4f7d4a" opacity="0.9">
+          <ellipse cx="150" cy="27" rx="9" ry="5" transform="rotate(35 150 27)" />
+          <ellipse cx="163" cy="38" rx="7" ry="4" transform="rotate(60 163 38)" />
+          <ellipse cx="42" cy="168" rx="9" ry="5" transform="rotate(-35 42 168)" />
+          <ellipse cx="176" cy="150" rx="8" ry="4.5" transform="rotate(100 176 150)" />
+        </g>
+      </svg>
+      <span class="radar-mushroom radar-mushroom--1"><i></i><i></i><i></i></span>
+      <span class="radar-mushroom radar-mushroom--2"><i></i><i></i></span>
+      <div class="radar-satellite radar-satellite--compass" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3 17 15 12 12 7 15Z" fill="currentColor" /></svg>
       </div>
-      <!-- Blip elements are created/pooled entirely in JS (radarHUD.js) - nothing static here. -->
-      <div id="radar-blips"></div>
-      <div class="radar-player">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 19 21 12 16.5 5 21Z" fill="currentColor" /></svg>
+      <div class="radar-satellite radar-satellite--target" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="6.5" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke-linecap="round" /></svg>
+      </div>
+      <div class="radar-satellite radar-satellite--drop" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 2c4 5 7 9 7 13a7 7 0 0 1-14 0c0-4 3-8 7-13Z" fill="currentColor" /></svg>
+      </div>
+
+      <div id="radar-display">
+        <div class="radar-grid"></div>
+        <div class="radar-sweep"></div>
+        <!-- Directional beam toward the current highest-priority signal (spec-inspired
+             addition matching the reference art) - rotated in JS every frame, hidden via
+             opacity when there's nothing to point at. -->
+        <div id="radar-beam"></div>
+        <div id="radar-compass">
+          <span class="radar-compass-mark radar-compass-mark--n">N</span>
+          <span class="radar-compass-mark radar-compass-mark--e">E</span>
+          <span class="radar-compass-mark radar-compass-mark--s">S</span>
+          <span class="radar-compass-mark radar-compass-mark--w">W</span>
+        </div>
+        <!-- Blip elements are created/pooled entirely in JS (radarHUD.js) - nothing static here. -->
+        <div id="radar-blips"></div>
+        <div class="radar-player">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 19 21 12 16.5 5 21Z" fill="currentColor" /></svg>
+        </div>
       </div>
     </div>
 
