@@ -20,6 +20,13 @@ export const GAME_FLOW_CONFIG = {
   // a beat before cutting to the ending" pause spec sections 6-7 ask for.
   memoryTransitionDelay: 0.6,
   resetFadeDuration: 0.35, // each half of the Play Again fade-to-black-and-back (spec section 59)
+  // Longest a Title tap will ever wait on the player model before starting anyway with
+  // the placeholder still showing (see _handleBeginTap). The FBX + texture set this is
+  // waiting on runs to tens of MB, which on a slow/real phone network can take far
+  // longer than any reasonable "please wait" - a run that never starts is a much worse
+  // experience than a few extra seconds of the placeholder sphere before the existing
+  // crossfade (playerSlimeModel.js) swaps in the real model mid-game.
+  maxModelWaitSeconds: 4,
 };
 
 /**
@@ -63,7 +70,13 @@ export class GameFlowController {
     if (this.state !== GAME_STATES.TITLE || this._awaitingSlime) return;
     this._awaitingSlime = true;
     this.uiManager.setTitleLoading(true);
-    this._slimeReady.then(() => {
+
+    // Race against a timeout rather than waiting on _slimeReady unconditionally - see
+    // GAME_FLOW_CONFIG.maxModelWaitSeconds. Whichever settles first wins; the loser is
+    // simply never observed (the model keeps loading in the background regardless, and
+    // playerSlimeModel.js's own crossfade picks it up whenever it actually finishes).
+    const timeout = new Promise((resolve) => setTimeout(resolve, GAME_FLOW_CONFIG.maxModelWaitSeconds * 1000));
+    Promise.race([this._slimeReady, timeout]).then(() => {
       this._awaitingSlime = false;
       this.uiManager.setTitleLoading(false);
       this._beginFirstRun();

@@ -33,6 +33,8 @@ import { CollisionSystem } from './collision.js';
 import { updateSlimeCreatures } from './slimeCreature.js';
 import { ScreenShake } from './screenShake.js';
 import { DamageNumberController } from './damageNumbers.js';
+import { RadarController } from './radarController.js';
+import { RadarHUD } from './radarHUD.js';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -525,6 +527,21 @@ collisionSystem.addDynamicProvider(() => {
 
 const objectiveIndicator = new ObjectiveIndicatorController(camera, canvas, uiManager, fragmentContestManager, genomeFragmentController);
 
+// --- Species-Seeker Radar --------------------------------------------------------
+// Reads live positions/state directly off the controllers already constructed above -
+// see radarController.js's own header for why it never duplicates any of their data.
+const radarController = new RadarController({
+  player,
+  predatorController,
+  apexController,
+  rivalController,
+  genomeFragmentController,
+  resourceManager,
+});
+const radarHUD = new RadarHUD(radarController, {
+  onApexSignal: () => uiManager.showRadarSignal('APEX SIGNAL'),
+});
+
 
 // Every enemy source exposes the same getDamageableEntities()/takeDamage() interface
 // (see PlayerCombatController's own doc comment) - registering a new one means adding
@@ -844,6 +861,11 @@ function resetGame() {
   uiManager.dismissTransientUI();
   objectiveIndicator.update(); // one extra call so it hides itself immediately, not next frame
 
+  // Radar: no stale blips/expanded-state/detection-memory/one-shot-signal-toast should
+  // survive into the new run (spec section 58).
+  radarController.reset();
+  radarHUD.reset();
+
   if (DEBUG_APEX || DEBUG_RIVAL || DEBUG_FRAGMENT_CONTEST) console.log('Game reset - new run started');
 }
 
@@ -920,6 +942,8 @@ window.__hollowdrop = {
   rivalController,
   fragmentContestManager,
   objectiveIndicator,
+  radarController,
+  radarHUD,
   runStats,
   gameFlowController,
   memorySequenceController,
@@ -1001,6 +1025,11 @@ function animate() {
   // than deleting or rebuilding anything - renderer/camera/UI keep running regardless.
   const isPlayingState = gameFlowController.state === GAME_STATES.PLAYING;
   metabolismSystem.enabled = isPlayingState; // MetabolismSystem's own flag already exists for exactly this
+  // Radar (spec section 56/79): skip scanning entirely, and hide the HUD, outside
+  // PLAYING - same "recompute fresh every frame, no change-detection needed" pattern
+  // as the metabolism flag above.
+  radarController.setEnabled(isPlayingState);
+  radarHUD.setVisible(isPlayingState);
 
   burdenSystem.update();
   // Speed/acceleration are recomputed fresh every frame from base x form x burden -
@@ -1079,6 +1108,12 @@ function animate() {
   // everything else would cancel the effect out.
   screenShake.update(realDeltaTime);
   damageNumbers.update(realDeltaTime);
+
+  // Radar: real delta for the same reason as the two above (a HUD instrument reading
+  // the world shouldn't itself freeze during hitstop) - both no-op internally while
+  // disabled/hidden (see the isPlayingState gate above), so this is always safe to call.
+  radarController.update(realDeltaTime);
+  radarHUD.update(realDeltaTime);
 
   // Amoeba deformation. Real delta for the same reason as the two above: the membrane
   // should keep breathing through a hitstop freeze rather than locking mid-lobe.

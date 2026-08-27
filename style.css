@@ -134,6 +134,18 @@
   /* Geometry - the HUD's shared shape language */
   --radius-pill: 999px;
   --blur-hud: 4px;
+
+  /* Species-Seeker Radar - kept in their own group since they're the one place this
+     game's palette borrows a cyan/teal identity distinct from the accent green, so the
+     radar itself reads as its own instrument rather than just another green HUD panel. */
+  --radar-cyan: #46f7ff;
+  --radar-cyan-dim: rgba(70, 247, 255, 0.35);
+  --radar-glass: rgba(6, 24, 26, 0.82);
+  --radar-enemy: #ff4058;
+  --radar-boss: #b05cff;
+  --radar-dna: #72ff62;
+  --radar-genome: #ffe38a;
+  --radar-rival: #ff943d;
 }
 
 * {
@@ -568,6 +580,498 @@ html, body {
 #objective-indicator.objective-indicator--visible {
   opacity: 0.9;
 }
+
+/* ==========================================================================
+   Species-Seeker Radar (radarController.js / radarHUD.js)
+   ========================================================================== */
+
+/* Top-right, responsive, deliberately much smaller than the concept artwork (that was
+   HUD inspiration, not final screen scale - spec section 4). Compact mode lays out as a
+   ROW (mini-legend, then the dial+nearest-label column) to echo the reference art's
+   permanent side legend; expanded mode (below) switches back to a centered column. */
+#species-radar {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 12px;
+  z-index: 22;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
+  transition: opacity 0.25s ease;
+}
+
+#species-radar.species-radar--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.radar-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Small always-on legend (unlike #radar-legend below, this one is NEVER expand-gated -
+   the reference keeps a legend permanently in view beside the dial). Icon + short label
+   rather than the reference's full row of decorative badges: only the three categories
+   a player actually needs to recognize at a glance while playing. */
+#radar-mini-legend {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  background: var(--surface-panel);
+  border: 1px solid rgb(var(--accent-rgb) / 0.18);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.radar-mini-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.radar-mini-legend-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  box-shadow: 0 0 5px currentColor;
+}
+
+.radar-mini-legend-icon--enemy { background: var(--radar-enemy); color: var(--radar-enemy); }
+.radar-mini-legend-icon--boss { background: var(--radar-boss); color: var(--radar-boss); }
+.radar-mini-legend-icon--dna { background: var(--radar-dna); color: var(--radar-dna); }
+
+/* Expanded: a centered full-screen overlay rather than growing in place toward the
+   top-right corner, which would run the larger circle off the edge of a narrow phone
+   screen. Deliberately does NOT pause the game (spec section 53) - it's a backdrop
+   tint, not a modal blocking gameplay state. */
+#species-radar.species-radar--expanded {
+  inset: 0;
+  flex-direction: column;
+  justify-content: center;
+  background: rgba(4, 10, 9, 0.86);
+  z-index: 40;
+  padding: 24px;
+  padding-top: max(24px, env(safe-area-inset-top));
+  gap: 16px;
+}
+
+/* The full legend takes over once expanded - the mini one would be redundant. */
+#species-radar.species-radar--expanded #radar-mini-legend {
+  display: none;
+}
+
+/* The circular glass itself. An organic "vine-wrapped" frame is faked cheaply via
+   several concentric box-shadow rings (moss green -> dark wood -> cyan glow) layered
+   outward from the border, rather than a literal vine texture - box-shadow paints
+   outside the element's own overflow:hidden clip, so this reads as a thick organic
+   frame without extra DOM (spec section 63 allows this kind of substitution:
+   "functionality is more important than pixel-perfect replication"). The background
+   itself got a third, off-center green bloom to feel more like a living/swirling medium
+   instead of a flat two-tone gradient. */
+#radar-display {
+  position: relative;
+  width: clamp(125px, 32vw, 180px);
+  height: clamp(125px, 32vw, 180px);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(70, 247, 255, 0.2), transparent 50%),
+    radial-gradient(circle at 68% 74%, rgba(58, 168, 108, 0.28), transparent 55%),
+    radial-gradient(circle at center, var(--radar-glass), rgba(4, 14, 15, 0.97) 85%);
+  border: 2px solid rgb(var(--accent-rgb) / 0.4);
+  box-shadow:
+    0 0 0 4px rgba(58, 122, 92, 0.55),
+    0 0 0 8px rgba(22, 38, 28, 0.65),
+    0 0 0 10px rgba(70, 247, 255, 0.18),
+    0 0 24px rgba(70, 247, 255, 0.28),
+    inset 0 0 24px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  cursor: pointer;
+  transition: width 0.35s ease, height 0.35s ease;
+}
+
+#species-radar.species-radar--expanded #radar-display {
+  width: min(78vw, 60vh, 420px);
+  height: min(78vw, 60vh, 420px);
+  cursor: default;
+}
+
+/* Range rings (spec section 20) - the outer ring is this element's own border, the two
+   inner ones are pseudo-elements so no extra DOM is needed. Crosshair axes are two
+   hard-edged linear-gradients rather than separate line elements, for the same reason. */
+.radar-grid {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  border: 1px solid var(--radar-cyan-dim);
+  background:
+    linear-gradient(to right, transparent 49.4%, rgba(70, 247, 255, 0.14) 49.4%, rgba(70, 247, 255, 0.14) 50.6%, transparent 50.6%),
+    linear-gradient(to bottom, transparent 49.4%, rgba(70, 247, 255, 0.14) 49.4%, rgba(70, 247, 255, 0.14) 50.6%, transparent 50.6%);
+}
+
+.radar-grid::before,
+.radar-grid::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(70, 247, 255, 0.16);
+}
+
+.radar-grid::before {
+  inset: 28%;
+}
+
+.radar-grid::after {
+  inset: 58%;
+}
+
+/* Rotating scan beam - purely visual (spec section 27: detection never waits on it),
+   a conic-gradient wedge spun by CSS animation alone. */
+.radar-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(70, 247, 255, 0.3) 22deg, transparent 55deg);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: radar-sweep-spin 2.6s linear infinite;
+}
+
+@keyframes radar-sweep-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Player-up mode (spec section 16-17): this whole layer's rotation is set every frame
+   in JS (radarHUD.js) to the player's current heading, so N/E/S/W always reflect which
+   way is actually which relative to the fixed "up = forward" player marker below. */
+#radar-compass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.radar-compass-mark {
+  position: absolute;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(var(--accent-rgb) / 0.7);
+  text-shadow: 0 0 4px rgba(70, 247, 255, 0.4);
+}
+
+/* Small triangular tick fused to each letter via a pseudo-element, pointing inward off
+   the rim - closer to the reference's tick-marked compass ring than plain text alone. */
+.radar-compass-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  transform: translateX(-50%);
+}
+
+.radar-compass-mark--n {
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.radar-compass-mark--n::after {
+  top: 11px;
+  border-top: 4px solid rgb(var(--accent-rgb) / 0.6);
+}
+
+.radar-compass-mark--s {
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.radar-compass-mark--s::after {
+  bottom: 11px;
+  border-bottom: 4px solid rgb(var(--accent-rgb) / 0.6);
+}
+
+.radar-compass-mark--e {
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.radar-compass-mark--w {
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* The player is always dead center and never moves (spec section 18) - only the
+   compass/blips move/rotate around it. A dart/paper-plane SVG rather than a bare "▲"
+   glyph, closer to the reference art's arrow marker. */
+.radar-player {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  color: var(--radar-cyan);
+  filter: drop-shadow(0 0 6px var(--radar-cyan));
+  z-index: 3;
+  pointer-events: none;
+}
+
+.radar-player svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#radar-blips {
+  position: absolute;
+  inset: 0;
+}
+
+/* Positioning wrapper - JS (radarHUD.js) sets ONLY this element's transform, every
+   frame, to translate(Xpx, Ypx) from center. Zero-sized on purpose: the pulse
+   animation below lives on a separate CHILD element (.radar-blip-inner) specifically
+   so a CSS keyframe animating transform there can never fight with this element's own
+   per-frame inline transform (an animated `transform` on the SAME element would win
+   over an inline style, clobbering the position every frame). */
+.radar-blip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Each blip is a colored circular BADGE (radial bloom + ring) with the icon sitting on
+   top, matching the reference's "icon inside a glowing coin" look rather than a bare
+   floating icon. The bloom background is set per-type below since currentColor can't be
+   read back into an rgba() background from here. */
+.radar-blip-inner {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--radar-cyan);
+  filter: drop-shadow(0 0 4px currentColor);
+  animation: radar-blip-pulse 1.8s ease-in-out infinite;
+}
+
+.radar-blip-inner svg {
+  width: 68%;
+  height: 68%;
+}
+
+@keyframes radar-blip-pulse {
+  0%, 100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.radar-blip--enemy .radar-blip-inner {
+  color: var(--radar-enemy);
+  background: radial-gradient(circle at 34% 30%, rgba(255, 64, 88, 0.4), rgba(255, 64, 88, 0.08) 70%);
+  border: 1px solid rgba(255, 64, 88, 0.65);
+  animation-duration: 1.4s;
+}
+
+.radar-blip--boss .radar-blip-inner {
+  color: var(--radar-boss);
+  width: 22px;
+  height: 22px;
+  top: -11px;
+  left: -11px;
+  background: radial-gradient(circle at 34% 30%, rgba(176, 92, 255, 0.42), rgba(176, 92, 255, 0.08) 70%);
+  border: 1px solid rgba(176, 92, 255, 0.65);
+  animation-duration: 2.2s;
+}
+
+.radar-blip--dna .radar-blip-inner {
+  color: var(--radar-dna);
+  background: radial-gradient(circle at 34% 30%, rgba(114, 255, 98, 0.4), rgba(114, 255, 98, 0.08) 70%);
+  border: 1px solid rgba(114, 255, 98, 0.65);
+}
+
+.radar-blip--genome .radar-blip-inner {
+  color: var(--radar-genome);
+  width: 18px;
+  height: 18px;
+  top: -9px;
+  left: -9px;
+  background: radial-gradient(circle at 34% 30%, rgba(255, 227, 138, 0.45), rgba(255, 227, 138, 0.1) 70%);
+  border: 1px solid rgba(255, 227, 138, 0.7);
+  animation-duration: 1s;
+}
+
+.radar-blip--rival .radar-blip-inner {
+  color: var(--radar-rival);
+  background: radial-gradient(circle at 34% 30%, rgba(255, 148, 61, 0.4), rgba(255, 148, 61, 0.08) 70%);
+  border: 1px solid rgba(255, 148, 61, 0.65);
+}
+
+/* Edge-clamped (boss/genome/rival past detectionRadius, spec section 23) reads
+   slightly brighter - it's still communicating real direction, just at a distance. */
+.radar-blip--clamped .radar-blip-inner {
+  filter: drop-shadow(0 0 6px currentColor) brightness(1.2);
+}
+
+/* Very-close hostile (spec section 30) and an actively chasing predator both pulse
+   faster - the same visual language, just a shorter animation-duration, rather than a
+   second competing effect. */
+.radar-blip--close .radar-blip-inner {
+  animation-duration: 0.6s;
+}
+
+.radar-blip--chasing .radar-blip-inner {
+  animation-duration: 0.5s;
+}
+
+/* Rival carrying the Fragment (spec section 14) - a small golden ring combined onto
+   the SAME orange Rival icon, never a second overlapping blip. */
+.radar-blip--carrying-genome .radar-blip-inner {
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--radar-genome);
+}
+
+/* First-detection ping (spec section 34) - a transient ring appended/removed by JS,
+   expanding and fading once. */
+.radar-ping {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+  pointer-events: none;
+  animation: radar-ping-expand 0.85s ease-out forwards;
+}
+
+@keyframes radar-ping-expand {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(4);
+  }
+}
+
+/* Single nearest/highest-priority signal only (spec sections 24-25, 67-68) - shown in
+   both compact and expanded mode, since it's deliberately light enough for either. */
+#radar-nearest {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--radar-cyan);
+  text-shadow: 0 0 6px rgba(70, 247, 255, 0.5);
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#species-radar.species-radar--expanded #radar-nearest {
+  font-size: 13px;
+}
+
+#radar-nearest.radar-nearest--visible {
+  opacity: 1;
+}
+
+#radar-close {
+  display: none;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgb(var(--accent-rgb) / 0.4);
+  background: var(--surface-button);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+#species-radar.species-radar--expanded #radar-close {
+  display: flex;
+}
+
+/* Only ever visible expanded (spec section 48-49) - the compact view stays to just the
+   radar itself plus the one nearest-signal line. */
+#radar-legend {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: var(--surface-panel);
+  border: 1px solid rgb(var(--accent-rgb) / 0.2);
+  color: var(--text);
+  font-size: 12px;
+}
+
+#species-radar.species-radar--expanded #radar-legend {
+  display: flex;
+}
+
+.radar-legend-heading {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+  margin-bottom: 2px;
+}
+
+.radar-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.radar-legend-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.radar-legend-icon--enemy { background: var(--radar-enemy); }
+.radar-legend-icon--boss { background: var(--radar-boss); }
+.radar-legend-icon--dna { background: var(--radar-dna); }
+.radar-legend-icon--genome { background: var(--radar-genome); }
+.radar-legend-icon--rival { background: var(--radar-rival); }
 
 /* ==========================================================================
    Title / Memory Reveal / Run Complete

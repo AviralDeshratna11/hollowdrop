@@ -178,6 +178,59 @@
      via inline style each frame, not CSS layout. -->
 <div id="objective-indicator">▲</div>
 
+<!-- Species-Seeker Radar (see radarController.js for the live target-detection logic,
+     radarHUD.js for everything below). A real gameplay system, not a decorative
+     minimap - every blip position comes from an existing controller's actual world
+     position, read fresh every ~100ms. Compact in the top-right corner by default; tap
+     it (or the X once expanded) to toggle the larger view with its legend. -->
+<div id="species-radar">
+  <!-- Small always-on legend (compact AND expanded) - the reference art keeps this
+       panel permanently visible beside the dial, so unlike the rest of the HUD this one
+       is never gated to expanded-only. Positioned to the LEFT of the dial in compact
+       mode (row layout) and hidden once expanded, where the full #radar-legend below
+       takes over with room to spell out every category. -->
+  <div id="radar-mini-legend">
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--enemy"></span>Enemy</div>
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--boss"></span>Boss</div>
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--dna"></span>DNA</div>
+  </div>
+
+  <div class="radar-column">
+    <div id="radar-display">
+      <div class="radar-grid"></div>
+      <div class="radar-sweep"></div>
+      <div id="radar-compass">
+        <span class="radar-compass-mark radar-compass-mark--n">N</span>
+        <span class="radar-compass-mark radar-compass-mark--e">E</span>
+        <span class="radar-compass-mark radar-compass-mark--s">S</span>
+        <span class="radar-compass-mark radar-compass-mark--w">W</span>
+      </div>
+      <!-- Blip elements are created/pooled entirely in JS (radarHUD.js) - nothing static here. -->
+      <div id="radar-blips"></div>
+      <div class="radar-player">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 19 21 12 16.5 5 21Z" fill="currentColor" /></svg>
+      </div>
+    </div>
+
+    <!-- Single highest-priority/nearest signal only (spec: a 150px radar can't carry a
+         label per blip) - e.g. "APEX • 24m" or "RIVAL + GENOME • 16m". -->
+    <div id="radar-nearest"></div>
+  </div>
+
+  <button id="radar-close" type="button" aria-label="Close radar">✕</button>
+
+  <!-- Full legend, only ever visible expanded (see style.css) - the compact mini-legend
+       above covers the three most important categories in the smaller space. -->
+  <div id="radar-legend">
+    <span class="radar-legend-heading">Species-Seeker</span>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--enemy"></span>Enemy</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--boss"></span>Apex</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--dna"></span>DNA</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--genome"></span>Genome Fragment</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--rival"></span>Rival</div>
+  </div>
+</div>
+
 <div id="inventory-overlay">
   <div id="inventory-panel">
     <div class="inventory-header">
