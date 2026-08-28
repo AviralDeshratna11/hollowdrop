@@ -10,6 +10,12 @@ export const GAME_STATES = {
   REVEAL: 'reveal',
   RUN_COMPLETE: 'run_complete',
   RESETTING: 'resetting',
+  // The Bag/Inventory panel, open (see openInventory()/closeInventory() below). Its own
+  // state rather than a parallel pause boolean, precisely so it falls under the SAME
+  // `isPlayingState = state === PLAYING` gate main.js already checks before ticking any
+  // AI/timer/physics system - opening the panel freezes all of that for free, the same
+  // way REVEAL already does for the info-card overlay.
+  INVENTORY: 'inventory',
 };
 
 export const GAME_FLOW_CONFIG = {
@@ -184,6 +190,25 @@ export class GameFlowController {
       if (this.state === GAME_STATES.REVEAL) this.state = GAME_STATES.PLAYING;
     });
     return true;
+  }
+
+  /**
+   * Opens the Bag/Inventory panel as a full gameplay pause (spec: movement, AI, energy
+   * drain, and the mutation timer all pause while it's up). Refuses outside PLAYING -
+   * covers TITLE/MEMORY/REVEAL/RUN_COMPLETE/RESETTING, and death (deathRespawnManager's
+   * own isPlaying flag is layered on top of this by the caller, same as canAct in
+   * main.js) all at once, rather than each needing its own special-case check here.
+   */
+  openInventory() {
+    if (this.state !== GAME_STATES.PLAYING) return false;
+    this.state = GAME_STATES.INVENTORY;
+    return true;
+  }
+
+  /** Only resumes if nothing else claimed the state while the panel was up - same guard
+   *  showReveal()/showOpeningObjective() use for their own dismissal. */
+  closeInventory() {
+    if (this.state === GAME_STATES.INVENTORY) this.state = GAME_STATES.PLAYING;
   }
 
   /** The opening objective card. Shown once per session, not once per run - a player

@@ -228,25 +228,37 @@ export class InventoryInteractionController {
   _confirmConsume() {
     const item = this.consumeCandidate;
     if (!item) return;
+    this._hideConsumeAction();
+    this.consumeItem(item);
+  }
+
+  /**
+   * Consumes one real item immediately - the shared core of the world-tap Consume flow
+   * above (_confirmConsume, via the on-screen button that appears after tapping an item
+   * inside Hollowdrop) and the Bag/Inventory panel's own Consume button
+   * (inventoryUI.js), so both paths always produce identical bookkeeping and the same
+   * toward-the-core digestion animation. Returns false (no-op beyond the Energy Full
+   * toast) if the item is no longer actually carried or the player is already full.
+   */
+  consumeItem(item) {
     // Re-verify it's still actually in the inventory (e.g. hasn't been expelled/consumed
-    // by some other path since the button appeared).
-    if (!this.inventoryManager.items.includes(item)) {
-      this._hideConsumeAction();
-      return;
-    }
+    // by some other path since the caller last saw it).
+    if (!this.inventoryManager.items.includes(item)) return false;
+    // Only one digestion animation runs at a time - a rapid double-tap on the panel's
+    // Consume button (or overlapping world-tap + panel calls) would otherwise stomp the
+    // in-flight item's start position/scale.
+    if (this._digestingItem !== null) return false;
 
     if (this.metabolismSystem.isFull()) {
       this.uiManager.showEnergyFull();
-      this._hideConsumeAction();
-      return;
+      return false;
     }
-
-    this._hideConsumeAction();
 
     this._digestingItem = item;
     this._digestTime = 0;
     this._digestStartPosition.copy(item.visualMesh.position);
     this._digestStartScale = item.visualMesh.scale.x;
+    return true;
   }
 
   /** Item shrinks and moves toward the slime's own core (local origin) while

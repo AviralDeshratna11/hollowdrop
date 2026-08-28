@@ -618,14 +618,44 @@ addDefeatShake(apexController, 0.7); // the boss earns the biggest one in the ga
 
 // Opening the panel mid-swipe cancels the drag so Hollowdrop eases to a stop
 // instead of continuing to coast while the player is browsing their items.
+//
+// canOpen closes over gameFlowController/deathRespawnManager, both declared further
+// down this file - safe because it's only ever CALLED (from a tap, well after this
+// whole module has finished executing), never evaluated here at construction time. It
+// mirrors main.js's own `canAct` gate exactly (spec section 66: not on Title, mid-death,
+// mid-mutation, or during any non-PLAYING flow state) without needing canAct itself,
+// which only exists freshly recomputed inside the animate loop.
 const inventoryUI = new InventoryUI(inventoryManager, {
   mutationSystem, // so the codex can show live missing-ingredient counts
+  inventoryInteraction, // Consume routes through here (consumeItem)
+  inventoryWheel, // Expel routes through here (expelItemById)
+  genomeFragmentController, // special Human Genome Fragment slot
+  burdenSystem, // live burden label + movement % in the Mass footer
+  canOpen: () => gameFlowController.state === GAME_STATES.PLAYING
+    && deathRespawnManager.isPlaying
+    && !playerFormController.isLocked,
   onOpen: () => {
     inputController.cancel();
     inventoryInteraction.cancelActiveGesture();
     inventoryWheel.cancel(); // the two inventory UIs must never be open at once
+    gameFlowController.openInventory(); // full gameplay pause - see that method's own note
   },
+  onClose: () => gameFlowController.closeInventory(),
 });
+
+// The one hook every inventory-changing action already calls (absorb/consume/expel/
+// death-drop/mutation - see mutationSystem.js's own note on onInventoryChanged), wrapped
+// rather than replaced so the existing debug recipe panel keeps working unchanged - same
+// pattern as addDefeatShake above. This is what keeps the Bag badge and, while open, the
+// panel's grid/details/mass/codex live without ever polling inventory state per frame
+// (spec sections 58-60).
+{
+  const previousOnRecipeChecked = mutationSystem.onRecipeChecked;
+  mutationSystem.onRecipeChecked = (recipe, missing) => {
+    previousOnRecipeChecked?.(recipe, missing);
+    inventoryUI.refresh();
+  };
+}
 
 // --- Camera follow -----------------------------------------------------------
 const desiredCameraPos = new THREE.Vector3();
@@ -700,6 +730,15 @@ if (DEBUG_METABOLISM) {
     if (e.key === 'f' || e.key === 'F') metabolismSystem.addEnergy(20);
   });
 }
+
+// Desktop keyboard support for the Bag/Inventory panel (spec section 82) - mobile
+// remains the primary input, this is purely a testing convenience and always on (not
+// gated behind a DEBUG flag), same as it would be for any other permanent HUD control.
+window.addEventListener('keydown', (e) => {
+  if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'i' || e.key === 'I') inventoryUI.toggle();
+  if (e.key === 'Escape' && inventoryUI.isOpen) inventoryUI.close();
+});
 
 if (DEBUG_MUTATION) {
   window.addEventListener('keydown', (e) => {
@@ -927,6 +966,7 @@ window.__hollowdrop = {
   playerController,
   inventoryInteraction,
   inventoryWheel,
+  inventoryUI,
   collisionSystem,
   playerHealth,
   metabolismSystem,
@@ -1101,7 +1141,8 @@ function animate() {
 
   inventoryInteraction.update(deltaTime);
   inventoryManager.update(deltaTime, inventoryInteraction.getExcludedItemId());
-  inventoryUI.updateMass();
+  // No per-frame inventoryUI update: it's event-driven (see the onRecipeChecked wrap
+  // near its construction) rather than polled every frame (spec sections 58-59).
 
   // Both run on REAL delta: the point of hitstop is that the world freezes while the
   // camera rattles and the number you just dealt keeps rising. Slowing these two with

@@ -208,9 +208,31 @@ export class InventoryWheelController {
   }
 
   /**
-   * Ejects one item back into the world. Lifted from the removed swipe gesture so the
-   * physics, particle burst and mass bookkeeping stay identical - only the input that
-   * triggers it has changed.
+   * Ejects one item back into the world in a given world-space direction. Lifted from
+   * the removed swipe gesture so the physics, particle burst and mass bookkeeping stay
+   * identical - only the input that triggers it has changed. Shared by both the wheel's
+   * own per-segment expel (_expel, below) and the Bag/Inventory panel's Expel button
+   * (expelItemById, below) - spec section 42 explicitly asks that the panel never
+   * duplicate this logic.
+   */
+  _expelInDirection(item, worldDir) {
+    tempSpawnPos.set(
+      this.player.position.x + worldDir.x * this.playerRadius,
+      EXPEL_PHYSICS.groundRestHeight + 0.25,
+      this.player.position.z + worldDir.z * this.playerRadius
+    );
+
+    this.resourceManager.spawnDroppedResource(item.type, tempSpawnPos, worldDir);
+    this.resourceManager.particles.spawnOutwardBurst(tempSpawnPos, worldDir, RESOURCE_TYPES[item.type].color);
+
+    this.inventoryManager.removeItem(item.id);
+    this.uiManager.updateMassUI(this.inventoryManager.getInventoryWeight(), this.inventoryManager.maxWeight);
+    this.playerController.triggerAbsorbPulse();
+    this.mutationSystem?.onInventoryChanged();
+  }
+
+  /**
+   * Ejects one item back into the world.
    *
    * @param screenAngle the segment's angle on the wheel, so the item flies out in the
    *        direction the player actually tapped rather than somewhere arbitrary.
@@ -232,23 +254,32 @@ export class InventoryWheelController {
       .addScaledVector(tempWorldForward, -dirY)
       .normalize();
 
-    tempSpawnPos.set(
-      this.player.position.x + tempWorldDir.x * this.playerRadius,
-      EXPEL_PHYSICS.groundRestHeight + 0.25,
-      this.player.position.z + tempWorldDir.z * this.playerRadius
-    );
-
-    this.resourceManager.spawnDroppedResource(item.type, tempSpawnPos, tempWorldDir);
-    this.resourceManager.particles.spawnOutwardBurst(tempSpawnPos, tempWorldDir, RESOURCE_TYPES[item.type].color);
-
-    this.inventoryManager.removeItem(item.id);
-    this.uiManager.updateMassUI(this.inventoryManager.getInventoryWeight(), this.inventoryManager.maxWeight);
-    this.playerController.triggerAbsorbPulse();
-    this.mutationSystem?.onInventoryChanged();
+    this._expelInDirection(item, tempWorldDir);
 
     // Rebuild rather than close: shedding weight is usually several taps in a row, and
     // reopening the wheel between each would make that miserable under pressure.
     this._build();
+  }
+
+  /**
+   * Public: expels one item by id, launched directly behind the player (spec section
+   * 41) - used by the Bag/Inventory panel, which has no on-screen wheel angle to derive
+   * a throw direction from. Reuses _expelInDirection so the physics/particles/mass/
+   * mutation bookkeeping are byte-for-byte identical to the wheel's own expel.
+   * Returns false (no-op) if the item is no longer actually carried.
+   */
+  expelItemById(itemId) {
+    const item = this.inventoryManager.items.find((i) => i.id === itemId);
+    if (!item) return false;
+
+    this.playerController.getForwardDirection(tempWorldDir).negate();
+    this._expelInDirection(item, tempWorldDir);
+
+    // Keep the wheel's own view in sync in case it happens to be open behind the panel
+    // (it never is at the same time in practice - main.js's onOpen closes it - but this
+    // costs nothing and removes any doubt).
+    if (this.isOpen) this._build();
+    return true;
   }
 
   /** Safety hook for death, mutation and the Play Again reset - same role as

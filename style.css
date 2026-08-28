@@ -1768,6 +1768,51 @@ html, body {
   border-color: rgb(var(--accent-rgb) / 0.6);
 }
 
+/* Heavy-inventory feedback on the button itself (spec section 7) - a color shift plus,
+   once past 85%, a slow pulse. Deliberately no giant warning text, just the button's
+   own state, same restrained language the mass-ui HUD element already uses. */
+#inventory-toggle.inventory-toggle--warn {
+  border-color: rgb(var(--warn-rgb, 230 170 60) / 0.7);
+  color: rgb(var(--warn-rgb, 230 170 60) / 1);
+}
+
+#inventory-toggle.inventory-toggle--critical {
+  border-color: rgb(var(--danger-rgb, 255 90 90) / 0.75);
+  color: rgb(var(--danger-rgb, 255 90 90) / 1);
+  animation: inventory-toggle-critical-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes inventory-toggle-critical-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--danger-rgb, 255 90 90) / 0.35); }
+  50% { box-shadow: 0 0 0 7px rgb(var(--danger-rgb, 255 90 90) / 0); }
+}
+
+/* Total carried UNITS (spec section 6), always live even while the panel is closed. */
+.inventory-bag-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: rgb(var(--accent-rgb) / 0.9);
+  color: #04140f;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgb(var(--surface-rgb) / 0.9);
+}
+
+#inventory-toggle.inventory-toggle--warn .inventory-bag-badge {
+  background: rgb(var(--warn-rgb, 230 170 60) / 1);
+}
+
+#inventory-toggle.inventory-toggle--critical .inventory-bag-badge {
+  background: rgb(var(--danger-rgb, 255 90 90) / 1);
+}
+
 /* Shared icon sizing for every action-stack button's inline SVG - fill: currentColor
    means each button's own `color` (set per state below) tints its icon automatically,
    with no separate icon-color rule needed anywhere. */
@@ -1908,18 +1953,6 @@ html, body {
   opacity: 1;
 }
 
-.inventory-icon {
-  display: grid;
-  grid-template-columns: repeat(2, 6px);
-  grid-template-rows: repeat(2, 6px);
-  gap: 3px;
-}
-
-.inventory-icon span {
-  background: currentColor;
-  border-radius: 2px;
-}
-
 /* Inventory panel: backdrop + bottom sheet */
 #inventory-overlay {
   position: fixed;
@@ -1942,7 +1975,7 @@ html, body {
 #inventory-panel {
   width: 100%;
   max-width: 480px;
-  max-height: 72vh;
+  max-height: 85vh; /* spec section 14: ~85-90% of available screen */
   background: var(--surface-panel);
   border: 1px solid rgb(var(--accent-rgb) / 0.25);
   border-bottom: none;
@@ -1955,6 +1988,16 @@ html, body {
   transition: transform 0.25s ease;
   color: var(--text);
   font-family: var(--font-ui);
+  /* The panel now carries a special slot, codex, and a fuller detail/actions section
+     on top of the grid - together they can exceed even 85vh (many resource types plus
+     an expanded codex). The grid keeps its OWN internal scroll below (spec section 15:
+     "the items area" specifically) so a long inventory alone never needs this outer
+     scroll to reach the codex/detail/footer beneath it; this outer one is the fallback
+     that keeps everything reachable, never overlapping, on a short/landscape viewport -
+     not the primary way either section is meant to be read. overscroll-behavior stops a
+     scroll-past-the-end here from also dragging the page behind the backdrop. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 #inventory-overlay.inventory-overlay--open #inventory-panel {
@@ -1967,10 +2010,23 @@ html, body {
   justify-content: space-between;
 }
 
+.inventory-header-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .inventory-title {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+/* Total carried units (spec section 35) - distinct from the per-stack ×N badges below. */
+.inventory-header-count {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
 }
 
 #inventory-close {
@@ -2012,14 +2068,17 @@ html, body {
 
 #inventory-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  grid-template-columns: repeat(3, 1fr); /* spec section 15 - fixed 3-column, matching the reference panel art */
   gap: 8px;
-  max-height: 42vh;
-  overflow-y: auto;
+  max-height: 30vh;
+  overflow-y: auto; /* the items area scrolls independently (spec section 15) */
+  overscroll-behavior: contain;
   padding-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .inventory-cell {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2037,11 +2096,35 @@ html, body {
   background: rgb(var(--accent-rgb) / 0.15);
 }
 
-.inventory-swatch {
-  width: 22px;
-  height: 22px;
+.inventory-cell--selected {
+  border-color: rgb(var(--accent-rgb) / 0.7);
+  background: rgb(var(--accent-rgb) / 0.14);
+  box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.4), 0 0 10px rgb(var(--accent-rgb) / 0.25);
+  animation: inventory-cell-selected-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes inventory-cell-selected-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.4), 0 0 10px rgb(var(--accent-rgb) / 0.25); }
+  50% { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.6), 0 0 16px rgb(var(--accent-rgb) / 0.4); }
+}
+
+/* Icon badge - colored glow + border set inline per-item from RESOURCE_TYPES.color
+   (inventoryUI.js), the same "icon inside a glowing coin" language the radar's own
+   blips use, for one consistent HUD vocabulary. See inventoryUI.js's CATEGORY_ICONS for
+   why these are category-shaped placeholders rather than final per-item artwork. */
+.inventory-cell-icon {
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  box-shadow: 0 0 8px currentColor;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inventory-cell-icon svg {
+  width: 62%;
+  height: 62%;
 }
 
 .inventory-cell-name {
@@ -2051,9 +2134,20 @@ html, body {
   line-height: 1.2;
 }
 
-.inventory-cell-count {
-  font-size: 10px;
-  opacity: 0.6;
+/* Quantity pill (spec section 20) - bottom-right of the cell, high-contrast. */
+.inventory-count {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 8px;
+  background: rgb(var(--shadow-rgb) / 0.75);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
 }
 
 .inventory-empty {
@@ -2064,10 +2158,56 @@ html, body {
   padding: 24px 0;
 }
 
+/* Special/key-item slot: Human Genome Fragment (spec sections 50-53) - visually
+   distinct (golden) from the normal grid, collapsed to nothing when not carrying it. */
+#inventory-special {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+}
+
+#inventory-special > * {
+  overflow: hidden;
+}
+
+#inventory-special.inventory-special--visible {
+  grid-template-rows: 1fr;
+}
+
+.inventory-cell--special {
+  width: 100%;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, rgb(255 227 138 / 0.14), rgb(255 227 138 / 0.03));
+  border-color: rgb(255 227 138 / 0.45);
+}
+
+.inventory-cell--special.inventory-cell--selected {
+  box-shadow: 0 0 0 1px rgb(255 227 138 / 0.6), 0 0 10px rgb(255 227 138 / 0.35);
+}
+
+.inventory-cell-icon--special {
+  background: radial-gradient(circle at 34% 30%, rgb(255 227 138 / 0.45), rgb(255 227 138 / 0.1) 70%);
+  border-color: rgb(255 227 138 / 0.65);
+  color: #ffe38a;
+  flex-shrink: 0;
+}
+
+.inventory-cell-tag {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ffe38a;
+  opacity: 0.85;
+}
+
 #inventory-detail {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 8px 10px;
   background: rgb(var(--white-rgb) / 0.04);
   border-radius: 10px;
@@ -2083,14 +2223,89 @@ html, body {
 #inventory-detail-meta {
   font-size: 11px;
   opacity: 0.7;
+  line-height: 1.5;
+}
+
+#inventory-detail-used-in {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: var(--accent-bright);
+  opacity: 0.85;
+}
+
+#inventory-detail-used-in:empty {
+  display: none;
+}
+
+#inventory-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+#inventory-detail-actions.inventory-detail-actions--hidden {
+  display: none;
+}
+
+.inventory-action-button {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.inventory-action-button--hidden {
+  display: none;
+}
+
+/* Consume/Expel colors follow the project's own established meaning (spec section 91) -
+   soft accent-green for a beneficial action, warm amber for shedding weight, never a
+   saturated red (that's reserved for danger/destructive, e.g. the death fade). */
+.inventory-action-button--consume {
+  background: rgb(var(--accent-rgb) / 0.18);
+  border-color: rgb(var(--accent-rgb) / 0.5);
+  color: var(--accent-bright);
+}
+
+.inventory-action-button--consume:active {
+  background: rgb(var(--accent-rgb) / 0.3);
+}
+
+.inventory-action-button--expel {
+  background: rgb(255 180 90 / 0.16);
+  border-color: rgb(255 180 90 / 0.5);
+  color: #ffc978;
+}
+
+.inventory-action-button--expel:active {
+  background: rgb(255 180 90 / 0.28);
 }
 
 .inventory-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   font-size: 12px;
 }
+
+/* Burden readout (spec section 34) - shares the footer row with the existing Mass bar
+   rather than adding a second row, since it is just a label derived from the same
+   number, not a new measurement. */
+#inventory-burden-label {
+  flex-basis: 100%;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.burden-label--heavy { color: #ffcf6e; opacity: 0.9; }
+.burden-label--overloaded { color: #ff8a8a; opacity: 0.95; }
 
 /* ==========================================================================
    Damage numbers (damageNumbers.js)
@@ -2418,8 +2633,9 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  max-height: 34vh;
+  max-height: 22vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .codex-entry {
