@@ -117,7 +117,15 @@ export class PlayerController {
     this.activeMaterial = material;
     this._baseEmissive.copy(material.emissive);
     this._baseEmissiveIntensity = material.emissiveIntensity;
-    this._baseOpacity = material.opacity;
+    // Prefer a declared resting opacity over the live one. A material handed over while
+    // it is still animating reports an instantaneous value, not its baseline - the
+    // player's imported slime is built at opacity 0 and crossfaded up to its real value,
+    // and fires onReady (which re-points this material) on the frame it arrives, i.e.
+    // while it still reads 0. Snapshotting that made _baseOpacity 0 permanently, so the
+    // death fade had nothing to fade and resetToBaseSlime() restored the body to fully
+    // transparent - the slime vanished for good after the first death. Anything that
+    // hands over a mid-animation material declares userData.restOpacity instead.
+    this._baseOpacity = material.userData?.restOpacity ?? material.opacity;
   }
 
   /** Called by BurdenSystem each frame with the current load ratio + target body scale. */

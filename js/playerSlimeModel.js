@@ -177,6 +177,13 @@ export function createPlayerSlimeVisual(radius = 0.6) {
       group.add(fbxGroup);
       fadeTimer = 0;
 
+      // The value the crossfade below is heading for. onReady fires on THIS frame, while
+      // opacity is still 0, and its listeners (see main.js) re-point PlayerController at
+      // this material - which baselines its death-fade/restore opacity from whatever the
+      // material reports. Without this it would capture the 0 and never see the real
+      // value, leaving the slime invisible after its first death.
+      material.userData.restOpacity = TARGET_OPACITY;
+
       api.bodyMaterial = material;
       api.onReady?.(material);
     })
