@@ -1976,7 +1976,18 @@ html, body {
   width: 100%;
   max-width: 480px;
   max-height: 85vh; /* spec section 14: ~85-90% of available screen */
-  background: var(--surface-panel);
+  /* Generated panel artwork (spec section 12) stretched to fill - the panel's own
+     height varies with content (item count, codex expansion), which the source art's
+     fixed proportions can't match exactly, so a dark scrim layers on top to both keep
+     every functional element overlaid on it readable and hide the stretch at the edges.
+     background-color is the fallback if the image 404s. */
+  background-color: var(--surface-panel);
+  background-image:
+    linear-gradient(rgba(4, 10, 9, 0.55), rgba(4, 10, 9, 0.82)),
+    url('assets/ui/inventory/bioluminescent_inventory_hud_panel.png');
+  background-size: 100% 100%, 100% 100%;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
   border: 1px solid rgb(var(--accent-rgb) / 0.25);
   border-bottom: none;
   border-radius: 20px 20px 0 0;
@@ -2120,11 +2131,21 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .inventory-cell-icon svg {
   width: 62%;
   height: 62%;
+}
+
+/* Real generated artwork (spec section 3) - fills the badge circle rather than sitting
+   inset like the svg fallbacks, since the source art already has its own glow/framing
+   baked in and reads better edge-to-edge at this size. */
+.inventory-cell-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .inventory-cell-name {

@@ -23,12 +23,32 @@ const CATEGORY_LABELS = {
   material: 'Mutation Material',
 };
 
-// No generated artwork exists in the project yet (see the session's own asset-folder
-// check) - these are category-shaped placeholders so every item still reads clearly at
-// a glance, styled to match the rest of the HUD's inline-svg icon language (radarHUD.js
-// does the same thing for its own blips). Swap INVENTORY_ICON_MAP entries below for
-// real per-item art if/when it's exported into the project as files.
-// TODO: replace with final generated item artwork once the asset files exist in-repo.
+// Real generated artwork (assets/ui/inventory/, resized/compressed from the ~1250px
+// sources down to 256px - see the session's own optimize step, spec section 72) for
+// every resource that has it. rat_dna/beetle_dna/predator_dna/apex_dna/toxic_gland/
+// iron/mushroom map directly to their named art; spore (Glow Spore) borrows the
+// nutrient-cluster art as the closest match among the supplied set, since this game has
+// no separate "Organic Biomass" resource. rival_dna/stone/toxic_spore have no generated
+// art yet and fall through to CATEGORY_ICONS below (spec section 2: never remove an
+// item just because it lacks art).
+const INVENTORY_ICON_MAP = {
+  mushroom: 'assets/ui/inventory/bioluminescent_moonlight_mushroom_cluster.png',
+  spore: 'assets/ui/inventory/bioluminescent_alien_nutrient_cluster.png',
+  iron: 'assets/ui/inventory/bioluminescent_cyan_ore_cluster.png',
+  rat_dna: 'assets/ui/inventory/neon_toxic_rat_dna_vial.png',
+  beetle_dna: 'assets/ui/inventory/bioluminescent_beetle_dna_vial.png',
+  predator_dna: 'assets/ui/inventory/neon_biohazard_dna_vial.png',
+  apex_dna: 'assets/ui/inventory/bioluminescent_apex_dna_vial.png',
+  toxic_gland: 'assets/ui/inventory/toxic_bioluminescent_venom_sac.png',
+};
+
+const GENOME_ICON_URL = 'assets/ui/inventory/luminous_crystal_dna_shard.png';
+const PANEL_ARTWORK_URL = 'assets/ui/inventory/bioluminescent_inventory_hud_panel.png';
+
+// Category-shaped placeholders for the few resources with no generated art (rival_dna/
+// stone/toxic_spore) - styled to match the rest of the HUD's inline-svg icon language
+// (radarHUD.js does the same thing for its own blips).
+// TODO: replace with generated per-item artwork if it's ever produced for these three.
 const CATEGORY_ICONS = {
   organic: '<svg viewBox="0 0 24 24"><path d="M4 11c0-4 4-7 8-7s8 3 8 7H4Z" fill="currentColor" /><path d="M9 11v6a3 3 0 0 0 6 0v-6" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>',
   mineral: '<svg viewBox="0 0 24 24"><path d="M9 2 19 6 21 15 14 22 4 18 2 8Z" fill="currentColor" /><path d="M9 2 11 10 4 18 M19 6 11 10 14 22" fill="none" stroke="#050806" stroke-width="1" opacity="0.4" /></svg>',
@@ -36,9 +56,16 @@ const CATEGORY_ICONS = {
   material: '<svg viewBox="0 0 24 24"><path d="M9 2h6v4l3 5v7a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-7l3-5Z" fill="currentColor" /><path d="M9 2h6" stroke="#050806" stroke-width="1.4" opacity="0.5" /></svg>',
 };
 
-// The Human Genome Fragment's own icon - a crystal shard, echoing the radar's genome
-// blip so the same item reads the same way in both places.
-const GENOME_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2 21 12 12 22 3 12Z" fill="currentColor" /><path d="M12 6 17 12 12 18 7 12Z" fill="#050806" opacity="0.55" /></svg>';
+/** Real artwork when it exists, else the category-shaped svg fallback - with an
+ *  onerror handler that swaps back to the svg fallback live if the image ever 404s or
+ *  fails to decode (spec section 74: never show a broken-image icon). */
+function getIconHtml(type) {
+  const url = INVENTORY_ICON_MAP[type];
+  const fallback = CATEGORY_ICONS[RESOURCE_TYPES[type].category] ?? CATEGORY_ICONS.material;
+  if (!url) return fallback;
+  const encodedFallback = fallback.replace(/'/g, '&#39;');
+  return `<img src="${url}" alt="" onerror="this.outerHTML='${encodedFallback}'" />`;
+}
 
 /** Every RESOURCE_TYPES id -> which recipe(s) actually use it, computed once (the
  *  recipe table is static) rather than re-scanned on every render. */
@@ -76,7 +103,7 @@ function getInventoryItemUIData(stack) {
     name: meta.name,
     count: stack.count,
     items: stack.items, // real gameplay item instances - Consume/Expel act on these, never a copy
-    icon: CATEGORY_ICONS[meta.category] ?? CATEGORY_ICONS.material,
+    icon: getIconHtml(stack.type),
     color: meta.color,
     category: meta.category,
     categoryLabel: CATEGORY_LABELS[meta.category] ?? meta.category,
@@ -256,7 +283,7 @@ export class InventoryUI {
     }
     if (this.specialCell) {
       this.specialCell.innerHTML = `
-        <span class="inventory-cell-icon inventory-cell-icon--special">${GENOME_ICON}</span>
+        <span class="inventory-cell-icon inventory-cell-icon--special"><img src="${GENOME_ICON_URL}" alt="" onerror="this.outerHTML='<svg viewBox=&quot;0 0 24 24&quot;><path d=&quot;M12 2 21 12 12 22 3 12Z&quot; fill=&quot;currentColor&quot;/><path d=&quot;M12 6 17 12 12 18 7 12Z&quot; fill=&quot;%23050806&quot; opacity=&quot;0.55&quot;/></svg>'" /></span>
         <span class="inventory-cell-name">Human Genome Fragment</span>
         <span class="inventory-cell-tag">KEY ITEM</span>
       `;
