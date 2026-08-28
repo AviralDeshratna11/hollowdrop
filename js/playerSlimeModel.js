@@ -177,8 +177,20 @@ export function createPlayerSlimeVisual(radius = 0.6) {
       group.add(fbxGroup);
       fadeTimer = 0;
 
+      // api.bodyMaterial updates now so any code just reading it (radius, etc.) sees the
+      // real model right away, but api.onReady - which PlayerController.setActiveMaterial
+      // uses to baseline _baseOpacity from whatever material.opacity happens to be at the
+      // moment it's called - is deliberately NOT fired yet. material.opacity is still 0
+      // here (its initial value above, faded in by the crossfade in update() below over
+      // the NEXT several frames), so calling onReady this instant would permanently
+      // baseline _baseOpacity at 0. That's invisible on screen for the rest of normal
+      // play (the crossfade keeps overwriting opacity every frame regardless), right up
+      // until the first death: _applyDeathAnimation dissolves toward 0 same as it always
+      // would, but then resetToBaseSlime() restores opacity to the stale baseline of 0 -
+      // permanently invisible after respawn. Firing onReady only once the crossfade
+      // below actually finishes (material.opacity holding steady at TARGET_OPACITY)
+      // guarantees setActiveMaterial reads the real resting value instead.
       api.bodyMaterial = material;
-      api.onReady?.(material);
     })
     .catch((err) => {
       console.error('Failed to load Jellybean Smile model - keeping the placeholder sphere.', err);
@@ -205,6 +217,10 @@ export function createPlayerSlimeVisual(radius = 0.6) {
         placeholderMesh.geometry.dispose();
         placeholderMaterial.dispose();
         fadeTimer = null;
+        // Only now, with fbxMaterial.opacity settled at TARGET_OPACITY (not the 0 it
+        // started at), is it safe for PlayerController.setActiveMaterial to read it as
+        // the resting baseline - see the long comment in the .then() block above.
+        api.onReady?.(fbxMaterial);
       }
     }
 

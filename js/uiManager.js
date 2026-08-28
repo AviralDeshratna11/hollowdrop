@@ -238,6 +238,13 @@ export class UIManager {
     this._showNotification('Rival Detected', 'notification--warning', RIVAL_ALERT_VISIBLE_MS);
   }
 
+  /** One-shot toast the first time the Species-Seeker Radar picks up the Apex's signal
+   *  (spec section 31) - RadarHUD guards this to once per encounter, this method is
+   *  just the generic toast render. */
+  showRadarSignal(text) {
+    this._showNotification(text, 'notification--warning', RIVAL_ALERT_VISIBLE_MS);
+  }
+
   // --- Fragment contest --------------------------------------------------------
 
   showFragmentAcquired() {
