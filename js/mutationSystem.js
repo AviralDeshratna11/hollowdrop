@@ -1,3 +1,5 @@
+import { RESOURCE_TYPES } from './resourceTypes.js';
+
 export const DEBUG_MUTATION = false;
 
 /**
@@ -63,6 +65,24 @@ export class MutationSystem {
     this.recipes = MUTATION_RECIPES;
     this.discoveredMutations = new Set();
     this.availableRecipeId = null;
+    // DNA the player has absorbed at least once this run. A DNA-category ingredient is a
+    // permanent gene unlock: once sampled it keeps satisfying its recipe requirement for
+    // the rest of the run even after the sample is consumed by a mutation or lost on death
+    // (the one-and-only Rat DNA never respawns), so the player is never permanently locked
+    // out of a form they've already unlocked - only the non-DNA materials must be
+    // re-gathered each time. Session-scoped: cleared on Play Again (see reset()).
+    this.unlockedGenes = new Set();
+  }
+
+  /** Records a DNA absorb as a permanent gene unlock. Non-DNA resources are ignored -
+   *  materials like Toxic Spore / Moon Mushroom stay a per-mutation cost. Called by
+   *  ResourceManager on every absorb. */
+  notifyResourceAbsorbed(type) {
+    if (RESOURCE_TYPES[type]?.category === 'dna') this.unlockedGenes.add(type);
+  }
+
+  isGeneUnlocked(type) {
+    return this.unlockedGenes.has(type);
   }
 
   countInventoryType(type) {
@@ -73,14 +93,21 @@ export class MutationSystem {
     return count;
   }
 
+  /** How much of an ingredient counts as available: a permanently-unlocked gene always
+   *  reads as satisfied, whether or not a physical sample is currently held. Everything
+   *  else is the live inventory count. */
+  _effectiveCount(type) {
+    return this.unlockedGenes.has(type) ? Infinity : this.countInventoryType(type);
+  }
+
   hasIngredients(recipe) {
-    return Object.entries(recipe.ingredients).every(([type, qty]) => this.countInventoryType(type) >= qty);
+    return Object.entries(recipe.ingredients).every(([type, qty]) => this._effectiveCount(type) >= qty);
   }
 
   getMissingIngredients(recipe) {
     const missing = [];
     for (const [type, qty] of Object.entries(recipe.ingredients)) {
-      const have = this.countInventoryType(type);
+      const have = this._effectiveCount(type);
       if (have < qty) missing.push({ type, missing: qty - have });
     }
     return missing;
@@ -134,6 +161,7 @@ export class MutationSystem {
   reset() {
     this.discoveredMutations.clear();
     this.availableRecipeId = null;
+    this.unlockedGenes.clear(); // a fresh run re-locks every gene until its DNA is sampled again
   }
 
   /** Removes exactly the recipe's required ingredients via the existing InventoryManager

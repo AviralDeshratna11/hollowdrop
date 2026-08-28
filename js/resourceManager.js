@@ -296,6 +296,7 @@ export class ResourceManager {
     this.inventoryManager.addItem(resource);
     this.uiManager.updateMassUI(this.inventoryManager.getInventoryWeight(), this.inventoryManager.maxWeight);
     this.uiManager.showPickupNotification(resource.name);
+    this.mutationSystem?.notifyResourceAbsorbed?.(resource.type); // records DNA as a permanent gene unlock
     this.mutationSystem?.onInventoryChanged();
     this.onAbsorbed?.(resource);
 

@@ -23,6 +23,11 @@ export const DEATH_CONFIG = {
   dropPlacementAttempts: 6, // tries per item to find a spot clear of static geometry, then falls back to the death spot
   dropClearance: 0.25, // collider clearance a drop point needs (small - items are tiny pickups)
   respawnInvulnerability: 1.5,
+  // How close the player must get to the death-drop spot for the radar beacon to retire
+  // (it has served its "navigate back here" purpose). Only arms once the player has first
+  // moved OUTSIDE it - which respawn's minimum-distance guarantees - so the death spot the
+  // player is standing on at the moment of death never counts as already-reached.
+  deathDropReachRadius: 2.5,
 };
 
 const tempScatterDir = new THREE.Vector3();
@@ -86,6 +91,12 @@ export class DeathRespawnManager {
     // getLastDeathLocation()). Null until the first death.
     this.lastDeathLocation = null;
     this._deathEventCounter = 0;
+
+    // The single tracked death drop the radar points at: { position, resources, isActive,
+    // id }. One slot, overwritten on each death (spec's deathDrop = { position, isActive }),
+    // so a later death replaces the previous marker rather than accumulating stale ones.
+    // Null until the first non-empty death drop. See _recordDeathDrop()/getActiveDeathDrop().
+    this.deathDrop = null;
 
     this.gameState = GAME_STATE.PLAYING;
     this.lastDeathPosition = new THREE.Vector3();
@@ -151,12 +162,16 @@ export class DeathRespawnManager {
   _dropInventoryOnDeath() {
     const items = [...this.inventoryManager.items]; // snapshot: removeItem() mutates the live array
 
+    const droppedResources = [];
     for (const item of items) {
       const spawnPos = this._resolveDropPosition();
       const dir = this._randomGroundDirection();
-      this.resourceManager.spawnDroppedResource(item.type, spawnPos, dir);
+      // Keep the spawned world-resource reference so the radar can tell when this drop
+      // has been fully recovered - no re-scanning the world for it later.
+      droppedResources.push(this.resourceManager.spawnDroppedResource(item.type, spawnPos, dir));
       this.inventoryManager.removeItem(item.id); // removed once, right after its own drop is spawned
     }
+    this._recordDeathDrop(droppedResources);
 
     this.uiManager.updateMassUI(this.inventoryManager.getInventoryWeight(), this.inventoryManager.maxWeight);
     this.onInventoryDropped?.(); // let an open inventory panel refresh from the now-empty state
@@ -213,6 +228,66 @@ export class DeathRespawnManager {
    *  system - nothing else needs to know how or when it was recorded. */
   getLastDeathLocation() {
     return this.lastDeathLocation;
+  }
+
+  /**
+   * Records the just-spawned death drop as the single tracked marker source. Position is
+   * the stored death spot (the items scatter only tightly around it - see DEATH_CONFIG -
+   * so the death spot is the accurate representative centre, no per-item averaging needed).
+   * An empty-inventory death drops nothing, so it clears the slot rather than tracking a
+   * phantom marker. Overwrites any previous drop, so a repeat death replaces the marker.
+   */
+  _recordDeathDrop(resources) {
+    if (!resources || resources.length === 0) {
+      this.deathDrop = null;
+      return;
+    }
+    const p = this.lastDeathPosition;
+    this.deathDrop = {
+      position: { x: p.x, y: p.y, z: p.z },
+      resources: [...resources],
+      isActive: true,
+      // Arms the "player reached the drop" retirement below - false until the player has
+      // been seen outside deathDropReachRadius (guaranteed once they respawn away).
+      hasLeft: false,
+      id: this.lastDeathLocation?.id ?? `death-${this._deathEventCounter}`,
+    };
+  }
+
+  /**
+   * The active death drop ({ position, isActive, ... }) for the radar to point at, or null
+   * if there is none / it has been fully recovered. Cheap: prunes only its own handful of
+   * dropped-resource references (a resource whose mesh has left the scene has been absorbed
+   * or cleared), never scanning the whole world. Goes inactive once none remain, so once
+   * recovered it stops doing even that work.
+   */
+  getActiveDeathDrop() {
+    const drop = this.deathDrop;
+    if (!drop || !drop.isActive) return null;
+    // mesh.parent goes null the moment ResourceManager.removeResource() detaches it
+    // (collected/absorbed or cleared on Play Again) - an O(1) "still in the world" test.
+    const remaining = drop.resources.filter((r) => r.mesh.parent !== null);
+    if (remaining.length !== drop.resources.length) drop.resources = remaining;
+    if (remaining.length === 0) {
+      drop.isActive = false;
+      return null;
+    }
+
+    // Retire the beacon once the player, having respawned away, walks back onto the drop.
+    // Self-arming: `hasLeft` only flips true after the player is first outside the radius,
+    // so the death spot the player dies on never counts as already-reached.
+    const reachSq = DEATH_CONFIG.deathDropReachRadius * DEATH_CONFIG.deathDropReachRadius;
+    const dx = this.player.position.x - drop.position.x;
+    const dz = this.player.position.z - drop.position.z;
+    const distSq = dx * dx + dz * dz;
+    if (!drop.hasLeft) {
+      if (distSq > reachSq) drop.hasLeft = true;
+    } else if (distSq <= reachSq) {
+      drop.isActive = false;
+      return null;
+    }
+
+    return drop;
   }
 
   update(deltaTime) {

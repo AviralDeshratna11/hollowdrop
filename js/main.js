@@ -769,6 +769,11 @@ const deathRespawnManager = new DeathRespawnManager({
   onPlayerDeath: () => runStats.deaths++,
 });
 
+// Radar reads the tracked death drop from here to show a recovery marker (RadarController
+// is built before DeathRespawnManager, so it's wired after construction like the rest of
+// main.js's cross-references).
+radarController.deathRespawnManager = deathRespawnManager;
+
 // Keep an open inventory panel honest after a death empties it (the grid is only rebuilt
 // on open, so without this a panel left open through a death would show stale item cells).
 deathRespawnManager.onInventoryDropped = () => {

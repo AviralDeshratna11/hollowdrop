@@ -22,6 +22,9 @@ export const RADAR_TARGET_TYPES = {
   DNA: 'dna',
   GENOME: 'genome',
   RIVAL: 'rival',
+  // The cargo dropped at the player's last death - a navigation beacon back to it,
+  // sourced from DeathRespawnManager's tracked deathDrop (never re-discovered here).
+  DEATH_DROP: 'death-drop',
 };
 
 // Higher wins ties are broken by distance (closer first) - see _scan(). Rival gets a
@@ -31,6 +34,9 @@ const BASE_PRIORITY = {
   [RADAR_TARGET_TYPES.RIVAL]: 4,
   [RADAR_TARGET_TYPES.BOSS]: 3,
   [RADAR_TARGET_TYPES.ENEMY]: 2,
+  // Above ambient DNA clutter, below any live threat/objective - a recovery waypoint
+  // shouldn't steal the nearest-signal readout from a predator or the Fragment.
+  [RADAR_TARGET_TYPES.DEATH_DROP]: 1.5,
   [RADAR_TARGET_TYPES.DNA]: 1,
 };
 
@@ -53,13 +59,17 @@ function horizontalDistanceSq(ax, az, bx, bz) {
  * otherwise no-ops, so calling it every frame from the main loop is cheap.
  */
 export class RadarController {
-  constructor({ player, predatorController, apexController, rivalController, genomeFragmentController, resourceManager }) {
+  constructor({ player, predatorController, apexController, rivalController, genomeFragmentController, resourceManager, deathRespawnManager = null }) {
     this.player = player;
     this.predatorController = predatorController;
     this.apexController = apexController;
     this.rivalController = rivalController;
     this.genomeFragmentController = genomeFragmentController;
     this.resourceManager = resourceManager;
+    // Source of the death-drop marker. Optional / wired after construction in main.js,
+    // since DeathRespawnManager is built after the radar (same post-construction wiring
+    // pattern the rest of main.js uses). Read defensively in collectTargets().
+    this.deathRespawnManager = deathRespawnManager;
 
     this.enabled = true;
     this._scanTimer = 0;
@@ -257,6 +267,25 @@ export class RadarController {
     }
     dnaCandidates.sort((a, b) => a.distanceSq - b.distanceSq);
     targets.push(...dnaCandidates.slice(0, RADAR_CONFIG.maxDnaBlips));
+
+    // --- Death drop (dropped cargo) --------------------------------------------------
+    // A single marker at the last death spot while any dropped item is still out there.
+    // DeathRespawnManager owns the tracked drop and reports when it's fully recovered, so
+    // there's no world-scan here - just one read. Always shown (no range gate) and edge-
+    // clamped, so it stays a usable "walk back to your loot" beacon from anywhere.
+    const deathDrop = this.deathRespawnManager?.getActiveDeathDrop?.();
+    if (deathDrop) {
+      const dp = deathDrop.position;
+      targets.push({
+        id: 'death-drop',
+        type: RADAR_TARGET_TYPES.DEATH_DROP,
+        position: dp, // plain { x, y, z } - worldToRadar only reads .x/.z
+        distanceSq: horizontalDistanceSq(dp.x, dp.z, px, pz),
+        clampToEdge: true,
+        label: 'Dropped Cargo',
+        priority: BASE_PRIORITY[RADAR_TARGET_TYPES.DEATH_DROP],
+      });
+    }
 
     return targets;
   }

@@ -146,6 +146,7 @@
   --radar-dna: #72ff62;
   --radar-genome: #ffe38a;
   --radar-rival: #ff943d;
+  --radar-drop: #9fd8ff; /* dropped-cargo beacon - a neutral navigational blue, distinct from the threat/objective hues above */
 }
 
 * {
@@ -1116,6 +1117,12 @@ html, body {
   color: var(--radar-rival);
   background: radial-gradient(circle at 34% 30%, rgba(255, 148, 61, 0.4), rgba(255, 148, 61, 0.08) 70%);
   border: 1px solid rgba(255, 148, 61, 0.65);
+}
+
+.radar-blip--death-drop .radar-blip-inner {
+  color: var(--radar-drop);
+  background: radial-gradient(circle at 34% 30%, rgba(159, 216, 255, 0.4), rgba(159, 216, 255, 0.08) 70%);
+  border: 1px solid rgba(159, 216, 255, 0.65);
 }
 
 /* Edge-clamped (boss/genome/rival past detectionRadius, spec section 23) reads

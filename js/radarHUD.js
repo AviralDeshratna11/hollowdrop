@@ -12,6 +12,9 @@ const BLIP_ICONS = {
   [RADAR_TARGET_TYPES.DNA]: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3c0 6 10 6 10 12 0 3-3 5-3 5M17 3c0 6-10 6-10 12 0 3 3 5 3 5" /><path d="M8 7h8M7.5 12h9M8 17h8" stroke-width="1.4" /></svg>',
   [RADAR_TARGET_TYPES.GENOME]: '<svg viewBox="0 0 24 24"><path d="M12 2 21 12 12 22 3 12Z" fill="currentColor"/><path d="M12 6 17 12 12 18 7 12Z" fill="#050806" opacity="0.55"/></svg>',
   [RADAR_TARGET_TYPES.RIVAL]: '<svg viewBox="0 0 24 24"><path d="M12 2c3 3 6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 3-8 6-11Z" fill="currentColor"/></svg>',
+  // Same bag silhouette as the inventory-toggle button (index.html) - the dropped-cargo
+  // marker reads as "your bag is over there".
+  [RADAR_TARGET_TYPES.DEATH_DROP]: '<svg viewBox="0 0 24 24"><path d="M8.5 8 L9.5 4 A2.5 2.5 0 0 1 14.5 4 L15.5 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 8 H18 L16.7 18.5 A2.6 2.6 0 0 1 14.1 21 H9.9 A2.6 2.6 0 0 1 7.3 18.5 Z" fill="currentColor"/></svg>',
 };
 
 const NEAREST_LABELS = {
@@ -20,6 +23,7 @@ const NEAREST_LABELS = {
   [RADAR_TARGET_TYPES.DNA]: 'DNA',
   [RADAR_TARGET_TYPES.GENOME]: 'GENOME',
   [RADAR_TARGET_TYPES.RIVAL]: 'RIVAL',
+  [RADAR_TARGET_TYPES.DEATH_DROP]: 'CARGO',
 };
 
 const BLIP_LERP_RATE = 12; // matches this project's usual 1 - exp(-rate * dt) smoothing idiom
