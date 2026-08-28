@@ -272,26 +272,77 @@
 
 <div id="inventory-overlay">
   <div id="inventory-panel">
-    <div class="inventory-header">
-      <div class="inventory-header-text">
-        <span class="inventory-title">Living Inventory</span>
-        <span id="inventory-header-count" class="inventory-header-count"></span>
-      </div>
+    <!-- Everything here is real CSS/DOM, not a background image - a generated raster
+         mockup was tried for the frame first, but it (a) baked its own title bar/grid/
+         mass-bar graphics at FIXED positions, which only ever matched a panel of its
+         own exact height and collided with real content the moment the panel grew
+         taller (the codex, more items), and (b) is one more network fetch that can
+         simply fail (confirmed happening on a real device - the frame silently vanished
+         while everything else still rendered). The vine-frame LOOK is now recreated
+         with plain CSS (.inventory-panel-frame's layered border/box-shadow, this
+         file's own leaf/mushroom accents) so it can never fail to load and scales to
+         any content height. The individual item-icon PNGs are unaffected by this - a
+         handful of small images each is a much lower-risk dependency than one big
+         structural background, and they're already confirmed working. -->
+    <div class="inventory-panel-frame">
+      <span class="inventory-leaf inventory-leaf--tl"></span>
+      <span class="inventory-leaf inventory-leaf--tr"></span>
+      <span class="inventory-leaf inventory-leaf--bl"></span>
+      <span class="inventory-leaf inventory-leaf--br"></span>
+
       <button id="inventory-close" aria-label="Close inventory">
         <span class="close-icon"></span>
       </button>
-    </div>
 
-    <!-- Special/key-item slot - the Human Genome Fragment, shown ONLY while the player
-         is actually carrying it (spec sections 50-53). Never part of the aggregated
-         grid below, never counted toward Mass, no Consume/Expel actions. JS
-         (inventoryUI.js) toggles inventory-special--visible; the button itself is
-         always present so no extra DOM create/destroy is needed each refresh. -->
-    <div id="inventory-special">
-      <button id="inventory-special-cell" class="inventory-cell inventory-cell--special" type="button"></button>
-    </div>
+      <div class="inventory-header-row">
+        <span class="inventory-title">Living Inventory</span>
+        <span id="inventory-header-count" class="inventory-header-count"></span>
+      </div>
 
-    <div id="inventory-grid"></div>
+      <!-- Special/key-item slot - the Human Genome Fragment, shown ONLY while the
+           player is actually carrying it (spec sections 50-53). Never part of the
+           aggregated grid below, never counted toward Mass, no Consume/Expel actions. -->
+      <div id="inventory-special">
+        <button id="inventory-special-cell" class="inventory-cell inventory-cell--special" type="button"></button>
+      </div>
+
+      <div id="inventory-grid"></div>
+
+      <div id="inventory-detail">
+        <div id="inventory-detail-icon" class="inventory-detail-icon"></div>
+        <div class="inventory-detail-body">
+          <div class="inventory-detail-title-row">
+            <div class="inventory-detail-titles">
+              <span id="inventory-detail-name">Select a material to inspect.</span>
+              <span id="inventory-detail-category"></span>
+            </div>
+            <span id="inventory-detail-count" class="inventory-detail-count"></span>
+          </div>
+          <div id="inventory-detail-stats" class="inventory-detail-stats"></div>
+        </div>
+        <p id="inventory-detail-description"></p>
+        <span id="inventory-detail-used-in"></span>
+        <div id="inventory-detail-actions">
+          <button id="inventory-consume-button" class="inventory-action-button inventory-action-button--consume" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c-5 2-8 6-8 11a5 5 0 0 0 10 0c2-1 4-3 4-7 0-2-1-3-2-4 0 2-1 3-2 3 1-2 0-3-2-3Z" fill="currentColor" /></svg>
+            <span>Consume</span>
+          </button>
+          <button id="inventory-expel-button" class="inventory-action-button inventory-action-button--expel" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c4 5 7 9 7 13a7 7 0 0 1-14 0c0-4 3-8 7-13Z" fill="currentColor" /></svg>
+            <span>Expel</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="inventory-footer">
+        <span class="mass-label">Mass</span>
+        <div class="mass-bar">
+          <div id="inventory-mass-fill" class="mass-fill"></div>
+        </div>
+        <span id="inventory-mass-text">0 / 15</span>
+        <span id="inventory-burden-label" class="burden-pill"></span>
+      </div>
+    </div>
 
     <!-- Mutation codex. The panel already exists as the "what am I carrying" view; this
          makes it also the "what can I become" reference, rather than adding a third
@@ -301,25 +352,6 @@
     <div id="codex-section">
       <span class="codex-heading">Mutations</span>
       <div id="codex-list"></div>
-    </div>
-
-    <div id="inventory-detail">
-      <span id="inventory-detail-name">Select a material to inspect.</span>
-      <span id="inventory-detail-meta"></span>
-      <span id="inventory-detail-used-in"></span>
-      <div id="inventory-detail-actions">
-        <button id="inventory-consume-button" class="inventory-action-button inventory-action-button--consume" type="button">Consume</button>
-        <button id="inventory-expel-button" class="inventory-action-button inventory-action-button--expel" type="button">Expel</button>
-      </div>
-    </div>
-
-    <div class="inventory-footer">
-      <span class="mass-label">Mass</span>
-      <div class="mass-bar">
-        <div id="inventory-mass-fill" class="mass-fill"></div>
-      </div>
-      <span id="inventory-mass-text">0 / 15</span>
-      <span id="inventory-burden-label"></span>
     </div>
   </div>
 </div>
