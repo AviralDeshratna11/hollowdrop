@@ -75,6 +75,8 @@
   --danger-warm: #ff8f6c;
   --danger-pale: #ffb3b3;
   --danger-btn: #ff6b6b;
+  --stone-btn: #c8ccd4;
+  --stone-rgb: 200 204 212;
   --danger-alt: #ff5c5c;
   --danger-hot: #ff3d3d;
   --danger-soft: #ff8a8a;
@@ -121,6 +123,10 @@
   --border-extraction: rgba(255, 207, 107, 0.7);
   --border-danger-hot: rgba(255, 60, 60, 0.7);
   --border-bite: rgba(255, 92, 92, 0.6);
+  /* Thrown-rock attack. Deliberately stone-grey rather than another red: Bite and
+     Throw sit next to each other in the action stack and are never available at the
+     same time, so they must not read as the same button in two states. */
+  --border-throw: rgba(186, 190, 198, 0.6);
   --glow-energy-critical: rgba(255, 140, 60, 0.45);
   --glow-extraction: rgba(255, 196, 108, 0.4);
   --glow-warning-soft: rgba(255, 178, 108, 0.35);
@@ -1200,6 +1206,87 @@ html, body {
 #bite-button:active {
   transform: scale(0.94);
   background: rgb(var(--danger-hot-rgb) / 0.18);
+}
+
+/* Throw: same geometry and cooldown mechanics as #bite-button (radial conic sweep
+   driven by --cd), in stone grey rather than red. Carries an ammo badge, so unlike
+   Bite it has a second dead state - "no rocks" - styled separately from "cooling
+   down" because they need different player responses (go pick rocks up vs. wait). */
+#throw-button {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid var(--border-throw);
+  background: none;
+  color: var(--stone-btn);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  overflow: visible;
+  --cd: 0;
+}
+
+#throw-button.throw-button--visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+#throw-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(rgb(var(--shadow-rgb) / 0.72) calc(var(--cd) * 360deg), transparent 0deg);
+  pointer-events: none;
+}
+
+#throw-button.throw-button--cooldown {
+  filter: saturate(0.55) brightness(0.82);
+}
+
+/* Out of rocks: faded much further than the cooldown dim, since this state can last
+   until the player finds more rather than clearing on its own. */
+#throw-button.throw-button--empty {
+  opacity: 0.38;
+}
+
+#throw-button:active {
+  transform: scale(0.94);
+  background: rgb(var(--stone-rgb) / 0.18);
+}
+
+/* Ammo badge. Sits on the ring rather than inside it so it never overlaps the icon. */
+.throw-ammo {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: rgb(var(--surface-rgb) / 0.92);
+  border: 1px solid var(--border-throw);
+  color: var(--stone-btn);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.action-icon--throw {
+  width: 34px;
+  height: 34px;
 }
 
 /* Dev-only recipe checklist (DEBUG_MUTATION). */
