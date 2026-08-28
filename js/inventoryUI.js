@@ -43,7 +43,9 @@ const INVENTORY_ICON_MAP = {
 };
 
 const GENOME_ICON_URL = 'assets/ui/inventory/luminous_crystal_dna_shard.png';
-const PANEL_ARTWORK_URL = 'assets/ui/inventory/bioluminescent_inventory_hud_panel.png';
+// Same diamond-shard shape the radar's own genome blip uses - the Fragment's fallback
+// if GENOME_ICON_URL ever fails to load (see wireIconFallbacks).
+const GENOME_ICON_FALLBACK = '<svg viewBox="0 0 24 24"><path d="M12 2 21 12 12 22 3 12Z" fill="currentColor" /><path d="M12 6 17 12 12 18 7 12Z" fill="#050806" opacity="0.55" /></svg>';
 
 // Category-shaped placeholders for the few resources with no generated art (rival_dna/
 // stone/toxic_spore) - styled to match the rest of the HUD's inline-svg icon language
@@ -56,15 +58,41 @@ const CATEGORY_ICONS = {
   material: '<svg viewBox="0 0 24 24"><path d="M9 2h6v4l3 5v7a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-7l3-5Z" fill="currentColor" /><path d="M9 2h6" stroke="#050806" stroke-width="1.4" opacity="0.5" /></svg>',
 };
 
-/** Real artwork when it exists, else the category-shaped svg fallback - with an
- *  onerror handler that swaps back to the svg fallback live if the image ever 404s or
- *  fails to decode (spec section 74: never show a broken-image icon). */
+// Small icons for the detail card's 2-column stat rows (spec section 23) - purely
+// decorative labels, matching the reference art's own icon-per-stat style.
+const STAT_ICONS = {
+  weight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v3M8 6h8l3 13H5L8 6Z" stroke-linejoin="round" /></svg>',
+  mass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 8V6a3 3 0 0 1 6 0v2M5 8h14l-1.5 12h-11L5 8Z" stroke-linejoin="round" /></svg>',
+  edible: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 3v7a2 2 0 0 0 4 0V3M9 10v11M17 3c-2 2-2 5-2 7 0 1 .5 2 2 2s2-1 2-2c0-2 0-5-2-7ZM17 12v9" /></svg>',
+  energy: '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor" /></svg>',
+  mutation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" /></svg>',
+};
+
+/** Real artwork when it exists, else the category-shaped svg fallback immediately (no
+ *  <img> at all). A previous version returned an <img onerror="..."> with the fallback
+ *  svg serialized into that inline HTML attribute - broken, since the svg's own double-
+ *  quoted attributes (viewBox="...", fill="...") terminate the onerror="..." attribute
+ *  value early the instant the browser's HTML parser hits the first one, leaving the
+ *  rest of the svg markup to spill out as garbled literal text next to the image (this
+ *  actually shipped and was visible in-game). wireIconFallback() below now attaches a
+ *  real error listener after the element exists in the DOM instead - no string
+ *  re-serialization, so nothing to escape. */
 function getIconHtml(type) {
   const url = INVENTORY_ICON_MAP[type];
-  const fallback = CATEGORY_ICONS[RESOURCE_TYPES[type].category] ?? CATEGORY_ICONS.material;
-  if (!url) return fallback;
-  const encodedFallback = fallback.replace(/'/g, '&#39;');
-  return `<img src="${url}" alt="" onerror="this.outerHTML='${encodedFallback}'" />`;
+  if (!url) return CATEGORY_ICONS[RESOURCE_TYPES[type].category] ?? CATEGORY_ICONS.material;
+  return `<img src="${url}" alt="" data-icon-fallback="${type}" />`;
+}
+
+/** Pairs with getIconHtml()/GENOME_ICON_URL - call once per <img data-icon-fallback>
+ *  after it's actually in the DOM (spec section 74: never show a broken-image icon). */
+function wireIconFallbacks(root) {
+  root.querySelectorAll('img[data-icon-fallback]').forEach((img) => {
+    img.addEventListener('error', () => {
+      const type = img.dataset.iconFallback;
+      const fallback = type === 'genome_fragment' ? GENOME_ICON_FALLBACK : (CATEGORY_ICONS[RESOURCE_TYPES[type]?.category] ?? CATEGORY_ICONS.material);
+      img.outerHTML = fallback;
+    }, { once: true });
+  });
 }
 
 /** Every RESOURCE_TYPES id -> which recipe(s) actually use it, computed once (the
@@ -104,6 +132,7 @@ function getInventoryItemUIData(stack) {
     count: stack.count,
     items: stack.items, // real gameplay item instances - Consume/Expel act on these, never a copy
     icon: getIconHtml(stack.type),
+    hasArt: !!INVENTORY_ICON_MAP[stack.type], // false only for rival_dna/stone/toxic_spore - see getIconHtml
     color: meta.color,
     category: meta.category,
     categoryLabel: CATEGORY_LABELS[meta.category] ?? meta.category,
@@ -170,8 +199,12 @@ export class InventoryUI {
     this.specialCell = document.getElementById('inventory-special-cell');
     this.grid = document.getElementById('inventory-grid');
     this.codexList = document.getElementById('codex-list');
+    this.detailIcon = document.getElementById('inventory-detail-icon');
     this.detailName = document.getElementById('inventory-detail-name');
-    this.detailMeta = document.getElementById('inventory-detail-meta');
+    this.detailCategory = document.getElementById('inventory-detail-category');
+    this.detailCount = document.getElementById('inventory-detail-count');
+    this.detailStats = document.getElementById('inventory-detail-stats');
+    this.detailDescription = document.getElementById('inventory-detail-description');
     this.detailUsedIn = document.getElementById('inventory-detail-used-in');
     this.detailActions = document.getElementById('inventory-detail-actions');
     this.consumeButton = document.getElementById('inventory-consume-button');
@@ -290,10 +323,11 @@ export class InventoryUI {
     }
     if (this.specialCell) {
       this.specialCell.innerHTML = `
-        <span class="inventory-cell-icon inventory-cell-icon--special"><img src="${GENOME_ICON_URL}" alt="" onerror="this.outerHTML='<svg viewBox=&quot;0 0 24 24&quot;><path d=&quot;M12 2 21 12 12 22 3 12Z&quot; fill=&quot;currentColor&quot;/><path d=&quot;M12 6 17 12 12 18 7 12Z&quot; fill=&quot;%23050806&quot; opacity=&quot;0.55&quot;/></svg>'" /></span>
+        <span class="inventory-cell-icon inventory-cell-icon--special"><img src="${GENOME_ICON_URL}" alt="" data-icon-fallback="genome_fragment" /></span>
         <span class="inventory-cell-name">Human Genome Fragment</span>
         <span class="inventory-cell-tag">KEY ITEM</span>
       `;
+      wireIconFallbacks(this.specialCell);
       this.specialCell.classList.toggle('inventory-cell--selected', this.selectedType === 'genome_fragment');
     }
   }
@@ -328,14 +362,19 @@ export class InventoryUI {
         cell.type = 'button';
         cell.className = `inventory-cell${data.type === this.selectedType ? ' inventory-cell--selected' : ''}`;
         cell.setAttribute('aria-label', `${data.name}, quantity ${data.count}`);
+        // Real artwork already has its own glow/framing baked in and fills the icon
+        // area edge-to-edge; only the svg fallback (no generated art for this type)
+        // gets the colored glow-badge treatment, so real icons never look tinted.
+        const iconStyle = data.hasArt ? '' : `style="background:${hexToRgba(data.color, 0.4)}; border-color:${hexToRgba(data.color, 0.6)}; color:${colorToCss(data.color)}"`;
         cell.innerHTML = `
-          <span class="inventory-cell-icon" style="background:${hexToRgba(data.color, 0.4)}; border-color:${hexToRgba(data.color, 0.6)}; color:${colorToCss(data.color)}">${data.icon}</span>
+          <span class="inventory-cell-icon${data.hasArt ? '' : ' inventory-cell-icon--badge'}" ${iconStyle}>${data.icon}</span>
           <span class="inventory-cell-name">${data.name}</span>
-          <span class="inventory-count">×${data.count}</span>
+          <span class="inventory-count">${data.count}</span>
         `;
         cell.addEventListener('click', () => this.selectItem(data.type));
         this.grid.appendChild(cell);
       }
+      wireIconFallbacks(this.grid);
     }
 
     if (this.headerCount) {
@@ -361,17 +400,23 @@ export class InventoryUI {
   // --- Details / actions -----------------------------------------------------------
 
   _renderDetails() {
-    if (!this.detailName || !this.detailMeta) return;
+    if (!this.detailName) return;
 
     if (this.selectedType === 'genome_fragment' && this._isCarryingFragment()) {
-      this.detailName.textContent = 'HUMAN GENOME FRAGMENT';
-      this.detailMeta.innerHTML = [
-        'Key Progression Item',
-        'Weight&nbsp;0',
-        'Consumable&nbsp;No',
-        'Expellable&nbsp;No',
-        'Status&nbsp;Currently Carrying',
-      ].join(' &middot; ');
+      if (this.detailIcon) {
+        this.detailIcon.innerHTML = `<img src="${GENOME_ICON_URL}" alt="" data-icon-fallback="genome_fragment" />`;
+        wireIconFallbacks(this.detailIcon);
+      }
+      this.detailName.textContent = 'Human Genome Fragment';
+      if (this.detailCategory) this.detailCategory.textContent = 'Key Progression Item';
+      if (this.detailCount) this.detailCount.textContent = '';
+      if (this.detailStats) {
+        this.detailStats.innerHTML = [
+          this._statRowHtml('weight', 'Weight', '0'),
+          this._statRowHtml('mutation', 'Consumable', 'No'),
+        ].join('');
+      }
+      if (this.detailDescription) this.detailDescription.textContent = 'Currently Carrying — cannot be Consumed or Expelled.';
       if (this.detailUsedIn) this.detailUsedIn.textContent = '';
       this._setActionsVisible(false, false);
       return;
@@ -379,25 +424,37 @@ export class InventoryUI {
 
     const data = this.stacks?.find((s) => s.type === this.selectedType);
     if (!data) {
+      if (this.detailIcon) this.detailIcon.innerHTML = '';
       this.detailName.textContent = 'Select a material to inspect.';
-      this.detailMeta.textContent = '';
+      if (this.detailCategory) this.detailCategory.textContent = '';
+      if (this.detailCount) this.detailCount.textContent = '';
+      if (this.detailStats) this.detailStats.innerHTML = '';
+      if (this.detailDescription) this.detailDescription.textContent = '';
       if (this.detailUsedIn) this.detailUsedIn.textContent = '';
       this._setActionsVisible(false, false);
       return;
     }
 
-    this.detailName.textContent = `${data.name.toUpperCase()} ×${data.count}`;
-    const rows = [
-      data.categoryLabel,
-      `Quantity&nbsp;${data.count}`,
-      `Weight&nbsp;${data.weightEach} each`,
-      `Stack&nbsp;Mass&nbsp;${data.totalWeight.toFixed(1)}`,
-      `Edible&nbsp;${data.edible ? 'Yes' : 'No'}`,
-    ];
-    if (data.edible) rows.push(`Energy&nbsp;+${data.energyValue}`);
-    if (data.mutationIngredient) rows.push('Mutation&nbsp;Ingredient&nbsp;Yes');
-    if (data.description) rows.push(data.description);
-    this.detailMeta.innerHTML = rows.join(' &middot; ');
+    if (this.detailIcon) {
+      this.detailIcon.innerHTML = data.icon;
+      wireIconFallbacks(this.detailIcon);
+    }
+    this.detailName.textContent = data.name;
+    if (this.detailCategory) this.detailCategory.textContent = data.categoryLabel;
+    if (this.detailCount) this.detailCount.textContent = `×${data.count}`;
+
+    if (this.detailStats) {
+      const stats = [
+        this._statRowHtml('weight', 'Weight (each)', data.weightEach),
+        this._statRowHtml('mass', 'Stack Mass', data.totalWeight.toFixed(1)),
+        this._statRowHtml('edible', 'Edible', data.edible ? 'Yes' : 'No'),
+      ];
+      if (data.edible) stats.push(this._statRowHtml('energy', 'Energy', `+${data.energyValue}`));
+      if (data.mutationIngredient) stats.push(this._statRowHtml('mutation', 'Mutation Ingredient', 'Yes'));
+      this.detailStats.innerHTML = stats.join('');
+    }
+
+    if (this.detailDescription) this.detailDescription.textContent = data.description;
 
     if (this.detailUsedIn) {
       this.detailUsedIn.textContent = data.usedIn.length > 0 ? `USED IN: ${data.usedIn.join(', ').toUpperCase()}` : '';
@@ -406,6 +463,10 @@ export class InventoryUI {
     // Only offer an action that is actually valid for this resource (spec sections
     // 36-37, 45, 102) - never a disabled-looking button for something that can't happen.
     this._setActionsVisible(data.edible, true);
+  }
+
+  _statRowHtml(iconKey, label, value) {
+    return `<span class="inventory-detail-stat">${STAT_ICONS[iconKey] ?? ''}${label}<b>${value}</b></span>`;
   }
 
   _setActionsVisible(showConsume, showExpel) {
@@ -456,10 +517,8 @@ export class InventoryUI {
     if (this.burdenLabelEl) {
       const load = this.burdenSystem ? this.burdenSystem.load : ratio;
       const label = burdenLabel(load);
-      let text = label;
-      if (this.burdenSystem) text += ` · Movement ${Math.round(this.burdenSystem.speedMultiplier * 100)}%`;
-      this.burdenLabelEl.textContent = text;
-      this.burdenLabelEl.className = `burden-label burden-label--${label.toLowerCase()}`;
+      this.burdenLabelEl.textContent = label;
+      this.burdenLabelEl.className = `burden-pill burden-pill--${label.toLowerCase()}`;
     }
   }
 

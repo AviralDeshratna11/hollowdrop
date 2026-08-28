@@ -1981,86 +1981,99 @@ html, body {
 
 #inventory-panel {
   width: 100%;
-  max-width: 480px;
+  max-width: 420px;
   max-height: 85vh; /* spec section 14: ~85-90% of available screen */
-  /* Generated panel artwork (spec section 12) stretched to fill - the panel's own
-     height varies with content (item count, codex expansion), which the source art's
-     fixed proportions can't match exactly, so a dark scrim layers on top to both keep
-     every functional element overlaid on it readable and hide the stretch at the edges.
-     background-color is the fallback if the image 404s. */
-  background-color: var(--surface-panel);
-  background-image:
-    linear-gradient(rgba(4, 10, 9, 0.55), rgba(4, 10, 9, 0.82)),
-    url('assets/ui/inventory/bioluminescent_inventory_hud_panel.png');
-  background-size: 100% 100%, 100% 100%;
-  background-position: center, center;
-  background-repeat: no-repeat, no-repeat;
-  border: 1px solid rgb(var(--accent-rgb) / 0.25);
-  border-bottom: none;
-  border-radius: 20px 20px 0 0;
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  padding: 14px 4px calc(16px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   transform: translateY(12px);
   transition: transform 0.25s ease;
   color: var(--text);
   font-family: var(--font-ui);
-  /* The panel now carries a special slot, codex, and a fuller detail/actions section
-     on top of the grid - together they can exceed even 85vh (many resource types plus
-     an expanded codex). The grid keeps its OWN internal scroll below (spec section 15:
-     "the items area" specifically) so a long inventory alone never needs this outer
-     scroll to reach the codex/detail/footer beneath it; this outer one is the fallback
-     that keeps everything reachable, never overlapping, on a short/landscape viewport -
-     not the primary way either section is meant to be read. overscroll-behavior stops a
+  /* .inventory-panel-frame below (fixed size only by its own content) plus
+     #codex-section together can exceed 85vh with enough items or an expanded codex -
+     this is the fallback scroll that keeps everything reachable, never overlapping,
+     rather than the primary way either is meant to be read (the grid inside the frame
+     has its own internal scroll too - spec section 15). overscroll-behavior stops a
      scroll-past-the-end here from also dragging the page behind the backdrop. */
   overflow-y: auto;
   overscroll-behavior: contain;
+  background: transparent; /* .inventory-panel-frame is the actual visible card */
 }
 
 #inventory-overlay.inventory-overlay--open #inventory-panel {
   transform: translateY(0);
 }
 
-.inventory-header {
+/* The vine-framed card, recreated entirely in CSS rather than a background image.
+   A generated raster mockup was tried here first, but (a) it baked its own title bar/
+   grid/mass-bar graphics at FIXED relative positions, which only ever matched a panel
+   of its own exact height and visibly collided with real content the moment the panel
+   grew taller (more items, the codex), and (b) it's one more network fetch that can
+   simply fail - confirmed happening on a real device, where the frame silently
+   vanished while every other element still rendered fine. This card can't fail to load
+   (nothing here is a network request) and scales to any content height. The layered
+   box-shadow rings are the same "organic tech frame" technique already used for the
+   radar's own compact dial. */
+.inventory-panel-frame {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 30% 12%, rgba(70, 247, 255, 0.16), transparent 55%),
+    radial-gradient(circle at 78% 88%, rgba(58, 168, 108, 0.2), transparent 55%),
+    var(--surface-panel);
+  box-shadow:
+    0 0 0 3px rgba(58, 122, 92, 0.5),
+    0 0 0 6px rgba(22, 38, 28, 0.6),
+    0 0 0 8px rgba(70, 247, 255, 0.14),
+    0 0 26px rgba(70, 247, 255, 0.18),
+    inset 0 0 30px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgb(var(--accent-rgb) / 0.3);
+  padding: 22px 14px 16px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.inventory-header-text {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+/* Small leaf flourishes at each corner - fixed-size accents rather than a wavy vine
+   running the full (variable) perimeter, which a card that scrolls/grows with content
+   can't support the way the radar's own fixed-size dial could. */
+.inventory-leaf {
+  position: absolute;
+  width: 20px;
+  height: 14px;
+  background: linear-gradient(135deg, #5c9c5a, #386b38);
+  border-radius: 0% 100% 0% 100% / 0% 100% 0% 100%;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
-.inventory-title {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-/* Total carried units (spec section 35) - distinct from the per-stack ×N badges below. */
-.inventory-header-count {
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  opacity: 0.55;
-}
+.inventory-leaf--tl { top: -5px; left: 16px; transform: rotate(-30deg); }
+.inventory-leaf--tr { top: -5px; right: 16px; transform: rotate(150deg); }
+.inventory-leaf--bl { bottom: -5px; left: 16px; transform: rotate(30deg) scaleY(-1); }
+.inventory-leaf--br { bottom: -5px; right: 16px; transform: rotate(-150deg) scaleY(-1); }
 
 #inventory-close {
-  /* 44px, up from 28. The visible glyph is drawn by .close-icon and is unchanged -
-     this only grows the pressable box to the minimum comfortable target. */
-  width: 44px;
-  height: 44px;
+  position: absolute;
+  top: -12px;
+  right: -6px;
+  z-index: 1;
+  /* 44px minimum comfortable target maintained via padding despite the visually
+     smaller 34px circle - see .close-icon for the glyph itself. */
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 1px solid rgb(var(--accent-rgb) / 0.25);
-  background: rgb(var(--white-rgb) / 0.06);
+  border: 1px solid rgb(var(--accent-rgb) / 0.4);
+  background: rgb(var(--surface-rgb) / 0.95);
   color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .close-icon {
@@ -2084,14 +2097,40 @@ html, body {
 .close-icon::before { transform: rotate(45deg); }
 .close-icon::after { transform: rotate(-45deg); }
 
+.inventory-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 26px 10px;
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.18);
+}
+
+.inventory-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Total carried units (spec section 35) - distinct from the per-stack count badges below. */
+.inventory-header-count {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
 #inventory-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr); /* spec section 15 - fixed 3-column, matching the reference panel art */
+  grid-template-columns: repeat(3, 1fr); /* spec section 15 - fixed 3-column */
   gap: 8px;
-  max-height: 30vh;
+  max-height: 34vh;
   overflow-y: auto; /* the items area scrolls independently (spec section 15) */
   overscroll-behavior: contain;
-  padding-bottom: 4px;
+  padding: 2px;
   flex-shrink: 0;
 }
 
@@ -2100,11 +2139,14 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 10px 6px;
-  background: rgb(var(--white-rgb) / 0.05);
-  border: 1px solid rgb(var(--accent-rgb) / 0.15);
+  aspect-ratio: 1;
+  padding: 8px 4px;
+  background: linear-gradient(160deg, rgba(70, 247, 255, 0.08), rgba(6, 20, 22, 0.65));
+  border: 1.5px solid rgb(var(--accent-rgb) / 0.35);
   border-radius: 12px;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.35);
   color: inherit;
   font-family: inherit;
   cursor: pointer;
@@ -2126,14 +2168,15 @@ html, body {
   50% { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.6), 0 0 16px rgb(var(--accent-rgb) / 0.4); }
 }
 
-/* Icon badge - colored glow + border set inline per-item from RESOURCE_TYPES.color
-   (inventoryUI.js), the same "icon inside a glowing coin" language the radar's own
-   blips use, for one consistent HUD vocabulary. See inventoryUI.js's CATEGORY_ICONS for
-   why these are category-shaped placeholders rather than final per-item artwork. */
+/* Icon area - real generated artwork fills it edge-to-edge (it already has its own
+   glow/framing baked in); the category-shaped svg fallback (rival_dna/stone/
+   toxic_spore, which have no generated art - see inventoryUI.js's CATEGORY_ICONS) gets
+   a colored glow badge instead, set inline per-item from RESOURCE_TYPES.color, the same
+   "icon inside a glowing coin" language the radar's own blips use. */
 .inventory-cell-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  width: 74%;
+  aspect-ratio: 1;
+  border-radius: 8px;
   border: 1px solid transparent;
   display: flex;
   align-items: center;
@@ -2141,14 +2184,15 @@ html, body {
   overflow: hidden;
 }
 
+.inventory-cell-icon--badge {
+  border-radius: 50%;
+}
+
 .inventory-cell-icon svg {
   width: 62%;
   height: 62%;
 }
 
-/* Real generated artwork (spec section 3) - fills the badge circle rather than sitting
-   inset like the svg fallbacks, since the source art already has its own glow/framing
-   baked in and reads better edge-to-edge at this size. */
 .inventory-cell-icon img {
   width: 100%;
   height: 100%;
@@ -2156,25 +2200,33 @@ html, body {
 }
 
 .inventory-cell-name {
-  font-size: 10px;
+  font-size: 9px;
   text-align: center;
   opacity: 0.9;
   line-height: 1.2;
+  padding: 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
-/* Quantity pill (spec section 20) - bottom-right of the cell, high-contrast. */
+/* Quantity badge (spec section 20) - a circular badge overlapping the cell's own
+   bottom-right corner, matching the reference art's numbered-coin style. */
 .inventory-count {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  min-width: 16px;
-  padding: 1px 4px;
-  border-radius: 8px;
-  background: rgb(var(--shadow-rgb) / 0.75);
+  right: -4px;
+  bottom: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
+  border-radius: 50%;
+  background: rgb(var(--shadow-rgb) / 0.92);
+  border: 1.5px solid rgb(var(--accent-rgb) / 0.7);
   color: var(--text);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 14px;
+  line-height: 17px;
   text-align: center;
 }
 
@@ -2188,22 +2240,30 @@ html, body {
 
 /* Special/key-item slot: Human Genome Fragment (spec sections 50-53) - visually
    distinct (golden) from the normal grid, collapsed to nothing when not carrying it. */
+/* A simple display toggle rather than the grid-template-rows 0fr->1fr collapse-
+   animation trick this used before: that produced an indeterminate auto-height while
+   #inventory-special sits in #inventory-panel's own column flex, which let its content
+   paint past its computed box and overlap the sibling sections below it. Losing the
+   smooth expand animation is the right trade for a layout that's actually correct. */
 #inventory-special {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.2s ease;
-}
-
-#inventory-special > * {
-  overflow: hidden;
+  display: none;
+  /* Every direct child of #inventory-panel's flex column needs this. Without it, once
+     the frame + special + detail + codex together exceed the panel's own max-height,
+     flex-shrink's default of 1 squeezes each one below its actual content height - the
+     text itself doesn't compress, so it visually spills out of its now-too-small box
+     into the neighboring sections (this is what caused the reported overlap). Disabling
+     shrink means the panel scrolls instead of squeezing anything - the correct
+     behavior, since #inventory-panel already has overflow-y: auto for exactly this. */
+  flex-shrink: 0;
 }
 
 #inventory-special.inventory-special--visible {
-  grid-template-rows: 1fr;
+  display: block;
 }
 
 .inventory-cell--special {
   width: 100%;
+  aspect-ratio: auto; /* overrides .inventory-cell's own square aspect-ratio - this one is a wide row, not a grid slot */
   flex-direction: row;
   justify-content: flex-start;
   gap: 10px;
@@ -2217,6 +2277,7 @@ html, body {
 }
 
 .inventory-cell-icon--special {
+  width: 40px; /* fixed, not the 74%-of-parent default - this cell is a wide row, not a square grid slot */
   background: radial-gradient(circle at 34% 30%, rgb(255 227 138 / 0.45), rgb(255 227 138 / 0.1) 70%);
   border-color: rgb(255 227 138 / 0.65);
   color: #ffe38a;
@@ -2232,29 +2293,139 @@ html, body {
   opacity: 0.85;
 }
 
+/* Icon (left) + name/category/count/stats (right), matching the reference art's own
+   detail-card layout - description and actions then span the full width below both. */
 #inventory-detail {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 12px;
   background: rgb(var(--white-rgb) / 0.04);
+  border: 1px solid rgb(var(--accent-rgb) / 0.2);
+  border-radius: 14px;
+  flex-shrink: 0; /* see #inventory-special's own comment - prevents content-vs-box overlap */
+}
+
+.inventory-detail-icon {
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
   border-radius: 10px;
-  min-height: 40px;
+  border: 1.5px solid rgb(var(--accent-rgb) / 0.35);
+  background: linear-gradient(160deg, rgba(70, 247, 255, 0.08), rgba(6, 20, 22, 0.65));
+  display: flex;
+  align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+.inventory-detail-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.inventory-detail-icon svg {
+  width: 68%;
+  height: 68%;
+}
+
+.inventory-detail-body {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inventory-detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inventory-detail-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 #inventory-detail-name {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-#inventory-detail-meta {
+#inventory-detail-category {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.inventory-detail-count {
+  flex-shrink: 0;
+  padding: 2px 9px;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.4);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.inventory-detail-count:empty {
+  display: none;
+}
+
+/* Two-column stat rows (weight/mass/edible on the left, energy/mutation-ingredient on
+   the right) - only real RESOURCE_TYPES metadata ever appears here (inventoryUI.js),
+   never an invented stat. */
+.inventory-detail-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
+}
+
+.inventory-detail-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.inventory-detail-stat svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.inventory-detail-stat b {
+  margin-left: auto;
+  font-weight: 700;
+  opacity: 1;
+}
+
+#inventory-detail-description {
+  flex-basis: 100%;
+  margin: 0;
   font-size: 11px;
-  opacity: 0.7;
   line-height: 1.5;
+  opacity: 0.75;
+}
+
+#inventory-detail-description:empty {
+  display: none;
 }
 
 #inventory-detail-used-in {
+  flex-basis: 100%;
   font-size: 10px;
   letter-spacing: 0.03em;
   color: var(--accent-bright);
@@ -2266,9 +2437,9 @@ html, body {
 }
 
 #inventory-detail-actions {
+  flex-basis: 100%;
   display: flex;
   gap: 8px;
-  margin-top: 2px;
 }
 
 #inventory-detail-actions.inventory-detail-actions--hidden {
@@ -2277,8 +2448,12 @@ html, body {
 
 .inventory-action-button {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 9px 0;
-  border-radius: 10px;
+  border-radius: 20px;
   border: 1px solid transparent;
   font-family: inherit;
   font-size: 11px;
@@ -2287,13 +2462,19 @@ html, body {
   cursor: pointer;
 }
 
+.inventory-action-button svg {
+  width: 14px;
+  height: 14px;
+}
+
 .inventory-action-button--hidden {
   display: none;
 }
 
-/* Consume/Expel colors follow the project's own established meaning (spec section 91) -
-   soft accent-green for a beneficial action, warm amber for shedding weight, never a
-   saturated red (that's reserved for danger/destructive, e.g. the death fade). */
+/* Consume (green, leaf icon) / Expel (magenta, droplet icon) - matching the reference
+   art's own button coloring, a clearer beneficial-vs-shedding distinction than the
+   project's earlier green/amber pairing, and still never the saturated red reserved for
+   danger/destructive actions (e.g. the death fade). */
 .inventory-action-button--consume {
   background: rgb(var(--accent-rgb) / 0.18);
   border-color: rgb(var(--accent-rgb) / 0.5);
@@ -2305,35 +2486,67 @@ html, body {
 }
 
 .inventory-action-button--expel {
-  background: rgb(255 180 90 / 0.16);
-  border-color: rgb(255 180 90 / 0.5);
-  color: #ffc978;
+  background: rgba(190, 90, 255, 0.16);
+  border-color: rgba(190, 90, 255, 0.5);
+  color: #dba8ff;
 }
 
 .inventory-action-button--expel:active {
-  background: rgb(255 180 90 / 0.28);
+  background: rgba(190, 90, 255, 0.28);
 }
 
 .inventory-footer {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  flex-shrink: 0;
 }
 
-/* Burden readout (spec section 34) - shares the footer row with the existing Mass bar
-   rather than adding a second row, since it is just a label derived from the same
-   number, not a new measurement. */
-#inventory-burden-label {
-  flex-basis: 100%;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  opacity: 0.7;
+.inventory-footer .mass-bar {
+  flex: 1;
+  width: auto;
+  height: 8px;
 }
 
-.burden-label--heavy { color: #ffcf6e; opacity: 0.9; }
-.burden-label--overloaded { color: #ff8a8a; opacity: 0.95; }
+/* Burden status pill (spec section 34) - reads the same load/speedMultiplier the mass
+   bar itself does, never a second competing measurement. */
+.burden-pill {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.4);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.burden-pill:empty {
+  display: none;
+}
+
+.burden-pill--light {
+  color: var(--accent-bright);
+  opacity: 0.8;
+}
+
+.burden-pill--burdened {
+  border-color: rgba(255, 180, 90, 0.5);
+  color: #ffc978;
+}
+
+.burden-pill--heavy {
+  border-color: rgba(255, 207, 110, 0.6);
+  color: #ffcf6e;
+  background: rgba(255, 207, 110, 0.1);
+}
+
+.burden-pill--overloaded {
+  border-color: rgba(255, 90, 90, 0.6);
+  color: #ff8a8a;
+  background: rgba(255, 90, 90, 0.12);
+}
 
 /* ==========================================================================
    Damage numbers (damageNumbers.js)
@@ -2644,6 +2857,7 @@ html, body {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid rgb(var(--white-rgb) / 0.08);
+  flex-shrink: 0; /* see #inventory-special's own comment - prevents content-vs-box overlap */
 }
 
 .codex-heading {
