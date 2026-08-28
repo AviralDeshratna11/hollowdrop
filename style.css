@@ -1974,24 +1974,13 @@ html, body {
 
 #inventory-panel {
   width: 100%;
-  max-width: 480px;
+  max-width: 420px; /* close to the artwork's own ~480px-wide native scale, so the frame below never has to upscale past its source resolution */
   max-height: 85vh; /* spec section 14: ~85-90% of available screen */
-  /* Generated panel artwork (spec section 12) stretched to fill - the panel's own
-     height varies with content (item count, codex expansion), which the source art's
-     fixed proportions can't match exactly, so a dark scrim layers on top to both keep
-     every functional element overlaid on it readable and hide the stretch at the edges.
-     background-color is the fallback if the image 404s. */
-  background-color: var(--surface-panel);
-  background-image:
-    linear-gradient(rgba(4, 10, 9, 0.55), rgba(4, 10, 9, 0.82)),
-    url('assets/ui/inventory/bioluminescent_inventory_hud_panel.png');
-  background-size: 100% 100%, 100% 100%;
-  background-position: center, center;
-  background-repeat: no-repeat, no-repeat;
   border: 1px solid rgb(var(--accent-rgb) / 0.25);
   border-bottom: none;
   border-radius: 20px 20px 0 0;
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  background: var(--surface-panel);
+  padding: 0 16px calc(16px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1999,14 +1988,13 @@ html, body {
   transition: transform 0.25s ease;
   color: var(--text);
   font-family: var(--font-ui);
-  /* The panel now carries a special slot, codex, and a fuller detail/actions section
-     on top of the grid - together they can exceed even 85vh (many resource types plus
-     an expanded codex). The grid keeps its OWN internal scroll below (spec section 15:
-     "the items area" specifically) so a long inventory alone never needs this outer
-     scroll to reach the codex/detail/footer beneath it; this outer one is the fallback
-     that keeps everything reachable, never overlapping, on a short/landscape viewport -
-     not the primary way either section is meant to be read. overscroll-behavior stops a
-     scroll-past-the-end here from also dragging the page behind the backdrop. */
+  /* Below the artwork frame (which has a fixed aspect and can't grow), the special
+     slot/detail/codex sections are normal flowing content that can exceed 85vh with
+     enough items or an expanded codex - this is the fallback scroll that keeps
+     everything reachable, never overlapping, rather than the primary way any one
+     section is meant to be read (the grid inside the frame has its own internal
+     scroll too - spec section 15). overscroll-behavior stops a scroll-past-the-end
+     here from also dragging the page behind the backdrop. */
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2015,36 +2003,105 @@ html, body {
   transform: translateY(0);
 }
 
-.inventory-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* The generated artwork, locked to its own native aspect ratio (1086:1448) so
+   background-size: 100% 100% can never distort it - see the long comment on this
+   element in index.html for why only header/grid/mass-bar live inside it. Negative
+   side margins pull it flush to #inventory-panel's own edges despite that panel's
+   16px horizontal padding (kept for every section below, which isn't full-bleed). */
+.inventory-artwork-frame {
+  position: relative;
+  margin: 0 -16px;
+  aspect-ratio: 1086 / 1448;
+  background-image: url('assets/ui/inventory/bioluminescent_inventory_hud_panel.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: top center;
+  flex-shrink: 0;
 }
 
-.inventory-header-text {
+/* Percentages measured directly off the source artwork (header pill / 3x3 grid /
+   mass-bar track), so each region sits exactly where the illustration draws its own
+   matching graphic regardless of the frame's actual rendered size. */
+.artwork-region {
+  position: absolute;
+  left: 13.8%;
+  right: 13.9%;
+}
+
+.artwork-region--header {
+  top: 10.2%;
+  height: 6%;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  left: 24%;
+  right: 22%;
 }
 
 .inventory-title {
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Total carried units (spec section 35) - distinct from the per-stack ×N badges below. */
 .inventory-header-count {
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 0.06em;
-  opacity: 0.55;
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+
+.artwork-region--grid {
+  top: 20%;
+  height: 39.7%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 3%;
+  overflow-y: auto; /* only kicks in past 9 stacks - the art's own 9 slots fit with no scroll */
+  overscroll-behavior: contain;
+}
+
+.artwork-region--mass {
+  top: 61.2%;
+  height: 6.2%;
+  /* Starts past 13.8% on purpose - the artwork already draws a bag icon in that gap
+     (roughly 13.8%-26%), left showing through rather than covered by the bar. */
+  left: 27%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Overrides .mass-bar/.mass-fill's own generic 72px-wide default (shared with the
+   main gameplay HUD's #mass-ui) - here the bar should fill the artwork's own wide
+   track instead. */
+.artwork-region--mass .mass-bar {
+  flex: 1;
+  width: auto;
+  height: 8px;
+}
+
+#inventory-mass-text {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 #inventory-close {
+  position: absolute;
+  top: 2%;
+  right: 1%;
+  z-index: 1;
   /* 44px, up from 28. The visible glyph is drawn by .close-icon and is unchanged -
      this only grows the pressable box to the minimum comfortable target. */
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1px solid rgb(var(--accent-rgb) / 0.25);
   background: rgb(var(--white-rgb) / 0.06);
@@ -2105,6 +2162,20 @@ html, body {
 
 .inventory-cell:active {
   background: rgb(var(--accent-rgb) / 0.15);
+}
+
+/* Cells inside the artwork frame sit directly on the illustration's own baked-in glass
+   slot graphic - no separate background/border of their own, so the art shows through
+   exactly as drawn instead of a flat CSS panel competing with it. */
+.artwork-region--grid .inventory-cell {
+  background: transparent;
+  border-color: transparent;
+  padding: 4% 3%;
+  justify-content: center;
+}
+
+.artwork-region--grid .inventory-cell:active {
+  background: rgb(var(--accent-rgb) / 0.12);
 }
 
 .inventory-cell--selected {
@@ -2181,18 +2252,25 @@ html, body {
 
 /* Special/key-item slot: Human Genome Fragment (spec sections 50-53) - visually
    distinct (golden) from the normal grid, collapsed to nothing when not carrying it. */
+/* A simple display toggle rather than the grid-template-rows 0fr->1fr collapse-
+   animation trick this used before: that produced an indeterminate auto-height while
+   #inventory-special sits in #inventory-panel's own column flex, which let its content
+   paint past its computed box and overlap the sibling sections below it. Losing the
+   smooth expand animation is the right trade for a layout that's actually correct. */
 #inventory-special {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.2s ease;
-}
-
-#inventory-special > * {
-  overflow: hidden;
+  display: none;
+  /* Every direct child of #inventory-panel's flex column needs this. Without it, once
+     the frame + special + detail + codex together exceed the panel's own max-height,
+     flex-shrink's default of 1 squeezes each one below its actual content height - the
+     text itself doesn't compress, so it visually spills out of its now-too-small box
+     into the neighboring sections (this is what caused the reported overlap). Disabling
+     shrink means the panel scrolls instead of squeezing anything - the correct
+     behavior, since #inventory-panel already has overflow-y: auto for exactly this. */
+  flex-shrink: 0;
 }
 
 #inventory-special.inventory-special--visible {
-  grid-template-rows: 1fr;
+  display: block;
 }
 
 .inventory-cell--special {
@@ -2233,7 +2311,7 @@ html, body {
   background: rgb(var(--white-rgb) / 0.04);
   border-radius: 10px;
   min-height: 40px;
-  justify-content: center;
+  flex-shrink: 0; /* see #inventory-special's own comment - prevents content-vs-box overlap */
 }
 
 #inventory-detail-name {
@@ -2637,6 +2715,7 @@ html, body {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid rgb(var(--white-rgb) / 0.08);
+  flex-shrink: 0; /* see #inventory-special's own comment - prevents content-vs-box overlap */
 }
 
 .codex-heading {

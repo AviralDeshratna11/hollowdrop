@@ -272,26 +272,56 @@
 
 <div id="inventory-overlay">
   <div id="inventory-panel">
-    <div class="inventory-header">
-      <div class="inventory-header-text">
-        <span class="inventory-title">Living Inventory</span>
-        <span id="inventory-header-count" class="inventory-header-count"></span>
-      </div>
+    <!-- The generated panel artwork (assets/ui/inventory/bioluminescent_inventory_hud_
+         panel.png) is a COMPLETE mockup - its own baked-in title bar, 3x3 grid, and
+         mass bar at fixed relative positions - not a texture to stretch behind
+         arbitrary content. This frame is locked to the artwork's own aspect ratio
+         (background-size 100% 100%, so it can never distort) and holds ONLY the three
+         real elements that map 1:1 onto regions the art actually draws: the title, the
+         3x3 grid (.artwork-region--grid), and the mass bar (.artwork-region--mass).
+         Everything the art doesn't depict (full item stats, Consume/Expel, the special
+         Genome Fragment slot, the mutation codex) lives below the frame in plain
+         sections, in normal document flow, so nothing can ever overlap the illustration
+         again regardless of how many items or how tall the codex gets. -->
+    <div class="inventory-artwork-frame">
       <button id="inventory-close" aria-label="Close inventory">
         <span class="close-icon"></span>
       </button>
+
+      <div class="artwork-region artwork-region--header">
+        <span class="inventory-title">Living Inventory</span>
+        <span id="inventory-header-count" class="inventory-header-count"></span>
+      </div>
+
+      <div id="inventory-grid" class="artwork-region artwork-region--grid"></div>
+
+      <div class="artwork-region artwork-region--mass">
+        <div class="mass-bar">
+          <div id="inventory-mass-fill" class="mass-fill"></div>
+        </div>
+        <span id="inventory-mass-text">0 / 15</span>
+      </div>
     </div>
 
     <!-- Special/key-item slot - the Human Genome Fragment, shown ONLY while the player
          is actually carrying it (spec sections 50-53). Never part of the aggregated
-         grid below, never counted toward Mass, no Consume/Expel actions. JS
+         grid above, never counted toward Mass, no Consume/Expel actions. JS
          (inventoryUI.js) toggles inventory-special--visible; the button itself is
          always present so no extra DOM create/destroy is needed each refresh. -->
     <div id="inventory-special">
       <button id="inventory-special-cell" class="inventory-cell inventory-cell--special" type="button"></button>
     </div>
 
-    <div id="inventory-grid"></div>
+    <div id="inventory-detail">
+      <span id="inventory-detail-name">Select a material to inspect.</span>
+      <span id="inventory-detail-meta"></span>
+      <span id="inventory-detail-used-in"></span>
+      <span id="inventory-burden-label"></span>
+      <div id="inventory-detail-actions">
+        <button id="inventory-consume-button" class="inventory-action-button inventory-action-button--consume" type="button">Consume</button>
+        <button id="inventory-expel-button" class="inventory-action-button inventory-action-button--expel" type="button">Expel</button>
+      </div>
+    </div>
 
     <!-- Mutation codex. The panel already exists as the "what am I carrying" view; this
          makes it also the "what can I become" reference, rather than adding a third
@@ -301,25 +331,6 @@
     <div id="codex-section">
       <span class="codex-heading">Mutations</span>
       <div id="codex-list"></div>
-    </div>
-
-    <div id="inventory-detail">
-      <span id="inventory-detail-name">Select a material to inspect.</span>
-      <span id="inventory-detail-meta"></span>
-      <span id="inventory-detail-used-in"></span>
-      <div id="inventory-detail-actions">
-        <button id="inventory-consume-button" class="inventory-action-button inventory-action-button--consume" type="button">Consume</button>
-        <button id="inventory-expel-button" class="inventory-action-button inventory-action-button--expel" type="button">Expel</button>
-      </div>
-    </div>
-
-    <div class="inventory-footer">
-      <span class="mass-label">Mass</span>
-      <div class="mass-bar">
-        <div id="inventory-mass-fill" class="mass-fill"></div>
-      </div>
-      <span id="inventory-mass-text">0 / 15</span>
-      <span id="inventory-burden-label"></span>
     </div>
   </div>
 </div>
