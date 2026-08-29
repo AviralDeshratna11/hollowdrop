@@ -136,9 +136,32 @@ for (let i = 0; i < groundPositions.count; i++) {
 }
 groundGeometry.setAttribute('color', new THREE.BufferAttribute(groundColorArray, 3));
 
+// User-generated cave-floor artwork, tiled across the whole 200x200 ground rather than
+// stretched once (a single ~1000px painting stretched over 200 world units would be a
+// blurry smear with no readable detail up close). It wasn't authored as a seamless
+// tile - MirroredRepeatWrapping is what actually hides that: each tile's edge meets a
+// mirrored copy of itself, so edge pixels always match exactly with no manual seam
+// editing, at the cost of a faint symmetry between neighboring tiles that reads far
+// better than a hard seam would. Combined with the existing vertex-color mottling
+// below (MeshStandardMaterial multiplies map x vertex color automatically) rather than
+// replacing it - the mottling still does its job of breaking up large-scale flatness,
+// and its own per-region tinting helps further disguise the texture's own repetition.
+const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground.jpg');
+groundTexture.wrapS = THREE.MirroredRepeatWrapping;
+groundTexture.wrapT = THREE.MirroredRepeatWrapping;
+groundTexture.repeat.set(8, 8); // each tile ~25 world units - close to the Apex arena's own 9-unit-radius scale
+groundTexture.colorSpace = THREE.SRGBColorSpace;
+groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+// vertexColors is dropped here (the geometry's own 'color' attribute above is now
+// unused, harmless to leave built) - it was calibrated as dark, standalone flat color
+// (breaking up an otherwise blank plane), and MeshStandardMaterial multiplies map x
+// vertexColor, so layering it under the real texture compounded two dark sources into
+// a near-black result. The real artwork already provides its own large- and small-
+// scale color variation; a flat multiplier tint isn't needed on top of it.
 const ground = new THREE.Mesh(
   groundGeometry,
-  new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })
+  new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1 })
 );
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
