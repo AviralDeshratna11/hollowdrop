@@ -110,12 +110,11 @@ export class RadarController {
     targets.sort((a, b) => (a.priority !== b.priority ? b.priority - a.priority : a.distanceSq - b.distanceSq));
     const limited = targets.slice(0, RADAR_CONFIG.maxBlips);
 
-    const heading = this.player.rotation.y;
     const nowDetected = new Set();
     const blips = [];
     for (const target of limited) {
       nowDetected.add(target.id);
-      const radar = this.worldToRadar(target.position, heading, target.clampToEdge);
+      const radar = this.worldToRadar(target.position, target.clampToEdge);
       if (!radar) continue; // defensive - collectTargets() already range-filters
       blips.push({
         id: target.id,
@@ -262,33 +261,27 @@ export class RadarController {
   }
 
   /**
-   * World XZ offset -> radar-space position, already rotated into player-up mode (spec
-   * sections 16-17) and, for edge-clamped target types, pinned just inside the rim
-   * rather than dropped once they exceed `detectionRadius` (spec section 23).
+   * World XZ offset -> radar-space position in NORTH-UP / world-locked orientation, and,
+   * for edge-clamped target types, pinned just inside the rim rather than dropped once
+   * they exceed `detectionRadius` (spec section 23).
    *
-   * Rotating (dx, dz) by +heading (heading = player.rotation.y, this project's own yaw
-   * convention - "Model faces -Z at rotation.y = 0") and using the result directly as
-   * (screenX, screenY) - no extra negation anywhere - was verified by hand against both
-   * axes: a target dead ahead of the player lands at (0, -1) (screen-up, since CSS y
-   * grows downward), and a target to the player's right lands at (+1, 0). Re-derive from
-   * scratch (don't just copy a generic "rotate by -heading" formula) if this ever needs
-   * to change - the sign that's actually correct here depends on this project's specific
-   * yaw/forward convention, not a universal constant.
+   * The dial itself never rotates: world +X is always radar-right and world +Z always
+   * radar-down (CSS y grows downward), so (dx, dz) maps straight to (screenX, screenY)
+   * with no heading rotation. A target dead north of the player lands at (0, -1), one
+   * due east at (+1, 0). The player's own facing is conveyed by rotating the centre
+   * marker instead (RadarHUD._updatePlayerMarker) rather than by counter-rotating the
+   * whole world under a fixed marker.
    *
    * @returns {{x:number, y:number, clamped:boolean}} x/y in -1..1 (radar-radius units),
    *   or null if out of range and not eligible for edge-clamping.
    */
-  worldToRadar(position, heading, clampToEdge) {
+  worldToRadar(position, clampToEdge) {
     const dx = position.x - this.player.position.x;
     const dz = position.z - this.player.position.z;
-    const cos = Math.cos(heading);
-    const sin = Math.sin(heading);
-    const rx = dx * cos - dz * sin;
-    const ry = dx * sin + dz * cos;
 
     const range = RADAR_CONFIG.detectionRadius;
-    let nx = rx / range;
-    let ny = ry / range;
+    let nx = dx / range;
+    let ny = dz / range;
     const dist = Math.hypot(nx, ny);
     let clamped = false;
     if (dist > 1) {

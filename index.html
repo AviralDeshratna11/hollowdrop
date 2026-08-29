@@ -66,6 +66,15 @@
      and this one is a single CSS animation triggered by a class toggle. -->
 <div id="genome-flash"></div>
 
+<!-- Floating movement joystick - purely visual, driven by InputController. It appears
+     at the exact point a drag begins and its knob tracks the (clamped) swipe vector, so
+     the existing swipe-to-move system reads as a familiar on-screen stick without
+     changing how movement is actually computed. No pointer-events: the canvas
+     underneath still receives every pointer event exactly as before. -->
+<div id="move-joystick" aria-hidden="true">
+  <div id="move-joystick-knob"></div>
+</div>
+
 <div id="ui-layer">
   <!-- Single stacked column (not split left/right) so the three bars can never
        collide horizontally, regardless of screen width or how long their text gets. -->
@@ -202,8 +211,8 @@
 
   <div class="radar-column">
     <!-- Compact-only decorative frame around the dial (organic vine ring, leaf/mushroom
-         accents, and three non-functional satellite badges) - approximates the reference
-         concept art's wood-and-vine housing. Hidden in expanded mode (style.css), where
+         accents) - approximates the reference concept art's wood-and-vine housing.
+         Hidden in expanded mode (style.css), where
          the dial grows past what this frame's fixed proportions were tuned for and the
          full legend below takes over the "readable detail" role instead. -->
     <div class="radar-frame">
@@ -220,15 +229,6 @@
       </svg>
       <span class="radar-mushroom radar-mushroom--1"><i></i><i></i><i></i></span>
       <span class="radar-mushroom radar-mushroom--2"><i></i><i></i></span>
-      <div class="radar-satellite radar-satellite--compass" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 3 17 15 12 12 7 15Z" fill="currentColor" /></svg>
-      </div>
-      <div class="radar-satellite radar-satellite--target" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="6.5" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke-linecap="round" /></svg>
-      </div>
-      <div class="radar-satellite radar-satellite--drop" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 2c4 5 7 9 7 13a7 7 0 0 1-14 0c0-4 3-8 7-13Z" fill="currentColor" /></svg>
-      </div>
 
       <div id="radar-display">
         <div class="radar-grid"></div>

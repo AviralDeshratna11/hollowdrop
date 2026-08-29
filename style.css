@@ -199,6 +199,51 @@ html, body {
   word-break: break-word;
 }
 
+/* Floating movement joystick (see index.html + inputController.js). Sits above the
+   canvas but below the HUD (#ui-layer is z-index 10) and never intercepts input - it
+   only visualises the swipe that InputController is already reading. The ring's radius
+   (half of width/height) is kept equal to InputController's maxDistance, so the knob
+   reaches the ring edge exactly when movement input hits full magnitude. */
+#move-joystick {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 180px;
+  height: 180px;
+  margin-left: -90px; /* centre the ring on the (left, top) touch point */
+  margin-top: -90px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9;
+  opacity: 0;
+  transition: opacity 0.14s ease-out;
+  border: 2px solid rgb(var(--accent-rgb) / 0.35);
+  background: radial-gradient(circle,
+    rgb(var(--accent-rgb) / 0.12),
+    rgb(var(--accent-rgb) / 0.04) 68%,
+    transparent 72%);
+}
+
+#move-joystick.is-active {
+  opacity: 1;
+}
+
+#move-joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 74px;
+  height: 74px;
+  margin-left: -37px;
+  margin-top: -37px;
+  border-radius: 50%;
+  background: rgb(var(--accent-rgb) / 0.28);
+  border: 2px solid rgb(var(--accent-rgb) / 0.65);
+  box-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.4);
+  /* transform is written every pointermove by InputController; no CSS transition so the
+     knob stays locked to the finger with zero lag. */
+}
+
 /* Death/respawn transition - opacity driven per-frame by DeathRespawnManager, not CSS. */
 #screen-fade {
   position: fixed;
@@ -699,9 +744,9 @@ html, body {
 }
 
 /* Compact-only decorative housing around the dial: a real (if simplified) vine/wood
-   ring plus leaf accents (all one inline SVG, .radar-frame-vine), two glowing mushroom
-   clusters, and three non-functional satellite badges - approximating the reference
-   concept art's fuller frame. Sized 34px larger than the dial itself in each dimension
+   ring plus leaf accents (all one inline SVG, .radar-frame-vine) and two glowing
+   mushroom clusters - approximating the reference concept art's fuller frame. Sized
+   34px larger than the dial itself in each dimension
    so the ring/leaves have somewhere to sit outside #radar-display's own circle without
    overlapping it. Hidden entirely in expanded mode (below) - at that larger size this
    fixed-proportion decoration would look thin/misplaced, and the full legend takes over
@@ -756,49 +801,8 @@ html, body {
   left: -2%;
 }
 
-/* Purely decorative badges echoing the reference's non-functional compass/crosshair/
-   water-drop trio - never interactive (pointer-events: none), never gated to any
-   gameplay state beyond compact-mode itself. */
-.radar-satellite {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at 35% 30%, rgba(34, 54, 48, 0.95), rgba(6, 16, 14, 0.96));
-  border: 2px solid #6b4a2a;
-  box-shadow: 0 0 6px rgba(70, 247, 255, 0.25), inset 0 0 4px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-}
-
-.radar-satellite svg {
-  width: 58%;
-  height: 58%;
-}
-
-.radar-satellite--compass {
-  top: -4%;
-  right: -4%;
-  color: var(--radar-cyan);
-}
-
-.radar-satellite--target {
-  bottom: -2%;
-  left: -4%;
-  color: rgba(210, 235, 255, 0.85);
-}
-
-.radar-satellite--drop {
-  bottom: -8%;
-  right: 12%;
-  color: #6fc8ff;
-}
-
 .species-radar--expanded .radar-frame-vine,
-.species-radar--expanded .radar-mushroom,
-.species-radar--expanded .radar-satellite {
+.species-radar--expanded .radar-mushroom {
   display: none;
 }
 
@@ -911,9 +915,9 @@ html, body {
   z-index: 2;
 }
 
-/* Player-up mode (spec section 16-17): this whole layer's rotation is set every frame
-   in JS (radarHUD.js) to the player's current heading, so N/E/S/W always reflect which
-   way is actually which relative to the fixed "up = forward" player marker below. */
+/* North-up / world-locked dial: this layer stays fixed (N always at the top) and is
+   never rotated from JS. The player's heading is shown by rotating the centre marker
+   below instead of counter-rotating the whole world under it. */
 #radar-compass {
   position: absolute;
   inset: 0;
@@ -974,9 +978,10 @@ html, body {
   transform: translateY(-50%);
 }
 
-/* The player is always dead center and never moves (spec section 18) - only the
-   compass/blips move/rotate around it. A dart/paper-plane SVG rather than a bare "▲"
-   glyph, closer to the reference art's arrow marker. */
+/* The player is always dead center - but on the north-up dial the marker ROTATES to
+   show which way the player is facing/travelling (transform set every frame in
+   radarHUD.js), while the compass ring and blip field stay world-locked around it.
+   A dart/paper-plane SVG rather than a bare "▲" glyph, closer to the reference art. */
 .radar-player {
   position: absolute;
   top: 50%;

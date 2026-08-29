@@ -39,19 +39,63 @@ import { RadarHUD } from './radarHUD.js';
 const canvas = document.getElementById('game-canvas');
 
 // --- Scene / Camera / Renderer -------------------------------------------
+const DEBUG_CAMERA = false;
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a1410);
-scene.fog = new THREE.Fog(0x0a1410, 18, 55);
+// near/far are the values for a REFERENCE_ASPECT screen; updateViewZoom() scales them
+// with viewZoom below so a dollied-back camera keeps the same atmospheric depth.
+const FOG_NEAR_BASE = 18;
+const FOG_FAR_BASE = 55;
+scene.fog = new THREE.Fog(0x0a1410, FOG_NEAR_BASE, FOG_FAR_BASE);
 
+const CAMERA_FAR_BASE = 200;
 const camera = new THREE.PerspectiveCamera(
-  50,
+  50, // VERTICAL fov (three.js convention) - horizontal coverage is this * aspect,
+      // which is the entire reason the equal-view logic below has to exist.
   window.innerWidth / window.innerHeight,
   0.1,
-  200
+  CAMERA_FAR_BASE
 );
 const CAMERA_OFFSET = new THREE.Vector3(0, 11, 7); // top-down / slightly angled
 const CAMERA_FOLLOW_SMOOTHING = 3.5; // lower = laggier camera, doesn't affect player physics
-camera.position.copy(CAMERA_OFFSET);
+
+// --- Equal map view across devices ------------------------------------------
+// Because fov is vertical, every device already sees the SAME vertical slice of the
+// world. Horizontal coverage is fov * aspect, so without correction a wide monitor
+// sees roughly twice the map width a portrait phone does.
+//
+// REFERENCE_ASPECT is the framing contract: a screen exactly this shape is rendered
+// exactly as CAMERA_OFFSET / fov intend (viewZoom = 1). Any NARROWER screen dollies
+// the camera straight back along CAMERA_OFFSET by REFERENCE_ASPECT / aspect - the
+// horizontal world extent at the player's own position is exactly proportional to
+// aspect (d * tan(vfov/2) * aspect, camera has no roll), so this ratio matches the
+// reference's horizontal coverage exactly rather than approximately. Such screens then
+// also see extra world above/below (bonus, never less). WIDER screens stay at
+// viewZoom = 1 and see extra world left/right. Net: nobody ever sees less of the map
+// than a REFERENCE_ASPECT screen would.
+const REFERENCE_ASPECT = 16 / 9;
+// Ceiling on the dolly-back so an extreme portrait aspect can't shrink the player to a
+// speck. Past this, very tall/thin screens give up some horizontal parity but still
+// keep the full vertical slice.
+const CAMERA_MAX_ZOOM_OUT = 3;
+let viewZoom = 1; // multiplies CAMERA_OFFSET everywhere it's used; set by updateViewZoom()
+
+/** Recompute viewZoom from the current window aspect, and push fog + far plane out with
+ *  it. Called once at startup and from onResize() (covers orientation changes too). */
+function updateViewZoom() {
+  const aspect = window.innerWidth / window.innerHeight;
+  viewZoom = THREE.MathUtils.clamp(REFERENCE_ASPECT / aspect, 1, CAMERA_MAX_ZOOM_OUT);
+  scene.fog.near = FOG_NEAR_BASE * viewZoom;
+  scene.fog.far = FOG_FAR_BASE * viewZoom;
+  camera.far = Math.max(CAMERA_FAR_BASE, FOG_FAR_BASE * viewZoom + 20);
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  if (DEBUG_CAMERA) console.log(`[camera] aspect ${aspect.toFixed(3)} -> viewZoom ${viewZoom.toFixed(3)}`);
+}
+
+updateViewZoom();
+camera.position.copy(CAMERA_OFFSET).multiplyScalar(viewZoom);
 camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -218,7 +262,11 @@ fragmentCarryAnchor.position.set(0, 0.55, 0.4);
 player.add(fragmentCarryAnchor);
 
 // --- Input / Movement --------------------------------------------------------
-const inputController = new InputController(canvas, { deadZone: 12, maxDistance: 90 });
+const inputController = new InputController(canvas, {
+  deadZone: 12,
+  maxDistance: 90,
+  joystickElement: document.getElementById('move-joystick'),
+});
 const playerController = new PlayerController(player, slimeMaterial);
 
 // iOS Safari pinch-zoom guard (touch-action:none handles most, this covers gesture events).
@@ -689,7 +737,10 @@ function updateCamera(deltaTime) {
   // single scale on the existing offset, not a separate camera path, so it stays
   // exactly as "subtle" as the offset itself and never fights the normal follow-cam.
   const zoom = memorySequenceController.getCameraZoom();
-  const offsetScale = 1 - zoom;
+  // viewZoom equalizes map coverage across devices; (1 - zoom) is the Memory Reveal's
+  // push toward the player. Multiplied, so the reveal still bottoms out on the player
+  // regardless of device.
+  const offsetScale = (1 - zoom) * viewZoom;
   desiredCameraPos.set(
     player.position.x + CAMERA_OFFSET.x * offsetScale,
     CAMERA_OFFSET.y * offsetScale,
@@ -729,7 +780,11 @@ const deathRespawnManager = new DeathRespawnManager({
   // Snaps the camera instantly on respawn instead of letting it slide across the
   // map to catch up - the fade covers the position jump, not a camera glide.
   onRespawnCamera: () => {
-    camera.position.set(player.position.x + CAMERA_OFFSET.x, CAMERA_OFFSET.y, player.position.z + CAMERA_OFFSET.z);
+    camera.position.set(
+      player.position.x + CAMERA_OFFSET.x * viewZoom,
+      CAMERA_OFFSET.y * viewZoom,
+      player.position.z + CAMERA_OFFSET.z * viewZoom
+    );
     cameraLookTarget.copy(player.position);
   },
   onPlayerDeath: () => runStats.deaths++,
@@ -1052,8 +1107,8 @@ function computeGaze() {
 
 // --- Resize handling -----------------------------------------------------------
 function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+  // Recomputes the equal-view dolly + fog and sets camera.aspect / projection matrix.
+  updateViewZoom();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', onResize);
