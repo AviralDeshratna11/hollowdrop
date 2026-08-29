@@ -182,18 +182,24 @@ groundGeometry.setAttribute('color', new THREE.BufferAttribute(groundColorArray,
 
 // User-generated cave-floor artwork, tiled across the whole 200x200 ground rather than
 // stretched once (a single ~1000px painting stretched over 200 world units would be a
-// blurry smear with no readable detail up close). It wasn't authored as a seamless
-// tile - MirroredRepeatWrapping is what actually hides that: each tile's edge meets a
-// mirrored copy of itself, so edge pixels always match exactly with no manual seam
-// editing, at the cost of a faint symmetry between neighboring tiles that reads far
-// better than a hard seam would. Combined with the existing vertex-color mottling
-// below (MeshStandardMaterial multiplies map x vertex color automatically) rather than
-// replacing it - the mottling still does its job of breaking up large-scale flatness,
-// and its own per-region tinting helps further disguise the texture's own repetition.
+// blurry smear with no readable detail up close). The source crop was picked to be
+// fairly uniform (scattered teal glow + rock + moss, no single dominant feature) -
+// earlier crops that included the art's one-off purple mushroom cluster made that
+// cluster read as an obvious duplicated landmark once mirrored/repeated, which is far
+// more objectionable than a repeating pattern with nothing distinctive to notice.
+// Plain RepeatWrapping (not Mirrored): mirroring matches every tile edge exactly with
+// no manual seam work, but this source has soft directional painted shading that
+// mirrors into an unnaturally dark line right along the seam - worse than the milder
+// color/pattern discontinuity a plain repeat leaves, now that there's no rare feature
+// for that discontinuity to draw the eye toward. offset shifts the tiling by half a
+// tile so a seam doesn't land exactly on the world origin - the player's spawn point,
+// the single most-viewed spot in the game.
 const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground.jpg');
-groundTexture.wrapS = THREE.MirroredRepeatWrapping;
-groundTexture.wrapT = THREE.MirroredRepeatWrapping;
-groundTexture.repeat.set(8, 8); // each tile ~25 world units - close to the Apex arena's own 9-unit-radius scale
+groundTexture.wrapS = THREE.RepeatWrapping;
+groundTexture.wrapT = THREE.RepeatWrapping;
+const GROUND_TEXTURE_REPEAT = 5; // each tile ~40 world units - large enough that seams cross the active play area only rarely
+groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
+groundTexture.offset.set(0.5 / GROUND_TEXTURE_REPEAT, 0.5 / GROUND_TEXTURE_REPEAT);
 groundTexture.colorSpace = THREE.SRGBColorSpace;
 groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
