@@ -573,11 +573,22 @@ playerCombatController.onHit = (entity, damage) => {
 // section so its hooks can be wired in the same place as combat's.
 const projectileSystem = new ProjectileSystem({
   scene,
+  camera,
   playerController,
   inventoryManager,
   damageableSources: [preyManager, predatorController, apexController, rivalController],
   uiManager,
 });
+
+// Auto-aim target priority. Read by ProjectileSystem._score as a bonus subtracted from
+// a candidate's distance, so a dangerous enemy several units away still outranks prey
+// that happens to be closer - without this, a Glow Beetle wandering through the Apex
+// arena would steal the lock mid-boss-fight. Assigned here rather than declared inside
+// each controller because it is a property of THIS feature's targeting policy, not of
+// the enemies themselves; PreyManager keeps the default 0.
+predatorController.aimPriority = 1;
+rivalController.aimPriority = 1;
+apexController.aimPriority = 2;
 
 projectileSystem.onHit = (entity, damage) => {
   damageNumbers.spawn(entity.mesh.position, damage, 'player');
