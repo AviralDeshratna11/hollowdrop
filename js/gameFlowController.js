@@ -10,6 +10,12 @@ export const GAME_STATES = {
   REVEAL: 'reveal',
   RUN_COMPLETE: 'run_complete',
   RESETTING: 'resetting',
+  // The Bag/Inventory panel, open (see openInventory()/closeInventory() below). Its own
+  // state rather than a parallel pause boolean, precisely so it falls under the SAME
+  // `isPlayingState = state === PLAYING` gate main.js already checks before ticking any
+  // AI/timer/physics system - opening the panel freezes all of that for free, the same
+  // way REVEAL already does for the info-card overlay.
+  INVENTORY: 'inventory',
 };
 
 export const GAME_FLOW_CONFIG = {
@@ -20,6 +26,13 @@ export const GAME_FLOW_CONFIG = {
   // a beat before cutting to the ending" pause spec sections 6-7 ask for.
   memoryTransitionDelay: 0.6,
   resetFadeDuration: 0.35, // each half of the Play Again fade-to-black-and-back (spec section 59)
+  // Longest a Title tap will ever wait on the player model before starting anyway with
+  // the placeholder still showing (see _handleBeginTap). The FBX + texture set this is
+  // waiting on runs to tens of MB, which on a slow/real phone network can take far
+  // longer than any reasonable "please wait" - a run that never starts is a much worse
+  // experience than a few extra seconds of the placeholder sphere before the existing
+  // crossfade (playerSlimeModel.js) swaps in the real model mid-game.
+  maxModelWaitSeconds: 4,
 };
 
 /**
@@ -63,7 +76,13 @@ export class GameFlowController {
     if (this.state !== GAME_STATES.TITLE || this._awaitingSlime) return;
     this._awaitingSlime = true;
     this.uiManager.setTitleLoading(true);
-    this._slimeReady.then(() => {
+
+    // Race against a timeout rather than waiting on _slimeReady unconditionally - see
+    // GAME_FLOW_CONFIG.maxModelWaitSeconds. Whichever settles first wins; the loser is
+    // simply never observed (the model keeps loading in the background regardless, and
+    // playerSlimeModel.js's own crossfade picks it up whenever it actually finishes).
+    const timeout = new Promise((resolve) => setTimeout(resolve, GAME_FLOW_CONFIG.maxModelWaitSeconds * 1000));
+    Promise.race([this._slimeReady, timeout]).then(() => {
       this._awaitingSlime = false;
       this.uiManager.setTitleLoading(false);
       this._beginFirstRun();
@@ -171,6 +190,25 @@ export class GameFlowController {
       if (this.state === GAME_STATES.REVEAL) this.state = GAME_STATES.PLAYING;
     });
     return true;
+  }
+
+  /**
+   * Opens the Bag/Inventory panel as a full gameplay pause (spec: movement, AI, energy
+   * drain, and the mutation timer all pause while it's up). Refuses outside PLAYING -
+   * covers TITLE/MEMORY/REVEAL/RUN_COMPLETE/RESETTING, and death (deathRespawnManager's
+   * own isPlaying flag is layered on top of this by the caller, same as canAct in
+   * main.js) all at once, rather than each needing its own special-case check here.
+   */
+  openInventory() {
+    if (this.state !== GAME_STATES.PLAYING) return false;
+    this.state = GAME_STATES.INVENTORY;
+    return true;
+  }
+
+  /** Only resumes if nothing else claimed the state while the panel was up - same guard
+   *  showReveal()/showOpeningObjective() use for their own dismissal. */
+  closeInventory() {
+    if (this.state === GAME_STATES.INVENTORY) this.state = GAME_STATES.PLAYING;
   }
 
   /** The opening objective card. Shown once per session, not once per run - a player

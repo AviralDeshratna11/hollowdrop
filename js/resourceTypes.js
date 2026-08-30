@@ -3,45 +3,60 @@
 // edible/energyValue drive MetabolismSystem's consume action. edible is explicit
 // rather than inferred from energyValue > 0, since a future resource might have
 // other digestion effects (or a nonzero value but not be food).
+//
+// category/description (added for the Bag/Inventory panel, inventoryUI.js) are
+// DISPLAY-ONLY - nothing in gameplay logic reads either field. category backfills the
+// entries that never needed one before now (spore/mushroom/stone/iron/toxic_spore -
+// the DNA/organic ones already had it), rather than inferring it in the UI layer, so
+// there's exactly one place "what kind of thing is this" lives.
 export const RESOURCE_TYPES = {
   spore: {
     name: 'Glow Spore',
+    category: 'organic',
     weight: 0.5,
     value: 1,
     color: 0x66e0ff,
     modelScale: 1.0,
     edible: true,
     energyValue: 8,
+    description: 'A faintly glowing spore, easy to digest.',
   },
   mushroom: {
     name: 'Moon Mushroom',
+    category: 'organic',
     weight: 1,
     value: 2,
     color: 0xb266ff,
     modelScale: 1.0,
     edible: true,
     energyValue: 20,
+    description: 'A luminous colony fungus, rich in metabolic energy.',
   },
   stone: {
     name: 'Stone',
+    category: 'mineral',
     weight: 2,
     value: 1,
     color: 0x8a8a8a,
     modelScale: 1.0,
     edible: false,
     energyValue: 0,
+    description: 'Plain rock. Heavy, and not much else.',
   },
   iron: {
     name: 'Iron Ore',
+    category: 'mineral',
     weight: 3,
     value: 3,
     color: 0x3a3a40,
     modelScale: 1.1,
     edible: false,
     energyValue: 0,
+    description: 'Dense metallic ore. Worth carrying, if you can bear the weight.',
   },
   toxic_spore: {
     name: 'Toxic Spore',
+    category: 'material',
     weight: 0.5,
     value: 1,
     color: 0x7cff4d,
@@ -49,6 +64,7 @@ export const RESOURCE_TYPES = {
     edible: false,
     energyValue: 0,
     mutationIngredient: true,
+    description: 'A caustic spore, unsafe to eat - useful for mutation.',
   },
   rat_dna: {
     name: 'Rat DNA',
@@ -60,6 +76,7 @@ export const RESOURCE_TYPES = {
     edible: false,
     energyValue: 0,
     mutationIngredient: true,
+    description: 'Genetic material sampled from a rat-like scavenger.',
   },
   beetle_dna: {
     name: 'Beetle DNA',
@@ -71,6 +88,7 @@ export const RESOURCE_TYPES = {
     edible: false,
     energyValue: 0,
     mutationIngredient: true,
+    description: 'Genetic material sampled from an armored beetle.',
   },
   predator_dna: {
     name: 'Stalker DNA',
@@ -82,6 +100,7 @@ export const RESOURCE_TYPES = {
     edible: false,
     energyValue: 0,
     mutationIngredient: true,
+    description: 'Genetic material sampled from a cave predator.',
   },
   toxic_gland: {
     name: 'Toxic Gland',
@@ -93,6 +112,7 @@ export const RESOURCE_TYPES = {
     edible: false,
     energyValue: 0,
     mutationIngredient: true,
+    description: 'An organic venom sac, harvested intact.',
   },
   apex_dna: {
     name: 'Murkmaw DNA',
@@ -104,6 +124,7 @@ export const RESOURCE_TYPES = {
     edible: false,
     energyValue: 0,
     mutationIngredient: true,
+    description: 'Genetic material sampled from the apex predator itself.',
   },
   rival_dna: {
     name: 'Rival DNA',
@@ -115,9 +136,12 @@ export const RESOURCE_TYPES = {
     edible: false,
     energyValue: 0,
     mutationIngredient: true,
+    description: 'Genetic material sampled from the rival colony.',
   },
 };
 
 // Human Genome Fragment is deliberately NOT here - it's a progression item owned by
 // GenomeFragmentController, never routed through ResourceManager/InventoryManager
 // (no weight, no capacity gate, not edible, not expellable - see that file's header).
+// The Bag/Inventory panel (inventoryUI.js) displays it as a separate special slot,
+// reading GenomeFragmentController's own state directly rather than through this table.

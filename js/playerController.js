@@ -117,14 +117,16 @@ export class PlayerController {
     this.activeMaterial = material;
     this._baseEmissive.copy(material.emissive);
     this._baseEmissiveIntensity = material.emissiveIntensity;
-    // Prefer a declared resting opacity over the live one. A material handed over while
-    // it is still animating reports an instantaneous value, not its baseline - the
-    // player's imported slime is built at opacity 0 and crossfaded up to its real value,
-    // and fires onReady (which re-points this material) on the frame it arrives, i.e.
-    // while it still reads 0. Snapshotting that made _baseOpacity 0 permanently, so the
-    // death fade had nothing to fade and resetToBaseSlime() restored the body to fully
-    // transparent - the slime vanished for good after the first death. Anything that
-    // hands over a mid-animation material declares userData.restOpacity instead.
+    // Everything below baselines from the material's CURRENT values, which is only
+    // correct if the material is at rest when it is handed over. A material still
+    // animating reports an instantaneous value, not its baseline - and that has already
+    // cost this project once: the imported slime is built at opacity 0 and crossfaded
+    // up, so baselining mid-fade captured 0, the death dissolve then had nothing to fade,
+    // and resetToBaseSlime() restored the body to fully transparent - invisible for the
+    // rest of the run after one death. playerSlimeModel.js fixes that at the source by
+    // deferring its onReady until the crossfade settles. This fallback is the belt to
+    // that braces: a caller that cannot defer can declare userData.restOpacity instead
+    // of silently poisoning the baseline.
     this._baseOpacity = material.userData?.restOpacity ?? material.opacity;
   }
 

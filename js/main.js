@@ -34,23 +34,69 @@ import { CollisionSystem } from './collision.js';
 import { updateSlimeCreatures } from './slimeCreature.js';
 import { ScreenShake } from './screenShake.js';
 import { DamageNumberController } from './damageNumbers.js';
+import { RadarController } from './radarController.js';
+import { RadarHUD } from './radarHUD.js';
 
 const canvas = document.getElementById('game-canvas');
 
 // --- Scene / Camera / Renderer -------------------------------------------
+const DEBUG_CAMERA = false;
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a1410);
-scene.fog = new THREE.Fog(0x0a1410, 18, 55);
+// near/far are the values for a REFERENCE_ASPECT screen; updateViewZoom() scales them
+// with viewZoom below so a dollied-back camera keeps the same atmospheric depth.
+const FOG_NEAR_BASE = 18;
+const FOG_FAR_BASE = 55;
+scene.fog = new THREE.Fog(0x0a1410, FOG_NEAR_BASE, FOG_FAR_BASE);
 
+const CAMERA_FAR_BASE = 200;
 const camera = new THREE.PerspectiveCamera(
-  50,
+  50, // VERTICAL fov (three.js convention) - horizontal coverage is this * aspect,
+      // which is the entire reason the equal-view logic below has to exist.
   window.innerWidth / window.innerHeight,
   0.1,
-  200
+  CAMERA_FAR_BASE
 );
 const CAMERA_OFFSET = new THREE.Vector3(0, 11, 7); // top-down / slightly angled
 const CAMERA_FOLLOW_SMOOTHING = 3.5; // lower = laggier camera, doesn't affect player physics
-camera.position.copy(CAMERA_OFFSET);
+
+// --- Equal map view across devices ------------------------------------------
+// Because fov is vertical, every device already sees the SAME vertical slice of the
+// world. Horizontal coverage is fov * aspect, so without correction a wide monitor
+// sees roughly twice the map width a portrait phone does.
+//
+// REFERENCE_ASPECT is the framing contract: a screen exactly this shape is rendered
+// exactly as CAMERA_OFFSET / fov intend (viewZoom = 1). Any NARROWER screen dollies
+// the camera straight back along CAMERA_OFFSET by REFERENCE_ASPECT / aspect - the
+// horizontal world extent at the player's own position is exactly proportional to
+// aspect (d * tan(vfov/2) * aspect, camera has no roll), so this ratio matches the
+// reference's horizontal coverage exactly rather than approximately. Such screens then
+// also see extra world above/below (bonus, never less). WIDER screens stay at
+// viewZoom = 1 and see extra world left/right. Net: nobody ever sees less of the map
+// than a REFERENCE_ASPECT screen would.
+const REFERENCE_ASPECT = 16 / 9;
+// Ceiling on the dolly-back so an extreme portrait aspect can't shrink the player to a
+// speck. Past this, very tall/thin screens give up some horizontal parity but still
+// keep the full vertical slice.
+const CAMERA_MAX_ZOOM_OUT = 3;
+let viewZoom = 1; // multiplies CAMERA_OFFSET everywhere it's used; set by updateViewZoom()
+
+/** Recompute viewZoom from the current window aspect, and push fog + far plane out with
+ *  it. Called once at startup and from onResize() (covers orientation changes too). */
+function updateViewZoom() {
+  const aspect = window.innerWidth / window.innerHeight;
+  viewZoom = THREE.MathUtils.clamp(REFERENCE_ASPECT / aspect, 1, CAMERA_MAX_ZOOM_OUT);
+  scene.fog.near = FOG_NEAR_BASE * viewZoom;
+  scene.fog.far = FOG_FAR_BASE * viewZoom;
+  camera.far = Math.max(CAMERA_FAR_BASE, FOG_FAR_BASE * viewZoom + 20);
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  if (DEBUG_CAMERA) console.log(`[camera] aspect ${aspect.toFixed(3)} -> viewZoom ${viewZoom.toFixed(3)}`);
+}
+
+updateViewZoom();
+camera.position.copy(CAMERA_OFFSET).multiplyScalar(viewZoom);
 camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -135,9 +181,38 @@ for (let i = 0; i < groundPositions.count; i++) {
 }
 groundGeometry.setAttribute('color', new THREE.BufferAttribute(groundColorArray, 3));
 
+// User-generated cave-floor artwork, tiled across the whole 200x200 ground rather than
+// stretched once (a single ~1000px painting stretched over 200 world units would be a
+// blurry smear with no readable detail up close). The source crop was picked to be
+// fairly uniform (scattered teal glow + rock + moss, no single dominant feature) -
+// earlier crops that included the art's one-off purple mushroom cluster made that
+// cluster read as an obvious duplicated landmark once mirrored/repeated, which is far
+// more objectionable than a repeating pattern with nothing distinctive to notice.
+// Plain RepeatWrapping (not Mirrored): mirroring matches every tile edge exactly with
+// no manual seam work, but this source has soft directional painted shading that
+// mirrors into an unnaturally dark line right along the seam - worse than the milder
+// color/pattern discontinuity a plain repeat leaves, now that there's no rare feature
+// for that discontinuity to draw the eye toward. offset shifts the tiling by half a
+// tile so a seam doesn't land exactly on the world origin - the player's spawn point,
+// the single most-viewed spot in the game.
+const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground.jpg');
+groundTexture.wrapS = THREE.RepeatWrapping;
+groundTexture.wrapT = THREE.RepeatWrapping;
+const GROUND_TEXTURE_REPEAT = 5; // each tile ~40 world units - large enough that seams cross the active play area only rarely
+groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
+groundTexture.offset.set(0.5 / GROUND_TEXTURE_REPEAT, 0.5 / GROUND_TEXTURE_REPEAT);
+groundTexture.colorSpace = THREE.SRGBColorSpace;
+groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+// vertexColors is dropped here (the geometry's own 'color' attribute above is now
+// unused, harmless to leave built) - it was calibrated as dark, standalone flat color
+// (breaking up an otherwise blank plane), and MeshStandardMaterial multiplies map x
+// vertexColor, so layering it under the real texture compounded two dark sources into
+// a near-black result. The real artwork already provides its own large- and small-
+// scale color variation; a flat multiplier tint isn't needed on top of it.
 const ground = new THREE.Mesh(
   groundGeometry,
-  new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })
+  new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1 })
 );
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
@@ -194,7 +269,11 @@ fragmentCarryAnchor.position.set(0, 0.55, 0.4);
 player.add(fragmentCarryAnchor);
 
 // --- Input / Movement --------------------------------------------------------
-const inputController = new InputController(canvas, { deadZone: 12, maxDistance: 90 });
+const inputController = new InputController(canvas, {
+  deadZone: 12,
+  maxDistance: 90,
+  joystickElement: document.getElementById('move-joystick'),
+});
 const playerController = new PlayerController(player, slimeMaterial);
 
 // iOS Safari pinch-zoom guard (touch-action:none handles most, this covers gesture events).
@@ -526,6 +605,21 @@ collisionSystem.addDynamicProvider(() => {
 
 const objectiveIndicator = new ObjectiveIndicatorController(camera, canvas, uiManager, fragmentContestManager, genomeFragmentController);
 
+// --- Species-Seeker Radar --------------------------------------------------------
+// Reads live positions/state directly off the controllers already constructed above -
+// see radarController.js's own header for why it never duplicates any of their data.
+const radarController = new RadarController({
+  player,
+  predatorController,
+  apexController,
+  rivalController,
+  genomeFragmentController,
+  resourceManager,
+});
+const radarHUD = new RadarHUD(radarController, {
+  onApexSignal: () => uiManager.showRadarSignal('APEX SIGNAL'),
+});
+
 
 // Every enemy source exposes the same getDamageableEntities()/takeDamage() interface
 // (see PlayerCombatController's own doc comment) - registering a new one means adding
@@ -646,14 +740,44 @@ addDefeatShake(apexController, 0.7); // the boss earns the biggest one in the ga
 
 // Opening the panel mid-swipe cancels the drag so Hollowdrop eases to a stop
 // instead of continuing to coast while the player is browsing their items.
+//
+// canOpen closes over gameFlowController/deathRespawnManager, both declared further
+// down this file - safe because it's only ever CALLED (from a tap, well after this
+// whole module has finished executing), never evaluated here at construction time. It
+// mirrors main.js's own `canAct` gate exactly (spec section 66: not on Title, mid-death,
+// mid-mutation, or during any non-PLAYING flow state) without needing canAct itself,
+// which only exists freshly recomputed inside the animate loop.
 const inventoryUI = new InventoryUI(inventoryManager, {
   mutationSystem, // so the codex can show live missing-ingredient counts
+  inventoryInteraction, // Consume routes through here (consumeItem)
+  inventoryWheel, // Expel routes through here (expelItemById)
+  genomeFragmentController, // special Human Genome Fragment slot
+  burdenSystem, // live burden label + movement % in the Mass footer
+  canOpen: () => gameFlowController.state === GAME_STATES.PLAYING
+    && deathRespawnManager.isPlaying
+    && !playerFormController.isLocked,
   onOpen: () => {
     inputController.cancel();
     inventoryInteraction.cancelActiveGesture();
     inventoryWheel.cancel(); // the two inventory UIs must never be open at once
+    gameFlowController.openInventory(); // full gameplay pause - see that method's own note
   },
+  onClose: () => gameFlowController.closeInventory(),
 });
+
+// The one hook every inventory-changing action already calls (absorb/consume/expel/
+// death-drop/mutation - see mutationSystem.js's own note on onInventoryChanged), wrapped
+// rather than replaced so the existing debug recipe panel keeps working unchanged - same
+// pattern as addDefeatShake above. This is what keeps the Bag badge and, while open, the
+// panel's grid/details/mass/codex live without ever polling inventory state per frame
+// (spec sections 58-60).
+{
+  const previousOnRecipeChecked = mutationSystem.onRecipeChecked;
+  mutationSystem.onRecipeChecked = (recipe, missing) => {
+    previousOnRecipeChecked?.(recipe, missing);
+    inventoryUI.refresh();
+  };
+}
 
 // --- Camera follow -----------------------------------------------------------
 const desiredCameraPos = new THREE.Vector3();
@@ -664,7 +788,10 @@ function updateCamera(deltaTime) {
   // single scale on the existing offset, not a separate camera path, so it stays
   // exactly as "subtle" as the offset itself and never fights the normal follow-cam.
   const zoom = memorySequenceController.getCameraZoom();
-  const offsetScale = 1 - zoom;
+  // viewZoom equalizes map coverage across devices; (1 - zoom) is the Memory Reveal's
+  // push toward the player. Multiplied, so the reveal still bottoms out on the player
+  // regardless of device.
+  const offsetScale = (1 - zoom) * viewZoom;
   desiredCameraPos.set(
     player.position.x + CAMERA_OFFSET.x * offsetScale,
     CAMERA_OFFSET.y * offsetScale,
@@ -704,7 +831,11 @@ const deathRespawnManager = new DeathRespawnManager({
   // Snaps the camera instantly on respawn instead of letting it slide across the
   // map to catch up - the fade covers the position jump, not a camera glide.
   onRespawnCamera: () => {
-    camera.position.set(player.position.x + CAMERA_OFFSET.x, CAMERA_OFFSET.y, player.position.z + CAMERA_OFFSET.z);
+    camera.position.set(
+      player.position.x + CAMERA_OFFSET.x * viewZoom,
+      CAMERA_OFFSET.y * viewZoom,
+      player.position.z + CAMERA_OFFSET.z * viewZoom
+    );
     cameraLookTarget.copy(player.position);
   },
   onPlayerDeath: () => runStats.deaths++,
@@ -728,6 +859,15 @@ if (DEBUG_METABOLISM) {
     if (e.key === 'f' || e.key === 'F') metabolismSystem.addEnergy(20);
   });
 }
+
+// Desktop keyboard support for the Bag/Inventory panel (spec section 82) - mobile
+// remains the primary input, this is purely a testing convenience and always on (not
+// gated behind a DEBUG flag), same as it would be for any other permanent HUD control.
+window.addEventListener('keydown', (e) => {
+  if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'i' || e.key === 'I') inventoryUI.toggle();
+  if (e.key === 'Escape' && inventoryUI.isOpen) inventoryUI.close();
+});
 
 if (DEBUG_MUTATION) {
   window.addEventListener('keydown', (e) => {
@@ -892,6 +1032,11 @@ function resetGame() {
   uiManager.dismissTransientUI();
   objectiveIndicator.update(); // one extra call so it hides itself immediately, not next frame
 
+  // Radar: no stale blips/expanded-state/detection-memory/one-shot-signal-toast should
+  // survive into the new run (spec section 58).
+  radarController.reset();
+  radarHUD.reset();
+
   if (DEBUG_APEX || DEBUG_RIVAL || DEBUG_FRAGMENT_CONTEST) console.log('Game reset - new run started');
 }
 
@@ -953,6 +1098,7 @@ window.__hollowdrop = {
   playerController,
   inventoryInteraction,
   inventoryWheel,
+  inventoryUI,
   collisionSystem,
   playerHealth,
   metabolismSystem,
@@ -969,6 +1115,8 @@ window.__hollowdrop = {
   rivalController,
   fragmentContestManager,
   objectiveIndicator,
+  radarController,
+  radarHUD,
   runStats,
   gameFlowController,
   memorySequenceController,
@@ -1014,8 +1162,8 @@ function computeGaze() {
 
 // --- Resize handling -----------------------------------------------------------
 function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+  // Recomputes the equal-view dolly + fog and sets camera.aspect / projection matrix.
+  updateViewZoom();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', onResize);
@@ -1050,6 +1198,11 @@ function animate() {
   // than deleting or rebuilding anything - renderer/camera/UI keep running regardless.
   const isPlayingState = gameFlowController.state === GAME_STATES.PLAYING;
   metabolismSystem.enabled = isPlayingState; // MetabolismSystem's own flag already exists for exactly this
+  // Radar (spec section 56/79): skip scanning entirely, and hide the HUD, outside
+  // PLAYING - same "recompute fresh every frame, no change-detection needed" pattern
+  // as the metabolism flag above.
+  radarController.setEnabled(isPlayingState);
+  radarHUD.setVisible(isPlayingState);
 
   burdenSystem.update();
   // Speed/acceleration are recomputed fresh every frame from base x form x burden -
@@ -1130,13 +1283,20 @@ function animate() {
 
   inventoryInteraction.update(deltaTime);
   inventoryManager.update(deltaTime, inventoryInteraction.getExcludedItemId());
-  inventoryUI.updateMass();
+  // No per-frame inventoryUI update: it's event-driven (see the onRecipeChecked wrap
+  // near its construction) rather than polled every frame (spec sections 58-59).
 
   // Both run on REAL delta: the point of hitstop is that the world freezes while the
   // camera rattles and the number you just dealt keeps rising. Slowing these two with
   // everything else would cancel the effect out.
   screenShake.update(realDeltaTime);
   damageNumbers.update(realDeltaTime);
+
+  // Radar: real delta for the same reason as the two above (a HUD instrument reading
+  // the world shouldn't itself freeze during hitstop) - both no-op internally while
+  // disabled/hidden (see the isPlayingState gate above), so this is always safe to call.
+  radarController.update(realDeltaTime);
+  radarHUD.update(realDeltaTime);
 
   // Amoeba deformation. Real delta for the same reason as the two above: the membrane
   // should keep breathing through a hitstop freeze rather than locking mid-lobe.

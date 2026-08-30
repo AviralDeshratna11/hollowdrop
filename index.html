@@ -66,6 +66,15 @@
      and this one is a single CSS animation triggered by a class toggle. -->
 <div id="genome-flash"></div>
 
+<!-- Floating movement joystick - purely visual, driven by InputController. It appears
+     at the exact point a drag begins and its knob tracks the (clamped) swipe vector, so
+     the existing swipe-to-move system reads as a familiar on-screen stick without
+     changing how movement is actually computed. No pointer-events: the canvas
+     underneath still receives every pointer event exactly as before. -->
+<div id="move-joystick" aria-hidden="true">
+  <div id="move-joystick-knob"></div>
+</div>
+
 <div id="ui-layer">
   <!-- Single stacked column (not split left/right) so the three bars can never
        collide horizontally, regardless of screen width or how long their text gets. -->
@@ -143,9 +152,13 @@
      bottom), and spacing comes from one `gap`. -->
 <div id="action-stack">
   <button id="inventory-toggle" aria-label="Open inventory">
-    <span class="inventory-icon">
-      <span></span><span></span><span></span><span></span>
-    </span>
+    <svg class="action-icon action-icon--bag" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M17 18 L18.5 11 a6 6 0 0 1 11 0 L31 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M13.5 18 H34.5 L32.5 39 a4 4 0 0 1 -4 3.5 H19.5 a4 4 0 0 1 -4 -3.5 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+    </svg>
+    <!-- Total carried UNITS (spec section 6), not unique types - kept live even while
+         the panel itself is closed (inventoryUI.js's onRecipeChecked hook, section 60). -->
+    <span id="inventory-bag-badge" class="inventory-bag-badge">0</span>
   </button>
 
   <!-- Icon-only badge, no fill background (see style.css) - two icons layered in the
@@ -193,16 +206,158 @@
      via inline style each frame, not CSS layout. -->
 <div id="objective-indicator">▲</div>
 
+<!-- Species-Seeker Radar (see radarController.js for the live target-detection logic,
+     radarHUD.js for everything below). A real gameplay system, not a decorative
+     minimap - every blip position comes from an existing controller's actual world
+     position, read fresh every ~100ms. Compact in the top-right corner by default; tap
+     it (or the X once expanded) to toggle the larger view with its legend. -->
+<div id="species-radar">
+  <!-- Small always-on legend (compact AND expanded) - the reference art keeps this
+       panel permanently visible beside the dial, so unlike the rest of the HUD this one
+       is never gated to expanded-only. Positioned to the LEFT of the dial in compact
+       mode (row layout) and hidden once expanded, where the full #radar-legend below
+       takes over with room to spell out every category. Each row is an icon BADGE (same
+       SVG as its blip) plus a label, matching the reference's dark glass side panel. -->
+  <div id="radar-mini-legend">
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--enemy" data-radar-icon="enemy"></span>Enemy</div>
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--boss" data-radar-icon="boss"></span>Boss</div>
+    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--dna" data-radar-icon="dna"></span>Resource</div>
+  </div>
+
+  <div class="radar-column">
+    <!-- Compact-only decorative frame around the dial (organic vine ring, leaf/mushroom
+         accents) - approximates the reference concept art's wood-and-vine housing.
+         Hidden in expanded mode (style.css), where
+         the dial grows past what this frame's fixed proportions were tuned for and the
+         full legend below takes over the "readable detail" role instead. -->
+    <div class="radar-frame">
+      <svg class="radar-frame-vine" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#3a2a16" stroke-width="13" />
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#8a6a3f" stroke-width="8" stroke-dasharray="11 7" stroke-linecap="round" />
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#5c8f5c" stroke-width="3" stroke-dasharray="3 12" stroke-linecap="round" opacity="0.8" />
+        <g fill="#4f7d4a" opacity="0.9">
+          <ellipse cx="150" cy="27" rx="9" ry="5" transform="rotate(35 150 27)" />
+          <ellipse cx="163" cy="38" rx="7" ry="4" transform="rotate(60 163 38)" />
+          <ellipse cx="42" cy="168" rx="9" ry="5" transform="rotate(-35 42 168)" />
+          <ellipse cx="176" cy="150" rx="8" ry="4.5" transform="rotate(100 176 150)" />
+        </g>
+      </svg>
+      <span class="radar-mushroom radar-mushroom--1"><i></i><i></i><i></i></span>
+      <span class="radar-mushroom radar-mushroom--2"><i></i><i></i></span>
+
+      <div id="radar-display">
+        <div class="radar-grid"></div>
+        <div class="radar-sweep"></div>
+        <!-- Directional beam toward the current highest-priority signal (spec-inspired
+             addition matching the reference art) - rotated in JS every frame, hidden via
+             opacity when there's nothing to point at. -->
+        <div id="radar-beam"></div>
+        <div id="radar-compass">
+          <span class="radar-compass-mark radar-compass-mark--n">N</span>
+          <span class="radar-compass-mark radar-compass-mark--e">E</span>
+          <span class="radar-compass-mark radar-compass-mark--s">S</span>
+          <span class="radar-compass-mark radar-compass-mark--w">W</span>
+        </div>
+        <!-- Blip elements are created/pooled entirely in JS (radarHUD.js) - nothing static here. -->
+        <div id="radar-blips"></div>
+        <div class="radar-player">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 19 21 12 16.5 5 21Z" fill="currentColor" /></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Single highest-priority/nearest signal only (spec: a 150px radar can't carry a
+         label per blip) - e.g. "APEX • 24m" or "RIVAL + GENOME • 16m". -->
+    <div id="radar-nearest"></div>
+  </div>
+
+  <button id="radar-close" type="button" aria-label="Close radar">✕</button>
+
+  <!-- Full legend, only ever visible expanded (see style.css) - the compact mini-legend
+       above covers the three most important categories in the smaller space. -->
+  <div id="radar-legend">
+    <span class="radar-legend-heading">Species-Seeker</span>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--enemy"></span>Enemy</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--boss"></span>Apex</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--dna"></span>DNA</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--genome"></span>Genome Fragment</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--rival"></span>Rival</div>
+  </div>
+</div>
+
 <div id="inventory-overlay">
   <div id="inventory-panel">
-    <div class="inventory-header">
-      <span class="inventory-title">Collected Items</span>
+    <!-- Everything here is real CSS/DOM, not a background image - a generated raster
+         mockup was tried for the frame first, but it (a) baked its own title bar/grid/
+         mass-bar graphics at FIXED positions, which only ever matched a panel of its
+         own exact height and collided with real content the moment the panel grew
+         taller (the codex, more items), and (b) is one more network fetch that can
+         simply fail (confirmed happening on a real device - the frame silently vanished
+         while everything else still rendered). The vine-frame LOOK is now recreated
+         with plain CSS (.inventory-panel-frame's layered border/box-shadow, this
+         file's own leaf/mushroom accents) so it can never fail to load and scales to
+         any content height. The individual item-icon PNGs are unaffected by this - a
+         handful of small images each is a much lower-risk dependency than one big
+         structural background, and they're already confirmed working. -->
+    <div class="inventory-panel-frame">
+      <span class="inventory-leaf inventory-leaf--tl"></span>
+      <span class="inventory-leaf inventory-leaf--tr"></span>
+      <span class="inventory-leaf inventory-leaf--bl"></span>
+      <span class="inventory-leaf inventory-leaf--br"></span>
+
       <button id="inventory-close" aria-label="Close inventory">
         <span class="close-icon"></span>
       </button>
-    </div>
 
-    <div id="inventory-grid"></div>
+      <div class="inventory-header-row">
+        <span class="inventory-title">Living Inventory</span>
+        <span id="inventory-header-count" class="inventory-header-count"></span>
+      </div>
+
+      <!-- Special/key-item slot - the Human Genome Fragment, shown ONLY while the
+           player is actually carrying it (spec sections 50-53). Never part of the
+           aggregated grid below, never counted toward Mass, no Consume/Expel actions. -->
+      <div id="inventory-special">
+        <button id="inventory-special-cell" class="inventory-cell inventory-cell--special" type="button"></button>
+      </div>
+
+      <div id="inventory-grid"></div>
+
+      <div id="inventory-detail">
+        <div id="inventory-detail-icon" class="inventory-detail-icon"></div>
+        <div class="inventory-detail-body">
+          <div class="inventory-detail-title-row">
+            <div class="inventory-detail-titles">
+              <span id="inventory-detail-name">Select a material to inspect.</span>
+              <span id="inventory-detail-category"></span>
+            </div>
+            <span id="inventory-detail-count" class="inventory-detail-count"></span>
+          </div>
+          <div id="inventory-detail-stats" class="inventory-detail-stats"></div>
+        </div>
+        <p id="inventory-detail-description"></p>
+        <span id="inventory-detail-used-in"></span>
+        <div id="inventory-detail-actions">
+          <button id="inventory-consume-button" class="inventory-action-button inventory-action-button--consume" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c-5 2-8 6-8 11a5 5 0 0 0 10 0c2-1 4-3 4-7 0-2-1-3-2-4 0 2-1 3-2 3 1-2 0-3-2-3Z" fill="currentColor" /></svg>
+            <span>Consume</span>
+          </button>
+          <button id="inventory-expel-button" class="inventory-action-button inventory-action-button--expel" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c4 5 7 9 7 13a7 7 0 0 1-14 0c0-4 3-8 7-13Z" fill="currentColor" /></svg>
+            <span>Expel</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="inventory-footer">
+        <span class="mass-label">Mass</span>
+        <div class="mass-bar">
+          <div id="inventory-mass-fill" class="mass-fill"></div>
+        </div>
+        <span id="inventory-mass-text">0 / 15</span>
+        <span id="inventory-burden-label" class="burden-pill"></span>
+      </div>
+    </div>
 
     <!-- Mutation codex. The panel already exists as the "what am I carrying" view; this
          makes it also the "what can I become" reference, rather than adding a third
@@ -212,19 +367,6 @@
     <div id="codex-section">
       <span class="codex-heading">Mutations</span>
       <div id="codex-list"></div>
-    </div>
-
-    <div id="inventory-detail">
-      <span id="inventory-detail-name">Tap an item for details</span>
-      <span id="inventory-detail-meta"></span>
-    </div>
-
-    <div class="inventory-footer">
-      <span class="mass-label">Mass</span>
-      <div class="mass-bar">
-        <div id="inventory-mass-fill" class="mass-fill"></div>
-      </div>
-      <span id="inventory-mass-text">0 / 15</span>
     </div>
   </div>
 </div>
