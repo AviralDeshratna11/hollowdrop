@@ -145,13 +145,22 @@ scene.add(rimLight);
 // (predator home, the Apex arena + its trigger radius, the Rival's escape target) and
 // the decorative prop scatter's own outer radius (34, see worldDressing.js) all sit
 // within roughly 30-34 units of the origin, so a 90-unit plane (45-unit half-width)
-// covers all of it with margin to spare. This is also what lets the ground texture
-// below map across the WHOLE plane at its default repeat of 1 - one image, stretched
-// once, with nothing left over to tile or seam (a real screenshot kept showing the
-// tile-boundary line at every larger size/repeat combination tried before this).
-// terrain.js's own GROUND_SIZE/TEXTURE_REPEAT constants are updated to match this pair
-// exactly (its heightmap sampling needs the same values used here to stay aligned with
-// what's actually visible) - keep the two in sync if this ever changes again.
+// covers all of it with margin to spare.
+//
+// The texture repeats across this plane rather than stretching once - at repeat 1, the
+// image's own big rock formations each spanned ~13 world units, dwarfing the player
+// (PLAYER_RADIUS 0.6) far more than a real screenshot comparison showed they should
+// (individual rock/pebble detail read as noticeably smaller, more numerous, relative to
+// the slime). Tiling at TEXTURE_REPEAT below shrinks each instance of those same
+// features to a size that actually matches. MirroredRepeatWrapping rather than plain
+// RepeatWrapping: mirroring matches every tile edge to a flipped copy of itself with no
+// manual seam work (this source was never authored as a seamless tile - a real
+// screenshot showed a hard discontinuity line at every plain-repeat attempt tried
+// before this), at the cost of a faint symmetry between neighboring tiles that reads
+// far better than that seam did. terrain.js's own GROUND_SIZE/TEXTURE_REPEAT constants
+// are updated to match this pair exactly (its heightmap sampling needs the same values
+// used here to stay aligned with what's actually visible) - keep the two in sync if
+// this ever changes again.
 const GROUND_SIZE = 90;
 const GROUND_SEGMENTS = 320;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
@@ -159,6 +168,10 @@ const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_
 const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground_new.png', (tex) => {
   initTextureElevation(tex.image);
 });
+groundTexture.wrapS = THREE.MirroredRepeatWrapping;
+groundTexture.wrapT = THREE.MirroredRepeatWrapping;
+const GROUND_TEXTURE_REPEAT = 3; // odd - centers a tile on the origin (the player's spawn point) rather than a seam
+groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
 groundTexture.colorSpace = THREE.SRGBColorSpace;
 groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 

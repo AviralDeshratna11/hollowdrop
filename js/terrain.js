@@ -9,7 +9,7 @@
  * - Downlifts dark subterranean crevices, fissures, and shadows (-1.2m to -2.2m).
  * - Elevates purple fungal crater rims (+1.8m to +2.4m).
  * - Leaves cobblestone trails and pathways at neutral baseline with organic stone micro-variation.
- * - Samples texture coordinates using exact MirroredRepeatWrapping (repeat = 8, 8 over 200x200m).
+ * - Samples texture coordinates using exact MirroredRepeatWrapping (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture setup).
  * - Uses bilinear filtering and spatial smoothing for seamless, climbable, tactile 3D terrain.
  */
 
@@ -17,11 +17,8 @@
 // main.js's own "--- Ground ---" block) - this module's whole heightmap is a sample of
 // the SAME texture at the SAME UV mapping the visible mesh uses, so any mismatch here
 // puts the 3D bumps in the wrong place relative to what the texture actually shows.
-// Currently 90 / 1: the ground was shrunk to match the texture's own single (untiled)
-// span across the active play area, rather than repeating it across a much larger
-// plane - GROUND_SIZE here moved from 200 to stay in lockstep with that.
 export const GROUND_SIZE = 90;
-export const TEXTURE_REPEAT = 1;
+export const TEXTURE_REPEAT = 3;
 
 const HEIGHTMAP_RES = 256;
 let heightmapData = null;
@@ -30,11 +27,18 @@ const onReadyCallbacks = [];
 const registeredGeometries = new Set();
 
 /**
- * Normalized repeat fractional calculation matching WebGL RepeatWrapping.
+ * Normalized repeat fractional calculation matching WebGL MirroredRepeatWrapping (the
+ * ground texture's own wrap mode - see main.js's own "--- Ground ---" block). Plain
+ * modulo wrapping would sample this heightmap as if every tile were identical, but
+ * mirrored tiles alternate - every other tile is flipped - so without this, the 3D
+ * terrain bumps would land correctly in tile 0 and backwards in tile 1, tile 2, etc.
+ * A period-2 triangle wave does it: within each pair of tiles, the first half rises
+ * 0->1 (a normal tile) and the second half falls 1->0 (that same tile mirrored).
  */
 function repeatFrac(val) {
-  const frac = val % 1.0;
-  return frac < 0 ? frac + 1.0 : frac;
+  let t = val % 2.0;
+  if (t < 0) t += 2.0;
+  return t <= 1.0 ? t : 2.0 - t;
 }
 
 /**
