@@ -44,7 +44,7 @@ function createWarningSprite() {
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, opacity: 0 });
   const sprite = new THREE.Sprite(material);
   sprite.scale.set(0.4, 0.4, 1);
-  sprite.position.y = 0.95;
+  sprite.position.y = 1.3;
   return sprite;
 }
 
@@ -54,7 +54,9 @@ export function createPredatorMesh() {
   const group = new THREE.Group();
 
   const slime = createSlimeCreature({
-    radius: 0.34,
+    // Player-sized. It was 0.34 against the player's 0.6, which made the thing hunting
+    // you noticeably smaller than you - the wrong power read for a predator.
+    radius: 0.6,
     // Long and low. The Z stretch is what gives it a stalking silhouette instead of the
     // egg every creature used to share.
     bodyScale: [0.92, 0.72, 1.55],
@@ -74,15 +76,31 @@ export function createPredatorMesh() {
     lobeAmplitude: 0.2,
     inwardFactor: 0.3,
 
+    // TWO eyes, cartoon-style: pale sclera, big dark pupil, and a flat lid slanting down
+    // toward the nose. This is a deliberate exception to the cast's one-eye-per-NPC rule -
+    // the Stalker is the creature you spend the most time being chased BY, and a readable
+    // scowling face carries far more threat at gameplay distance than a single slit did.
+    // The old single near-black iris is gone; from above it read as a floating black ball
+    // rather than an eye.
     eye: {
-      count: 1,
-      aspect: 0.55,       // narrowed into a slit - the whole "hostile" read
-      radius: 0.34,
+      count: 2,
+      aspect: 1,
+      radius: 0.3,
+      separation: 0.33,
       height: 0.1,
-      depth: 0.42,
-      irisColor: 0x1a0008,
-      irisEmissive: 0x2a0010,
-      highlightRadius: 0.26,
+      depth: 0.44,
+      sclera: true,
+      scleraColor: 0xf4f2ee,
+      pupilColor: 0x0d0d10,
+      pupilRadius: 0.62,
+      // Lid angled inward and downward - the scowl. Coloured to match the membrane's
+      // on-screen value so it reads as the creature's own flesh, not a drawn-on bar.
+      lidAngle: 0.5,
+      // Darker than the membrane's emissive. The lid material is UNLIT, so a colour
+      // sampled from the emissive rendered brighter than the lit body around it and read
+      // as a glowing red wedge instead of flesh.
+      lidColor: 0x4a0a1e,
+      highlightRadius: 0.3,
       blinkIntervalMin: 3.5,
       blinkIntervalMax: 9.0,
     },
@@ -91,25 +109,26 @@ export function createPredatorMesh() {
   // rather than sitting directly in the group. The pivot also lifts the body clear of
   // the floor, which the old model did with body.position.y = 0.28.
   const bodyPivot = new THREE.Group();
-  bodyPivot.position.y = 0.3;
+  bodyPivot.position.y = 0.45;
   bodyPivot.add(slime.group);
   group.add(bodyPivot);
 
   // Six thin legs, splayed low and wide. Deliberately spindly: against a soft round
   // body they are what actually says "bug" rather than "blob".
   const legMaterial = new THREE.MeshStandardMaterial({ flatShading: true, color: 0x2a0a18, roughness: 0.85 });
+  // Scaled with the body's jump from 0.34 to 0.6.
   const legOffsets = [
-    [-0.26, 0.26], [0.26, 0.26],
-    [-0.3, 0.0], [0.3, 0.0],
-    [-0.26, -0.24], [0.26, -0.24],
+    [-0.44, 0.42], [0.44, 0.42],
+    [-0.5, 0.0], [0.5, 0.0],
+    [-0.44, -0.4], [0.44, -0.4],
   ];
   const legs = legOffsets.map(([x, z]) => {
     // Each leg hangs from a pivot at body height so the gait can swing it from the hip
     // rather than sliding the whole limb.
     const pivot = new THREE.Group();
-    pivot.position.set(x, 0.3, z);
+    pivot.position.set(x, 0.42, z);
     const leg = new THREE.Mesh(legGeometry, legMaterial);
-    leg.position.y = -0.16;
+    leg.position.y = -0.2;
     leg.rotation.z = x > 0 ? -0.5 : 0.5;
     pivot.add(leg);
     group.add(pivot);
@@ -122,7 +141,7 @@ export function createPredatorMesh() {
   });
   const antennae = [-1, 1].map((side) => {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.1, 0.42, -0.28);
+    pivot.position.set(side * 0.16, 0.6, -0.46);
     const antenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
     antenna.position.y = 0.14;
     antenna.rotation.z = side * 0.5;
@@ -142,7 +161,7 @@ export function createPredatorMesh() {
   const warningSprite = createWarningSprite();
   group.add(warningSprite);
 
-  const healthBar = createEntityHealthBar({ width: 0.7, fillWidth: 0.64, yOffset: 0.85 });
+  const healthBar = createEntityHealthBar({ width: 0.8, fillWidth: 0.74, yOffset: 1.15 });
   group.add(healthBar);
 
   // Contract preserved for PredatorController: it writes bodyMaterial (hit flash),

@@ -178,6 +178,21 @@
     </svg>
   </button>
 
+  <!-- Ranged attack: visible whenever Hollowdrop is carrying throwable rock (stone or
+       iron) and able to act - see ProjectileSystem.setAvailable. The badge shows how
+       many rocks are loaded, so the button doubles as the ammo readout. -->
+  <button id="throw-button" type="button" aria-label="Throw rock">
+    <svg class="action-icon action-icon--throw" viewBox="0 0 48 48" aria-hidden="true">
+      <!-- Speed lines trailing behind the rock - without them the glyph is just a
+           polygon and reads as "a rock", not "throw a rock". -->
+      <path d="M6 15 H17 M4 24 H14 M7 33 H18" fill="none" stroke="currentColor"
+            stroke-width="3" stroke-linecap="round" opacity="0.55" />
+      <path d="M31 7 L41 13 L43 26 L35 38 L25 36 L21 22 Z" fill="currentColor" />
+      <path d="M29 15 L36 19 L33 27 L26 24 Z" fill="rgb(0 0 0 / 0.3)" />
+    </svg>
+    <span class="throw-ammo" aria-hidden="true">0</span>
+  </button>
+
   <!-- Combat: only ever visible while Venom Rat (see PlayerCombatController.setAvailable). -->
   <button id="bite-button" type="button" aria-label="Venom Bite">
     <svg class="action-icon action-icon--bite" viewBox="0 0 48 48" aria-hidden="true">

@@ -4,7 +4,10 @@ import { createApexMesh } from './apexModel.js';
 export const DEBUG_APEX = false;
 
 export const APEX_CONFIG = {
-  maxHealth: 30, // TEMP for testing: 2 Venom Bites (15 dmg each) kills it - real value is 180, restore before shipping
+  // 180 = 12 Venom Bites at 15 damage each. Was temporarily 30 for testing, which made
+  // the boss die in two hits and - worse - put the phase-2 transition (60% health) at
+  // 18 HP, i.e. after a single bite, so the second phase was effectively unreachable.
+  maxHealth: 180,
   moveSpeed: 1.8,
   phase2MoveSpeedMultiplier: 1.15,
   phase2RecoveryMultiplier: 0.85,

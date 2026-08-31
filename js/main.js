@@ -18,6 +18,7 @@ import { createRatMesh } from './ratModel.js';
 import { createPlayerSlimeVisual } from './playerSlimeModel.js';
 import { PreyManager, DEBUG_PREY } from './preyManager.js';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js';
+import { ProjectileSystem } from './projectileSystem.js';
 import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js';
 import { ApexEncounterManager } from './apexEncounterManager.js';
 import { GenomeFragmentController, FRAGMENT_STATES } from './genomeFragmentController.js';
@@ -393,7 +394,7 @@ const inventoryWheel = new InventoryWheelController({
 
 // Inventory weight -> movement speed/acceleration + the visual "burden" body shape.
 const burdenSystem = new BurdenSystem(inventoryManager, playerController, {
-  onHeavyReached: () => uiManager.showHeavyHint(),
+  onHeavyReached: () => uiManager.showHeavyHint(projectileSystem.getAmmoCount()),
 });
 
 // --- Predator (Cave Stalker) ---------------------------------------------------
@@ -668,6 +669,50 @@ playerCombatController.onAttackConnected = () => {
 };
 playerCombatController.onHit = (entity, damage) => {
   damageNumbers.spawn(entity.mesh.position, damage, 'player');
+};
+
+// --- Thrown rocks ---------------------------------------------------------------
+// Shares combat's damageable-entity array, so a rock hits exactly what a bite hits and
+// adding a future enemy needs no change in either class. Built after the game-feel
+// section so its hooks can be wired in the same place as combat's.
+const projectileSystem = new ProjectileSystem({
+  scene,
+  camera,
+  playerController,
+  inventoryManager,
+  damageableSources: [preyManager, predatorController, apexController, rivalController],
+  uiManager,
+});
+
+// Auto-aim target priority. Read by ProjectileSystem._score as a bonus subtracted from
+// a candidate's distance, so a dangerous enemy several units away still outranks prey
+// that happens to be closer - without this, a Glow Beetle wandering through the Apex
+// arena would steal the lock mid-boss-fight. Assigned here rather than declared inside
+// each controller because it is a property of THIS feature's targeting policy, not of
+// the enemies themselves; PreyManager keeps the default 0.
+predatorController.aimPriority = 1;
+rivalController.aimPriority = 1;
+apexController.aimPriority = 2;
+
+projectileSystem.onHit = (entity, damage) => {
+  damageNumbers.spawn(entity.mesh.position, damage, 'player');
+};
+// Lighter than a bite's: a thrown rock is the weaker, safer attack, and giving it the
+// same kick would make the two read as equally weighty when they are not.
+projectileSystem.onImpact = (position, hitSomething) => {
+  if (!hitSomething) return;
+  triggerHitstop(0.03);
+  screenShake.add(0.14);
+};
+// Throwing changes inventory weight, and the mutation checklist keys off inventory
+// contents - without this, spending a rock would leave the recipe panel and the
+// MUTATE button reflecting an inventory that no longer exists.
+// Deliberately does NOT fire triggerAbsorbPulse(): that widen is the "joy of absorbing"
+// reaction (see the wrapper further down), and throwing is the opposite gesture. The
+// feedback for a throw is the rock leaving, the mass bar dropping, and the impact hooks
+// above - borrowing the absorb tell here would blur what that animation means.
+projectileSystem.onFired = () => {
+  mutationSystem.onInventoryChanged();
 };
 
 // Damage taken. Trauma scales with the fraction of max health lost, so a Glow Beetle
@@ -988,6 +1033,9 @@ function resetGame() {
   screenShake.reset();
   hitstopRemaining = 0;
   damageNumbers.clear();
+  // Rocks still in the air would otherwise survive the reset and damage the freshly
+  // spawned enemies of the next run.
+  projectileSystem.reset();
 
   // HUD: instantly dismiss anything left over from the previous run (a mid-timeout
   // toast, a still-visible boss/rival bar) rather than waiting for it to time out.
@@ -1070,6 +1118,7 @@ window.__hollowdrop = {
   deathRespawnManager,
   preyManager,
   playerCombatController,
+  projectileSystem,
   apexController,
   apexEncounterManager,
   genomeFragmentController,
@@ -1214,6 +1263,15 @@ function animate() {
   playerCombatController.setAvailable(canAct && playerFormController.currentForm === PLAYER_FORMS.VENOM_RAT);
   playerCombatController.update(deltaTime);
 
+  // Throwing is the SLIME's attack, deliberately the mirror of Bite's gate above: the
+  // Rat has Venom Bite and the Slime has thrown rock, so each form has exactly one
+  // offensive verb and neither is simply a better version of the other. The button
+  // still appears with zero rocks (dimmed via throw-button--empty) rather than
+  // vanishing - a button that disappears whenever you run out teaches nothing about
+  // why, and the ammo badge is how the player learns rocks are ammunition at all.
+  projectileSystem.setAvailable(canAct && playerFormController.currentForm === PLAYER_FORMS.SLIME);
+  projectileSystem.update(deltaTime);
+
   if (isPlayingState) {
     // Mutation timer, AI (Prey/Predator/Apex/Rival), the Fragment contest, resource
     // attraction/absorption, and death/respawn all stop advancing outside PLAYING
@@ -1259,7 +1317,7 @@ function animate() {
   // having to know the shader exists. Real delta, same reasoning as the player's: bodies
   // keep breathing through a hitstop freeze. Creatures removed from the scene are
   // dropped from the registry automatically.
-  updateSlimeCreatures(realDeltaTime);
+  updateSlimeCreatures(realDeltaTime, camera);
 
   amoeba.update(realDeltaTime, {
     speedRatio: playerController.currentVelocity.length() / PLAYER_MAX_SPEED,
