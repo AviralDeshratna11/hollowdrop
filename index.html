@@ -91,29 +91,39 @@
 <div id="ui-layer">
   <!-- Single stacked column (not split left/right) so the three bars can never
        collide horizontally, regardless of screen width or how long their text gets. -->
+  <!-- One panel: the player's own portrait (left) + Health/Energy/Mass stacked (right),
+       matching the reference HUD's icon+bars layout instead of three separate pill
+       chips. Each bar keeps the exact same fill logic it always had (uiManager.js's
+       updateHealthUI/updateEnergyUI/updateMassUI just write .style.width, unchanged) -
+       .mass-fill's own `transition: width` is what already makes every change gradual
+       rather than an instant snap, so nothing needed to change there either. -->
   <div id="vitals-ui">
-    <div id="health-ui">
-      <span class="mass-label">Health</span>
-      <div class="mass-bar">
-        <div id="health-fill" class="mass-fill health-fill"></div>
-      </div>
-      <span id="health-text">100 / 100</span>
-    </div>
+    <img id="vitals-portrait" src="assets/ui/hud/player_portrait.png" alt="" />
 
-    <div id="energy-ui">
-      <span class="mass-label">Energy</span>
-      <div class="mass-bar">
-        <div id="energy-fill" class="mass-fill energy-fill"></div>
+    <div id="vitals-bars">
+      <div id="health-ui" class="vitals-row">
+        <span class="mass-label">Health</span>
+        <div class="mass-bar">
+          <div id="health-fill" class="mass-fill health-fill"></div>
+        </div>
+        <span id="health-text">100 / 100</span>
       </div>
-      <span id="energy-text">100</span>
-    </div>
 
-    <div id="mass-ui">
-      <span class="mass-label">Mass</span>
-      <div class="mass-bar">
-        <div id="mass-fill" class="mass-fill"></div>
+      <div id="energy-ui" class="vitals-row">
+        <span class="mass-label">Energy</span>
+        <div class="mass-bar">
+          <div id="energy-fill" class="mass-fill energy-fill"></div>
+        </div>
+        <span id="energy-text">100</span>
       </div>
-      <span id="mass-text">0 / 15</span>
+
+      <div id="mass-ui" class="vitals-row">
+        <span class="mass-label">Mass</span>
+        <div class="mass-bar">
+          <div id="mass-fill" class="mass-fill"></div>
+        </div>
+        <span id="mass-text">0 / 15</span>
+      </div>
     </div>
   </div>
 
