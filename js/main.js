@@ -85,7 +85,7 @@ const REFERENCE_ASPECT = 16 / 9;
 // this ceiling directly (REFERENCE_ASPECT/aspect works out to ~3.5-4 there), so this
 // number IS the effective zoom level on most real devices, not just a rare-case cap -
 // lowered from 3 to 2.2 (a real screenshot read as too zoomed out at 3).
-const CAMERA_MAX_ZOOM_OUT = 2.2;
+const CAMERA_MAX_ZOOM_OUT = 1.5;
 let viewZoom = 1; // multiplies CAMERA_OFFSET everywhere it's used; set by updateViewZoom()
 
 /** Recompute viewZoom from the current window aspect, and push fog + far plane out with
