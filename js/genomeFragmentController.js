@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { createGenomeFragmentMesh } from './genomeFragmentModel.js';
+import { createGenomeFragmentMesh } from './genomeFragmentModel.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const FRAGMENT_STATES = {
   EXPOSED: 'exposed',
@@ -71,9 +72,9 @@ export class GenomeFragmentController {
   spawn(position) {
     if (this.fragment) return;
 
+    const groundY = getTerrainHeight(position.x, position.z);
     const mesh = createGenomeFragmentMesh();
-    mesh.position.copy(position);
-    mesh.position.y = position.y + 0.15;
+    mesh.position.set(position.x, groundY + 0.15, position.z);
     mesh.scale.setScalar(0.01);
     this.scene.add(mesh);
 
@@ -286,11 +287,10 @@ export class GenomeFragmentController {
     f.mesh.position.copy(tempWorldPos);
 
     const angle = Math.random() * Math.PI * 2;
-    const target = new THREE.Vector3(
-      carrierMesh.position.x + Math.cos(angle) * GENOME_FRAGMENT_CONFIG.dropDistance,
-      carrierMesh.position.y + 0.3,
-      carrierMesh.position.z + Math.sin(angle) * GENOME_FRAGMENT_CONFIG.dropDistance
-    );
+    const targetX = carrierMesh.position.x + Math.cos(angle) * GENOME_FRAGMENT_CONFIG.dropDistance;
+    const targetZ = carrierMesh.position.z + Math.sin(angle) * GENOME_FRAGMENT_CONFIG.dropDistance;
+    const targetY = getTerrainHeight(targetX, targetZ) + 0.3;
+    const target = new THREE.Vector3(targetX, targetY, targetZ);
     f.dropAnim = { start: tempWorldPos.clone(), target, time: 0 };
 
     f.state = FRAGMENT_STATES.DROPPED;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { RESOURCE_TYPES } from './resourceTypes.js';
-import { EXPEL_PHYSICS } from './resourceManager.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
+import { EXPEL_PHYSICS } from './resourceManager.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const WHEEL_CONFIG = {
   // How long the press has to be held before the wheel opens.
@@ -216,11 +217,10 @@ export class InventoryWheelController {
    * duplicate this logic.
    */
   _expelInDirection(item, worldDir) {
-    tempSpawnPos.set(
-      this.player.position.x + worldDir.x * this.playerRadius,
-      EXPEL_PHYSICS.groundRestHeight + 0.25,
-      this.player.position.z + worldDir.z * this.playerRadius
-    );
+    const spawnX = this.player.position.x + worldDir.x * this.playerRadius;
+    const spawnZ = this.player.position.z + worldDir.z * this.playerRadius;
+    const spawnY = getTerrainHeight(spawnX, spawnZ) + 0.25;
+    tempSpawnPos.set(spawnX, spawnY, spawnZ);
 
     this.resourceManager.spawnDroppedResource(item.type, tempSpawnPos, worldDir);
     this.resourceManager.particles.spawnOutwardBurst(tempSpawnPos, worldDir, RESOURCE_TYPES[item.type].color);

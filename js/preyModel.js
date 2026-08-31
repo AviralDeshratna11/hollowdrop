@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { createEntityHealthBar } from './entityHealthBar.js';
-import { createSlimeCreature } from './slimeCreature.js';
+import { createEntityHealthBar } from './entityHealthBar.js?v=5.3';
+import { createSlimeCreature } from './slimeCreature.js?v=5.3';
 
 /**
  * Glow Beetle: a small, squat, domed teal slime with one round eye and six little legs.

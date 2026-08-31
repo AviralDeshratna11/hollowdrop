@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { loadFbxCharacter } from './fbxCharacterLoader.js';
-import { registerSlimeUpdater } from './slimeCreature.js';
+import { loadFbxCharacter } from './fbxCharacterLoader.js?v=5.3';
+import { registerSlimeUpdater } from './slimeCreature.js?v=5.3';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 /**
  * Venom Rat: the player's mutated form, now Meshy AI's "Plague Sludge Rat" - a static
@@ -86,6 +87,16 @@ export function createRatMesh() {
   const placeholderMesh = new THREE.Mesh(new THREE.SphereGeometry(RAT_CONFIG.bodyRadius, 20, 14), placeholderMaterial);
   group.add(placeholderMesh);
 
+  let placeholderOcclusion = attachOcclusionOutline(placeholderMesh, {
+    color: 0xff2d9e,
+    rimColor: 0xffccee,
+    opacity: 0.92,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.22,
+  });
+
   // Wraps the actual visible mesh (placeholder now, the loaded FBX once ready) so the
   // walk cycle below can bob/pitch/roll it independently of `group` itself, which
   // PlayerFormController writes .scale/.position.z on directly for the instability
@@ -130,9 +141,24 @@ export function createRatMesh() {
     },
   })
     .then(({ group: fbxGroup, material }) => {
+      if (placeholderOcclusion) {
+        placeholderOcclusion.dispose();
+        placeholderOcclusion = null;
+      }
       gaitWrapper.remove(placeholderMesh);
       placeholderMesh.geometry.dispose();
       placeholderMaterial.dispose();
+
+      attachOcclusionOutline(fbxGroup, {
+        color: 0xff2d9e,
+        rimColor: 0xffccee,
+        opacity: 0.92,
+        emissiveIntensity: 2.8,
+        rimStrength: 3.4,
+        rimPower: 1.8,
+        innerAlpha: 0.22,
+      });
+
       gaitWrapper.add(fbxGroup);
 
       group.userData.venomMaterial = material;

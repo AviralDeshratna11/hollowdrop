@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { createEntityHealthBar } from './entityHealthBar.js';
+import { createEntityHealthBar } from './entityHealthBar.js?v=5.3';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 // Sized between the Venom Rat and the Apex (spec: Hollowdrop < Venom Rat ~ Fire
 // Lizard < Apex) - a real reptilian predator silhouette, not just a recolor.
@@ -126,6 +127,16 @@ export function createFireLizardMesh() {
 
   const healthBar = createEntityHealthBar({ width: 0.55, fillWidth: 0.5, yOffset: 0.95, fillColor: 0xff6a3d });
   group.add(healthBar);
+
+  attachOcclusionOutline(group, {
+    color: 0xff5511,
+    rimColor: 0xffaa44,
+    opacity: 0.92,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.22,
+  });
 
   group.userData.body = body;
   group.userData.head = head;

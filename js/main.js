@@ -1,41 +1,44 @@
 import * as THREE from 'three';
-import { InputController } from './inputController.js';
-import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js';
-import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js';
-import { ResourceManager } from './resourceManager.js';
-import { UIManager } from './uiManager.js';
-import { InventoryUI } from './inventoryUI.js';
-import { InventoryInteractionController } from './inventoryInteraction.js';
-import { InventoryWheelController } from './inventoryWheel.js';
-import { BurdenSystem } from './burdenSystem.js';
-import { PlayerHealthState, DEBUG_HEALTH } from './playerHealth.js';
-import { PredatorController, DEBUG_PREDATOR_COMBAT } from './predatorController.js';
-import { DeathRespawnManager } from './deathRespawnManager.js';
-import { MetabolismSystem, DEBUG_METABOLISM } from './metabolismSystem.js';
-import { MutationSystem, DEBUG_MUTATION, MUTATION_RECIPES } from './mutationSystem.js';
-import { PlayerFormController, MUTATION_CONFIG, PLAYER_FORMS, DEBUG_MUTATION_TIMER } from './playerFormController.js';
-import { createRatMesh } from './ratModel.js';
-import { createPlayerSlimeVisual } from './playerSlimeModel.js';
-import { PreyManager, DEBUG_PREY } from './preyManager.js';
-import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js';
-import { ProjectileSystem } from './projectileSystem.js';
-import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js';
-import { ApexEncounterManager } from './apexEncounterManager.js';
-import { GenomeFragmentController, FRAGMENT_STATES } from './genomeFragmentController.js';
-import { RivalController, DEBUG_RIVAL } from './rivalController.js';
-import { FragmentContestManager, DEBUG_FRAGMENT_CONTEST } from './fragmentContestManager.js';
-import { ObjectiveIndicatorController } from './objectiveIndicator.js';
-import { createRunStats } from './runStats.js';
-import { MemorySequenceController } from './memorySequenceController.js';
-import { RunCompleteController } from './runCompleteController.js';
-import { GameFlowController, GAME_STATES } from './gameFlowController.js';
-import { scatterWorldDressing, rockColliderRadius } from './worldDressing.js';
-import { CollisionSystem } from './collision.js';
-import { updateSlimeCreatures } from './slimeCreature.js';
-import { ScreenShake } from './screenShake.js';
-import { DamageNumberController } from './damageNumbers.js';
-import { RadarController } from './radarController.js';
-import { RadarHUD } from './radarHUD.js';
+import { InputController } from './inputController.js?v=5.3';
+import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
+import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js?v=5.3';
+import { ResourceManager } from './resourceManager.js?v=5.3';
+import { UIManager } from './uiManager.js?v=5.3';
+import { InventoryUI } from './inventoryUI.js?v=5.3';
+import { InventoryInteractionController } from './inventoryInteraction.js?v=5.3';
+import { InventoryWheelController } from './inventoryWheel.js?v=5.3';
+import { BurdenSystem } from './burdenSystem.js?v=5.3';
+import { PlayerHealthState, DEBUG_HEALTH } from './playerHealth.js?v=5.3';
+import { PredatorController, DEBUG_PREDATOR_COMBAT } from './predatorController.js?v=5.3';
+import { DeathRespawnManager } from './deathRespawnManager.js?v=5.3';
+import { MetabolismSystem, DEBUG_METABOLISM } from './metabolismSystem.js?v=5.3';
+import { MutationSystem, DEBUG_MUTATION, MUTATION_RECIPES } from './mutationSystem.js?v=5.3';
+import { PlayerFormController, MUTATION_CONFIG, PLAYER_FORMS, DEBUG_MUTATION_TIMER } from './playerFormController.js?v=5.3';
+import { createRatMesh } from './ratModel.js?v=5.3';
+import { createPlayerSlimeVisual } from './playerSlimeModel.js?v=5.3';
+import { PreyManager, DEBUG_PREY } from './preyManager.js?v=5.3';
+import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js?v=5.3';
+import { ProjectileSystem } from './projectileSystem.js?v=5.3';
+import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js?v=5.3';
+import { ApexEncounterManager } from './apexEncounterManager.js?v=5.3';
+import { GenomeFragmentController, FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
+import { RivalController, DEBUG_RIVAL } from './rivalController.js?v=5.3';
+import { FragmentContestManager, DEBUG_FRAGMENT_CONTEST } from './fragmentContestManager.js?v=5.3';
+import { ObjectiveIndicatorController } from './objectiveIndicator.js?v=5.3';
+import { createRunStats } from './runStats.js?v=5.3';
+import { MemorySequenceController } from './memorySequenceController.js?v=5.3';
+import { RunCompleteController } from './runCompleteController.js?v=5.3';
+import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=5.3';
+import { scatterWorldDressing, rockColliderRadius, realignDressingToTerrain } from './worldDressing.js?v=5.3';
+import { CollisionSystem } from './collision.js?v=5.3';
+import { updateSlimeCreatures } from './slimeCreature.js?v=5.3';
+import { ScreenShake } from './screenShake.js?v=5.3';
+import { DamageNumberController } from './damageNumbers.js?v=5.3';
+import { RadarController } from './radarController.js?v=5.3';
+import { RadarHUD } from './radarHUD.js?v=5.3';
+import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady } from './terrain.js?v=5.3';
+import { StoneClusterManager } from './stoneClusters.js?v=5.3';
+import { createVastCanopyTree } from './treeModel.js?v=5.3';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -135,78 +138,13 @@ rimLight.position.set(-8, 5, -9);
 scene.add(rimLight);
 
 // --- Ground ----------------------------------------------------------------
-// This surface has to do the job the old debug GridHelper was doing: give movement a
-// visible reference. A flat single-colour plane reads as "standing still" no matter
-// how fast you actually travel, which is the only reason a wireframe grid was
-// acceptable here in the first place. Instead the plane carries per-vertex colour
-// mottling - broad patches for large-scale travel, finer break-up so nearby motion
-// still registers - which reads as cave floor rather than as debug scaffolding.
 const GROUND_SIZE = 200;
-// 240 segments = 0.83 world units between vertices. The high-frequency octave below
-// has a ~2.4-unit wavelength, so this has to stay dense enough to actually represent
-// it - at the more obvious 120 the fine detail aliases away and the floor goes back to
-// looking flat while you move over it.
-const GROUND_SEGMENTS = 240;
-
-/** Deterministic (no Math.random) smooth value field in roughly -1..1, summed from
- *  five octaves. Deliberately not noise-library-grade - it only has to break up a flat
- *  colour convincingly. The octave spread is the point: the broad ones give long-range
- *  travel something to read against, and the last two sit at roughly 2-5 world units
- *  so there's still visible texture passing under you at close range (this is the job
- *  the old GridHelper was doing). Staying deterministic means the cave looks identical
- *  on every load rather than reshuffling itself on each refresh. */
-function groundMottle(x, z) {
-  return (
-    Math.sin(x * 0.08) * Math.cos(z * 0.11) * 0.45 +
-    Math.sin(x * 0.23 + 1.7) * Math.cos(z * 0.19 - 0.9) * 0.25 +
-    Math.sin(x * 0.55 - 2.3) * Math.cos(z * 0.47 + 2.1) * 0.15 +
-    Math.sin(x * 1.3 + 0.6) * Math.cos(z * 1.17 + 3.1) * 0.1 +
-    Math.sin(x * 2.6 - 1.1) * Math.cos(z * 2.43 - 2.6) * 0.05
-  );
-}
-
+const GROUND_SEGMENTS = 320;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
-const groundPositions = groundGeometry.attributes.position;
-const groundColorLow = new THREE.Color(0x0c1912);
-const groundColorHigh = new THREE.Color(0x24402e);
-const groundColorScratch = new THREE.Color();
-const groundColorArray = new Float32Array(groundPositions.count * 3);
-for (let i = 0; i < groundPositions.count; i++) {
-  // The plane is authored in XY and rotated flat below, so its local Y is world Z.
-  const t = THREE.MathUtils.clamp(groundMottle(groundPositions.getX(i), groundPositions.getY(i)) * 0.5 + 0.5, 0, 1);
-  groundColorScratch.copy(groundColorLow).lerp(groundColorHigh, t);
-  groundColorArray[i * 3] = groundColorScratch.r;
-  groundColorArray[i * 3 + 1] = groundColorScratch.g;
-  groundColorArray[i * 3 + 2] = groundColorScratch.b;
-}
-groundGeometry.setAttribute('color', new THREE.BufferAttribute(groundColorArray, 3));
 
-// User-generated cave-floor artwork, tiled across the whole 200x200 ground rather than
-// stretched once (a single ~1000px painting stretched once over 200 world units would
-// be a blurry smear with no readable detail up close). The source crop was picked to be
-// fairly uniform (scattered teal glow + rock + moss, no single dominant feature) -
-// earlier crops that included the art's one-off purple mushroom cluster made that
-// cluster read as an obvious duplicated landmark once repeated, far more objectionable
-// than a repeating pattern with nothing distinctive to notice.
-//
-// GROUND_SIZE (200) is much bigger than where the game actually happens - the player
-// spawns at the origin and every hand-placed thing (predator home, the Apex arena, the
-// Rival's escape target) sits within roughly 30 units of it, per main.js's own spawn
-// coordinates. GROUND_TEXTURE_REPEAT is picked so ONE tile (200 / repeat world units
-// wide) comfortably covers that whole active area on its own - a real player essentially
-// never sees the texture repeat, only the decorative far edges of the plane would.
-// Plain RepeatWrapping (not Mirrored): mirroring matches every tile edge exactly with
-// no manual seam work, but this source has soft directional painted shading that
-// mirrors into an unnaturally dark line right along the seam - worse than the milder
-// color/pattern discontinuity a plain repeat leaves, now that there's no rare feature
-// for that discontinuity to draw the eye toward.
-//
-// An ODD repeat count centers a tile on the world origin - the player's spawn point,
-// the single most-viewed spot in the game - with no extra offset needed: PlaneGeometry
-// maps its own local origin to UV (0.5, 0.5), and (0.5 * odd) mod 1 = 0.5 (a tile's own
-// center), whereas an even count lands exactly on a tile boundary (a seam) instead -
-// which is what actually put the very first version's dark seam line through spawn.
-const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground.jpg');
+const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground.jpg', (tex) => {
+  initTextureElevation(tex.image);
+});
 groundTexture.wrapS = THREE.RepeatWrapping;
 groundTexture.wrapT = THREE.RepeatWrapping;
 const GROUND_TEXTURE_REPEAT = 3; // odd - each tile ~67 world units, one tile spans the whole active play area
@@ -214,12 +152,8 @@ groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
 groundTexture.colorSpace = THREE.SRGBColorSpace;
 groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-// vertexColors is dropped here (the geometry's own 'color' attribute above is now
-// unused, harmless to leave built) - it was calibrated as dark, standalone flat color
-// (breaking up an otherwise blank plane), and MeshStandardMaterial multiplies map x
-// vertexColor, so layering it under the real texture compounded two dark sources into
-// a near-black result. The real artwork already provides its own large- and small-
-// scale color variation; a flat multiplier tint isn't needed on top of it.
+applyTerrainElevation(groundGeometry);
+
 const ground = new THREE.Mesh(
   groundGeometry,
   new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1 })
@@ -228,30 +162,12 @@ ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
 // --- Player root + swappable visuals -----------------------------------------
-// `player` is the ROOT: position/camera/predator/knockback all target it, and it
-// never gets replaced. Exactly one of its two visual children is shown at a time -
-// see PlayerFormController. Both visuals sit at local (0,0,0) (root already carries
-// the height offset), so switching forms never touches player.position.
 const PLAYER_RADIUS = 0.6;
-// The one canonical spawn point (spec section 60) - both a death respawn AND a
-// brand-new run (Play Again) return the player here, never wherever they happen to
-// be standing. Declared here with the player root (rather than down with
-// DeathRespawnManager, which is its main consumer) because the world dressing built
-// further down needs it to know which area to leave undecorated.
 const PLAYER_SPAWN_POSITION = new THREE.Vector3(0, PLAYER_RADIUS, 0);
 const player = new THREE.Group();
 player.position.copy(PLAYER_SPAWN_POSITION);
 scene.add(player);
 
-// Slime form visual - a wrapper Group (not a bare Mesh) so what's inside it can change
-// without anything that references slimeVisual having to care; PlayerFormController
-// only ever touches .visible/.scale, both plain Object3D properties.
-//
-// The amoeba is built synchronously - it's generated geometry plus a shader, with no
-// asset to fetch. That removes the placeholder-sphere-then-hot-swap sequence this file
-// used to run for the imported model, along with having to re-point
-// playerFormController.slimeMaterial and playerController.setActiveMaterial() partway
-// through a live session.
 const slimeVisual = new THREE.Group();
 player.add(slimeVisual);
 
@@ -264,16 +180,9 @@ const ratMaterial = ratVisual.userData.bodyMaterial;
 ratVisual.visible = false;
 player.add(ratVisual);
 
-// Living Inventory: collected resources are parented here, so they inherit
-// Hollowdrop's position/rotation automatically - no manual per-frame sync.
-// Hidden (not destroyed) while transformed - see PlayerFormController.
 const inventoryContainer = new THREE.Group();
 player.add(inventoryContainer);
 
-// Where a carried Human Genome Fragment attaches while the Player holds it -
-// same "parent to a small anchor Group" technique as inventoryContainer, kept
-// separate since a carried Fragment must stay visible/attached even mid-mutation
-// (unlike inventoryContainer, which PlayerFormController hides while transformed).
 const fragmentCarryAnchor = new THREE.Group();
 fragmentCarryAnchor.position.set(0, 0.55, 0.4);
 player.add(fragmentCarryAnchor);
@@ -290,59 +199,37 @@ const playerController = new PlayerController(player, slimeMaterial);
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 // --- Pointer tracking for eye gaze ---------------------------------------------
-// Separate from InputController on purpose: that one only records pointer position
-// WHILE dragging (its _onPointerMove early-returns unless isDragging), because it only
-// cares about movement swipes. Gaze needs the position whenever the pointer exists at
-// all, including plain desktop hover with no button held.
 const pointerScreen = { x: 0, y: 0, seen: false };
 canvas.addEventListener('pointermove', (e) => {
   pointerScreen.x = e.clientX;
   pointerScreen.y = e.clientY;
   pointerScreen.seen = true;
 }, { passive: true });
-// A finger leaving the glass is not "looking somewhere else" - it is no information at
-// all, so the gaze falls back to the direction of travel rather than freezing.
 canvas.addEventListener('pointerleave', () => { pointerScreen.seen = false; }, { passive: true });
 
 // --- Resources / Inventory / UI -----------------------------------------------
 const uiManager = new UIManager();
 const inventoryManager = new InventoryManager(inventoryContainer, { maxWeight: MAX_WEIGHT });
 
-// Run statistics (spec section 22-23) - a plain data object other systems report
-// into via optional hooks (onDefeated/onSpawned/onAbsorbed/onPlayerDeath, wired
-// below as each relevant controller is constructed) rather than counted separately.
 const runStats = createRunStats();
 
-// Mutation recipe/data logic - created early since ResourceManager needs it to notify
-// on every absorb. Its UI callbacks are wired below, once PlayerFormController exists.
 const mutationSystem = new MutationSystem(inventoryManager);
 
 const resourceManager = new ResourceManager(scene, inventoryManager, uiManager, playerController, mutationSystem);
 resourceManager.onAbsorbed = () => runStats.resourcesAbsorbed++;
 
-/** The world's starting resource scatter (spec section 38: "clear old -> spawn new",
- *  never stacked on top of what's already there) - factored out so both the initial
- *  load and the Play Again reset pipeline (see resetGame() below) populate the exact
- *  same layout from one place. */
 function populateWorldResources() {
-  // Kill-exclusive resources are excluded from ambient scatter - they should only ever
-  // come from the corresponding kill (see PreyManager._dropLoot / PredatorController's
-  // _dropLoot), never lying around unearned.
   resourceManager.spawnTestZone(player.position, 4, {
     minRadius: 3,
     maxRadius: 15,
     excludeTypes: ['rat_dna', 'beetle_dna', 'predator_dna', 'toxic_gland', 'apex_dna', 'rival_dna'],
   });
 
-  // A few Iron Ore placed along the path toward the predator's territory (section 39 of
-  // the predator spec): encourages "collect the valuable heavy stuff, wander into danger".
   for (const [x, z] of [[4, 3], [6, 5], [8, 6.5]]) {
-    resourceManager.spawnResource('iron', new THREE.Vector3(x, 0.2, z));
+    resourceManager.spawnResource('iron', new THREE.Vector3(x, getTerrainHeight(x, z), z));
   }
 
-  // Exactly one Rat DNA pickup, placed beyond the immediate safe spawn area (not
-  // stacked with the predator's territory - a distinct direction to explore toward).
-  resourceManager.spawnResource('rat_dna', new THREE.Vector3(-10, 0.2, 6));
+  resourceManager.spawnResource('rat_dna', new THREE.Vector3(-10, getTerrainHeight(-10, 6), 6));
 }
 populateWorldResources();
 
@@ -351,17 +238,10 @@ uiManager.updateMassUI(inventoryManager.getInventoryWeight(), inventoryManager.m
 // --- Health / Metabolism --------------------------------------------------------
 const playerHealth = new PlayerHealthState(playerController, uiManager);
 
-// Continuous energy drain + consuming edible Living Inventory items to restore it.
-// Starvation (energy = 0) damages health through takeEnvironmentalDamage(), the
-// non-combat path, so it never interacts with predator-hit invulnerability.
 const metabolismSystem = new MetabolismSystem(playerController, playerHealth, uiManager, {
   onLowEnergyReached: () => uiManager.showLowEnergyHint(),
 });
 
-// Tapping an item visible inside Hollowdrop brings up Consume (edible items only) -
-// claims the pointer via inputController's gesture guard before movement can start on
-// the same touch. Swipe-to-expel used to live here too and was removed, which leaves
-// the outward drag on the body free for other gestures.
 const inventoryInteraction = new InventoryInteractionController({
   canvas,
   camera,
@@ -376,9 +256,6 @@ const inventoryInteraction = new InventoryInteractionController({
 });
 inputController.setGestureGuard((e) => inventoryInteraction.tryBeginItemTouch(e));
 
-// Press and hold on Hollowdrop to open the radial inventory, tap a segment to expel.
-// This is where dropping cargo lives now that the outward swipe is gone - see the
-// module header for why that matters to Stage 2 of the design doc.
 const inventoryWheel = new InventoryWheelController({
   canvas,
   camera,
@@ -392,15 +269,12 @@ const inventoryWheel = new InventoryWheelController({
   playerRadius: PLAYER_RADIUS,
 });
 
-// Inventory weight -> movement speed/acceleration + the visual "burden" body shape.
 const burdenSystem = new BurdenSystem(inventoryManager, playerController, {
   onHeavyReached: () => uiManager.showHeavyHint(projectileSystem.getAmmoCount()),
 });
 
 // --- Predator (Cave Stalker) ---------------------------------------------------
-// Home territory placed well outside detection/lose/max-chase radii from the
-// player's start, so there's a safe opening to explore and collect first.
-const predatorHomePosition = new THREE.Vector3(10, 0, 8);
+const predatorHomePosition = new THREE.Vector3(10, getTerrainHeight(10, 8), 8);
 const predatorController = new PredatorController(scene, predatorHomePosition, playerController, playerHealth, uiManager, resourceManager, {
   onDefeated: () => runStats.predatorsDefeated++,
 });
@@ -421,14 +295,6 @@ const playerFormController = new PlayerFormController({
   ratMaterial,
 });
 
-// Both visuals above (Meshy AI FBX imports, see playerSlimeModel.js/ratModel.js) load
-// their real model asynchronously and start out showing a small placeholder sphere -
-// slimeMaterial/ratMaterial above were captured from that placeholder at construction
-// time, and playerFormController just copied those same stale references into its own
-// fields. Once each one's real material actually arrives, re-point that field (read
-// fresh every time PlayerFormController calls setActiveMaterial()) and, if that form
-// happens to be the one currently showing, switch PlayerController to it immediately
-// rather than waiting for the next mutate/revert to pick it up on its own.
 amoeba.onReady = (material) => {
   playerFormController.slimeMaterial = material;
   if (playerFormController.currentForm === PLAYER_FORMS.SLIME) playerController.setActiveMaterial(material);
@@ -438,16 +304,11 @@ ratVisual.userData.onReady = (material) => {
   if (playerFormController.currentForm === PLAYER_FORMS.VENOM_RAT) playerController.setActiveMaterial(material);
 };
 
-// Wired here (not at MutationSystem construction) so the callback can close over
-// playerFormController, which doesn't exist yet at that point.
 mutationSystem.onMutationAvailable = (recipe, firstDiscovery) => {
-  // Guards the shared action-button slot: while transformed, that slot belongs to
-  // REVERT (see PlayerFormController), never MUTATE - even if ingredients happen to
-  // be available again (e.g. re-absorbed while Rat, before the inventory reopens).
   if (recipe && playerFormController.currentForm === PLAYER_FORMS.SLIME) {
     if (firstDiscovery) {
       uiManager.showMutationDiscovered(recipe.name);
-      runStats.venomRatDiscovered = true; // only one recipe exists in this prototype (mutationSystem.js)
+      runStats.venomRatDiscovered = true;
     }
     uiManager.showMutationReady(recipe, () => playerFormController.beginMutation(recipe));
   } else {
@@ -459,33 +320,20 @@ if (DEBUG_MUTATION) {
 }
 
 // --- Prey (Glow Beetle) + Venom Bite combat ------------------------------------
-// Spread around the environment (not on top of the player's spawn at the origin),
-// in different directions from both the predator's territory and the Rat DNA
-// pickup, so there's something new to find once the player can actually hunt.
 const preyManager = new PreyManager(scene, playerController, playerFormController, resourceManager, uiManager, {
   onDefeated: () => runStats.preyDefeated++,
 });
 
-/** Factored out for the same reason populateWorldResources() is - both the initial
- *  load and the Play Again reset pipeline spawn the exact same starting population. */
 function populateWorldPrey() {
   for (const [x, z] of [[-6, -4], [-3, 8], [6, -6], [3, -3]]) {
-    preyManager.spawnGlowBeetle(new THREE.Vector3(x, 0, z));
+    preyManager.spawnGlowBeetle(new THREE.Vector3(x, getTerrainHeight(x, z), z));
   }
 }
 populateWorldPrey();
 
 // --- Apex Predator (Murkmaw) + Human Genome Fragment ---------------------------
-// A short walk from spawn (~13.5 units) in the one quadrant nothing else spawns in
-// (negative X, negative Z) - far enough that the trigger radius no longer reaches
-// spawn itself, close enough to still be a quick test loop.
-const apexArenaCenter = new THREE.Vector3(-10, 0, -9);
+const apexArenaCenter = new THREE.Vector3(-10, getTerrainHeight(-10, -9), -9);
 
-// Reveal/hover/collect for the Fragment - deliberately its own small controller, not
-// routed through ResourceManager (see that file's own header comment for why).
-// rivalController/playerCarryAnchor are assigned post-construction below (same
-// "wire after construction" pattern as mutationSystem.onMutationAvailable), since
-// RivalController needs genomeFragmentController to exist first.
 const genomeFragmentController = new GenomeFragmentController(scene, playerController, playerHealth, uiManager);
 genomeFragmentController.playerCarryAnchor = fragmentCarryAnchor;
 
@@ -500,8 +348,6 @@ const apexController = new ApexController({
   onDefeated: () => runStats.apexDefeated++,
 });
 
-// Trigger radius sits a little outside the dressed arena itself, so crossing into
-// the territory reads as the moment of discovery, not "suddenly standing on the boss".
 const apexEncounterManager = new ApexEncounterManager(scene, playerController, apexController, {
   arenaCenter: apexArenaCenter,
   arenaRadius: APEX_CONFIG.arenaRadius,
@@ -509,13 +355,7 @@ const apexEncounterManager = new ApexEncounterManager(scene, playerController, a
 });
 
 // --- Rival Slime + Fire Lizard --------------------------------------------------
-// Shares the Apex's arena - it only ever enters once the Human Genome Fragment is
-// exposed (see the onExposed wiring below), competing with the player for the SAME
-// reward rather than being a standalone encounter. escapeTarget sits well beyond the
-// arena toward the world boundary - somewhere the Rival visibly commits to fleeing
-// toward once it's carrying the Fragment, distinct from the Player's own extraction
-// zone (set up below with FragmentContestManager).
-const rivalEscapeTarget = new THREE.Vector3(-22, 0, -20);
+const rivalEscapeTarget = new THREE.Vector3(-22, getTerrainHeight(-22, -20), -20);
 const rivalController = new RivalController({
   scene,
   arenaCenter: apexArenaCenter,
@@ -542,15 +382,9 @@ genomeFragmentController.onPickup = (carrier) => {
 genomeFragmentController.onDrop = (fromCarrier) => {
   if (DEBUG_APEX || DEBUG_RIVAL) console.log(`Human Genome Fragment dropped by ${fromCarrier}`);
 };
-// onSecured is assigned further down, once gameFlowController exists - it's the ONE
-// authoritative trigger for the Memory/Run Complete ending (spec sections 3-4).
 
 // --- Fragment Contest: extraction zone + escape/reset orchestration -------------
-// extractionPosition sits back near the Player's own spawn - a real "carry it home"
-// distance from the arena (~13.5 units), and nowhere near the Fragment's own spawn
-// point so reaching it always requires deliberate travel. resetSpawnPosition is the
-// arena itself, matching where ApexController originally spawns the Fragment.
-const fragmentExtractionPosition = new THREE.Vector3(3, 0, 3);
+const fragmentExtractionPosition = new THREE.Vector3(3, getTerrainHeight(3, 3), 3);
 const fragmentContestManager = new FragmentContestManager({
   scene,
   playerController,
@@ -561,39 +395,82 @@ const fragmentContestManager = new FragmentContestManager({
   resetSpawnPosition: apexArenaCenter,
 });
 
-// Decorative props across the rest of the map. Built here rather than earlier because
-// the exclusion list needs the objective positions that are only decided above. Purely
-// visual and non-colliding, so it never has to be part of the Play Again reset - like
-// the arena's own dressing, it's permanent scenery.
-// --- Collision -----------------------------------------------------------------
-// Circles in the XZ plane. Every solid thing here is round from above and the camera is
-// fixed top-down, so this is the actual shape rather than an approximation.
+// --- Collision System & World Scenery ------------------------------------------
 const collisionSystem = new CollisionSystem();
 
+// Subterranean Vast-Canopy Trees
+const tree1Trunk = { x: 21.0, z: -7.0 };
+const tree1 = createVastCanopyTree({
+  seed: 0x73ee1,
+  scale: 0.85,
+  rotationY: Math.PI * 0.95,
+  foliageColor: 0x112e22,
+  sporeColor: 0x3fb98a,
+});
+tree1.position.set(tree1Trunk.x, getTerrainHeight(tree1Trunk.x, tree1Trunk.z), tree1Trunk.z);
+scene.add(tree1);
+
+const tree2Trunk = { x: -17.0, z: 16.0 };
+const tree2 = createVastCanopyTree({
+  seed: 0x73ee2,
+  scale: 0.88,
+  rotationY: -Math.PI * 0.25,
+  foliageColor: 0x14342e,
+  sporeColor: 0x6e88ff,
+});
+tree2.position.set(tree2Trunk.x, getTerrainHeight(tree2Trunk.x, tree2Trunk.z), tree2Trunk.z);
+scene.add(tree2);
+
+const mapExclusions = [
+  { x: PLAYER_SPAWN_POSITION.x, z: PLAYER_SPAWN_POSITION.z, radius: 7 },
+  { x: fragmentExtractionPosition.x, z: fragmentExtractionPosition.z, radius: 5 },
+  { x: apexArenaCenter.x, z: apexArenaCenter.z, radius: APEX_CONFIG.arenaRadius + 3 },
+  { x: tree1Trunk.x, z: tree1Trunk.z, radius: 1.8 },
+  { x: tree2Trunk.x, z: tree2Trunk.z, radius: 1.8 },
+];
+
 const worldDressingResult = scatterWorldDressing(scene, {
-  exclusions: [
-    // Player spawn: the opening ring of collectible resources sits here and must stay
-    // readable rather than buried in scenery.
-    { x: PLAYER_SPAWN_POSITION.x, z: PLAYER_SPAWN_POSITION.z, radius: 7 },
-    { x: fragmentExtractionPosition.x, z: fragmentExtractionPosition.z, radius: 5 },
-    // The arena already dresses itself, more densely and in its own violet palette.
-    { x: apexArenaCenter.x, z: apexArenaCenter.z, radius: APEX_CONFIG.arenaRadius + 3 },
-  ],
+  exclusions: mapExclusions,
 });
 
-// Stones become solid. Both scatters are registered: the wider map's and the Apex
-// arena's own ring, which ApexEncounterManager builds through the same module.
-for (const rock of worldDressingResult.rocks) {
+const stoneClusterManager = new StoneClusterManager(
+  scene,
+  inventoryManager,
+  resourceManager,
+  uiManager,
+  playerController,
+  mutationSystem,
+  collisionSystem
+);
+stoneClusterManager.populateWorldClusters({ exclusions: mapExclusions });
+
+collisionSystem.addStatic(tree1Trunk.x, tree1Trunk.z, tree1.userData.baseColliderRadius);
+collisionSystem.addStatic(tree2Trunk.x, tree2Trunk.z, tree2.userData.baseColliderRadius);
+
+for (const rock of worldDressingResult.rocks ?? []) {
   collisionSystem.addStatic(rock.x, rock.z, rockColliderRadius(rock.scale));
 }
 for (const rock of apexEncounterManager.dressingRocks ?? []) {
   collisionSystem.addStatic(rock.x, rock.z, rockColliderRadius(rock.scale));
 }
 
-// Murkmaw's body is solid; its HEAD deliberately is not. A collider on the head would
-// hold the player at head-radius + player-radius apart - further than Venom Bite's 1.25
-// reach - and the boss would become literally unkillable. Leaving the head passable is
-// what makes "body is a wall, head is the weak point" actually playable.
+onTerrainElevationReady(() => {
+  applyTerrainElevation(groundGeometry);
+
+  tree1.position.y = getTerrainHeight(tree1Trunk.x, tree1Trunk.z);
+  tree2.position.y = getTerrainHeight(tree2Trunk.x, tree2Trunk.z);
+
+  fragmentExtractionPosition.y = getTerrainHeight(fragmentExtractionPosition.x, fragmentExtractionPosition.z);
+  if (fragmentContestManager && fragmentContestManager.extractionZoneVisual) {
+    fragmentContestManager.extractionZoneVisual.position.y = fragmentExtractionPosition.y;
+  }
+
+  resourceManager.realignToTerrain();
+  stoneClusterManager.realignToTerrain();
+  realignDressingToTerrain();
+});
+
+const tempColliderPos = new THREE.Vector3();
 collisionSystem.addDynamicProvider(() => {
   const mesh = apexController.mesh;
   if (!mesh || !mesh.visible || apexController.state === 'DORMANT' || apexController.state === 'DEAD') return null;
@@ -602,8 +479,6 @@ collisionSystem.addDynamicProvider(() => {
   const out = [];
   for (const seg of segments) {
     seg.pivot.getWorldPosition(tempColliderPos);
-    // Segment world radius: base body radius x its own taper x the group's live scale
-    // (which ApexController ramps 0.55 -> 1 during the intro rise).
     out.push({
       x: tempColliderPos.x,
       z: tempColliderPos.z,
@@ -613,11 +488,10 @@ collisionSystem.addDynamicProvider(() => {
   return out;
 });
 
+// --- Objective Indicator -------------------------------------------------------
 const objectiveIndicator = new ObjectiveIndicatorController(camera, canvas, uiManager, fragmentContestManager, genomeFragmentController);
 
 // --- Species-Seeker Radar --------------------------------------------------------
-// Reads live positions/state directly off the controllers already constructed above -
-// see radarController.js's own header for why it never duplicates any of their data.
 const radarController = new RadarController({
   player,
   predatorController,
@@ -630,36 +504,21 @@ const radarHUD = new RadarHUD(radarController, {
   onApexSignal: () => uiManager.showRadarSignal('APEX SIGNAL'),
 });
 
-
-// Every enemy source exposes the same getDamageableEntities()/takeDamage() interface
-// (see PlayerCombatController's own doc comment) - registering a new one means adding
-// it to this array, nothing inside PlayerCombatController itself.
+// --- Combat Controller ---------------------------------------------------------
 const playerCombatController = new PlayerCombatController({
   playerController,
   damageableSources: [preyManager, predatorController, apexController, rivalController],
   uiManager,
 });
-// Read-only: PlayerFormController blends this into ratVisual's own animation - see
-// its constructor comment and _updateRatIdle. Wired here (not at construction) since
-// playerCombatController doesn't exist yet when playerFormController is built.
 playerFormController.playerCombatController = playerCombatController;
 
 // --- Game feel: shake / hitstop / damage numbers --------------------------------
-// Impact feedback, kept deliberately separate from the systems that cause it: every
-// hook below is assigned post-construction (the same wiring pattern as
-// mutationSystem.onMutationAvailable above), so no combat or AI class has to know
-// that screen shake or damage numbers exist.
 const screenShake = new ScreenShake();
 const damageNumbers = new DamageNumberController(camera, canvas);
 
-// Hitstop: a couple of frames of near-frozen simulation on a landed hit - what makes
-// a strike feel like it connected with something solid rather than passing through
-// it. Applied at the ONE place deltaTime is produced in animate(), so every system
-// slows together and none of them need to know it happened.
 const HITSTOP_TIME_SCALE = 0.08;
 let hitstopRemaining = 0;
 function triggerHitstop(duration) {
-  // max(), not +=, so several hits in one frame can't compound into a long freeze.
   hitstopRemaining = Math.max(hitstopRemaining, duration);
 }
 
@@ -672,9 +531,6 @@ playerCombatController.onHit = (entity, damage) => {
 };
 
 // --- Thrown rocks ---------------------------------------------------------------
-// Shares combat's damageable-entity array, so a rock hits exactly what a bite hits and
-// adding a future enemy needs no change in either class. Built after the game-feel
-// section so its hooks can be wired in the same place as combat's.
 const projectileSystem = new ProjectileSystem({
   scene,
   camera,
@@ -684,12 +540,6 @@ const projectileSystem = new ProjectileSystem({
   uiManager,
 });
 
-// Auto-aim target priority. Read by ProjectileSystem._score as a bonus subtracted from
-// a candidate's distance, so a dangerous enemy several units away still outranks prey
-// that happens to be closer - without this, a Glow Beetle wandering through the Apex
-// arena would steal the lock mid-boss-fight. Assigned here rather than declared inside
-// each controller because it is a property of THIS feature's targeting policy, not of
-// the enemies themselves; PreyManager keeps the default 0.
 predatorController.aimPriority = 1;
 rivalController.aimPriority = 1;
 apexController.aimPriority = 2;
@@ -697,46 +547,30 @@ apexController.aimPriority = 2;
 projectileSystem.onHit = (entity, damage) => {
   damageNumbers.spawn(entity.mesh.position, damage, 'player');
 };
-// Lighter than a bite's: a thrown rock is the weaker, safer attack, and giving it the
-// same kick would make the two read as equally weighty when they are not.
 projectileSystem.onImpact = (position, hitSomething) => {
   if (!hitSomething) return;
   triggerHitstop(0.03);
   screenShake.add(0.14);
 };
-// Throwing changes inventory weight, and the mutation checklist keys off inventory
-// contents - without this, spending a rock would leave the recipe panel and the
-// MUTATE button reflecting an inventory that no longer exists.
-// Deliberately does NOT fire triggerAbsorbPulse(): that widen is the "joy of absorbing"
-// reaction (see the wrapper further down), and throwing is the opposite gesture. The
-// feedback for a throw is the rock leaving, the mass bar dropping, and the impact hooks
-// above - borrowing the absorb tell here would blur what that animation means.
 projectileSystem.onFired = () => {
   mutationSystem.onInventoryChanged();
 };
 
-// Damage taken. Trauma scales with the fraction of max health lost, so a Glow Beetle
-// graze and an Apex slam don't rattle the camera by the same amount.
+// Damage taken
 playerHealth.onDamaged = (amount) => {
   screenShake.add(THREE.MathUtils.clamp(0.25 + (amount / playerHealth.maxHealth) * 0.9, 0, 1));
   damageNumbers.spawn(player.position, amount, 'incoming');
   amoeba.triggerSquint();
 };
 
-// Eyes widen on absorb. Wrapping triggerAbsorbPulse rather than hunting down every
-// call site: ResourceManager, MetabolismSystem and PlayerFormController all fire it,
-// and every one of them is a moment the creature should react to. The design doc names
-// the "toy-like joy of absorbing items" as the Stage 1 hook - this is that.
+// Eyes widen on absorb
 const originalAbsorbPulse = playerController.triggerAbsorbPulse.bind(playerController);
 playerController.triggerAbsorbPulse = () => {
   originalAbsorbPulse();
   amoeba.triggerWiden();
 };
 
-// Death feedback. NOTE: every one of these controllers already spawns its own particle
-// burst inside its _die() (preyManager.js, predatorController.js, apexController.js) -
-// only the camera shake is missing, so only shake is added here. The existing
-// onDefeated hooks are wrapped rather than replaced, so run-stats counting is untouched.
+// Death feedback shake
 const addDefeatShake = (controller, trauma) => {
   const previousOnDefeated = controller.onDefeated;
   controller.onDefeated = (...args) => {
@@ -746,41 +580,27 @@ const addDefeatShake = (controller, trauma) => {
 };
 addDefeatShake(preyManager, 0.12);
 addDefeatShake(predatorController, 0.3);
-addDefeatShake(apexController, 0.7); // the boss earns the biggest one in the game
+addDefeatShake(apexController, 0.7);
 
-// Opening the panel mid-swipe cancels the drag so Hollowdrop eases to a stop
-// instead of continuing to coast while the player is browsing their items.
-//
-// canOpen closes over gameFlowController/deathRespawnManager, both declared further
-// down this file - safe because it's only ever CALLED (from a tap, well after this
-// whole module has finished executing), never evaluated here at construction time. It
-// mirrors main.js's own `canAct` gate exactly (spec section 66: not on Title, mid-death,
-// mid-mutation, or during any non-PLAYING flow state) without needing canAct itself,
-// which only exists freshly recomputed inside the animate loop.
+// --- Inventory UI -------------------------------------------------------------
 const inventoryUI = new InventoryUI(inventoryManager, {
-  mutationSystem, // so the codex can show live missing-ingredient counts
-  inventoryInteraction, // Consume routes through here (consumeItem)
-  inventoryWheel, // Expel routes through here (expelItemById)
-  genomeFragmentController, // special Human Genome Fragment slot
-  burdenSystem, // live burden label + movement % in the Mass footer
+  mutationSystem,
+  inventoryInteraction,
+  inventoryWheel,
+  genomeFragmentController,
+  burdenSystem,
   canOpen: () => gameFlowController.state === GAME_STATES.PLAYING
     && deathRespawnManager.isPlaying
     && !playerFormController.isLocked,
   onOpen: () => {
     inputController.cancel();
     inventoryInteraction.cancelActiveGesture();
-    inventoryWheel.cancel(); // the two inventory UIs must never be open at once
-    gameFlowController.openInventory(); // full gameplay pause - see that method's own note
+    inventoryWheel.cancel();
+    gameFlowController.openInventory();
   },
   onClose: () => gameFlowController.closeInventory(),
 });
 
-// The one hook every inventory-changing action already calls (absorb/consume/expel/
-// death-drop/mutation - see mutationSystem.js's own note on onInventoryChanged), wrapped
-// rather than replaced so the existing debug recipe panel keeps working unchanged - same
-// pattern as addDefeatShake above. This is what keeps the Bag badge and, while open, the
-// panel's grid/details/mass/codex live without ever polling inventory state per frame
-// (spec sections 58-60).
 {
   const previousOnRecipeChecked = mutationSystem.onRecipeChecked;
   mutationSystem.onRecipeChecked = (recipe, missing) => {
@@ -794,13 +614,7 @@ const desiredCameraPos = new THREE.Vector3();
 const cameraLookTarget = new THREE.Vector3();
 
 function updateCamera(deltaTime) {
-  // Subtle zoom-toward-Hollowdrop during the Memory Reveal (spec section 10) - a
-  // single scale on the existing offset, not a separate camera path, so it stays
-  // exactly as "subtle" as the offset itself and never fights the normal follow-cam.
   const zoom = memorySequenceController.getCameraZoom();
-  // viewZoom equalizes map coverage across devices; (1 - zoom) is the Memory Reveal's
-  // push toward the player. Multiplied, so the reveal still bottoms out on the player
-  // regardless of device.
   const offsetScale = (1 - zoom) * viewZoom;
   desiredCameraPos.set(
     player.position.x + CAMERA_OFFSET.x * offsetScale,
@@ -810,19 +624,13 @@ function updateCamera(deltaTime) {
   const smooth = 1 - Math.exp(-CAMERA_FOLLOW_SMOOTHING * deltaTime);
   camera.position.lerp(desiredCameraPos, smooth);
   cameraLookTarget.lerp(player.position, smooth);
+  cameraLookTarget.y = 0;
   camera.lookAt(cameraLookTarget.x, 0, cameraLookTarget.z);
 
-  // Shake is added AFTER the follow-lerp and after lookAt, so the offset never feeds
-  // back into the smoothing (which would drag the camera off the player and let the
-  // shake slowly wander) and never rotates the view - it displaces the eye only.
   camera.position.add(screenShake.offset);
 }
 
-// Death/respawn: drops inventory back into the world (reusing the swipe-to-expel
-// resource system), plays the collapse animation, fades, and returns Hollowdrop
-// to a safe spawn point away from the predator's territory, always back as Slime.
-// PLAYER_SPAWN_POSITION itself is declared up with the player root, since the world
-// dressing needs it before this point to know where to leave clear.
+// --- Death / Respawn ----------------------------------------------------------
 const deathRespawnManager = new DeathRespawnManager({
   player,
   playerController,
@@ -838,8 +646,6 @@ const deathRespawnManager = new DeathRespawnManager({
   genomeFragmentController,
   uiManager,
   respawnPosition: PLAYER_SPAWN_POSITION,
-  // Snaps the camera instantly on respawn instead of letting it slide across the
-  // map to catch up - the fade covers the position jump, not a camera glide.
   onRespawnCamera: () => {
     camera.position.set(
       player.position.x + CAMERA_OFFSET.x * viewZoom,
@@ -851,9 +657,7 @@ const deathRespawnManager = new DeathRespawnManager({
   onPlayerDeath: () => runStats.deaths++,
 });
 
-// Resources shouldn't attract/absorb into a dying or not-yet-respawned player.
 const OFFSCREEN_POSITION = new THREE.Vector3(9999, 9999, 9999);
-const tempColliderPos = new THREE.Vector3();
 
 if (DEBUG_HEALTH) {
   window.addEventListener('keydown', (e) => {
@@ -870,9 +674,6 @@ if (DEBUG_METABOLISM) {
   });
 }
 
-// Desktop keyboard support for the Bag/Inventory panel (spec section 82) - mobile
-// remains the primary input, this is purely a testing convenience and always on (not
-// gated behind a DEBUG flag), same as it would be for any other permanent HUD control.
 window.addEventListener('keydown', (e) => {
   if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   if (e.key === 'i' || e.key === 'I') inventoryUI.toggle();
@@ -895,7 +696,7 @@ if (DEBUG_MUTATION_TIMER) {
 if (DEBUG_COMBAT || DEBUG_PREY) {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
-      e.preventDefault(); // stop the page from scrolling on spacebar
+      e.preventDefault();
       playerCombatController.tryBite();
     }
     if (e.key === 'p' || e.key === 'P') {
@@ -972,78 +773,48 @@ const runCompleteController = new RunCompleteController(uiManager, {
   onPlayAgain: () => gameFlowController.restartRun(),
 });
 
-/** The ONE central reset pipeline (spec section 29) - every step reuses an existing
- *  system's own reset()/clearAll() method rather than duplicating any of their
- *  internal logic here. Order matters in a few places (inventory must be empty
- *  before mutation state is recomputed; the player must already be back at spawn
- *  before the world resource scatter re-centers on it) - see the inline notes below. */
 function resetGame() {
-  // Player: position/velocity/form/health/energy/camera, all back to a fresh Slime
-  // at PLAYER_SPAWN_POSITION - reuses the exact same restore a natural respawn uses.
   deathRespawnManager.resetForNewRun();
 
-  // Input: clears any pointer still "held" from the previous run's very last frame,
-  // so the new run can never start with Hollowdrop already sliding on a stale drag.
   inputController.cancel();
   inventoryInteraction.cancelActiveGesture();
   inventoryWheel.cancel();
   inventoryUI.close();
 
-  // Inventory / burden - burden itself has no state to reset (BurdenSystem.update()
-  // recomputes it fresh from inventory weight every frame, so it self-corrects the
-  // instant the inventory above is empty).
   inventoryManager.reset();
   uiManager.updateMassUI(0, inventoryManager.maxWeight);
 
-  // Mutation - must run AFTER the inventory is actually empty, so onInventoryChanged()
-  // recomputes availability against a truly empty Living Inventory (and, via the
-  // existing onMutationAvailable wiring above, hides the MUTATE button through the
-  // normal path rather than a special-cased reset call).
   mutationSystem.reset();
   mutationSystem.onInventoryChanged();
 
-  // World resources - clear everything (ambient scatter, expelled items, loot),
-  // then repopulate the exact same starting layout used on first load. Player is
-  // already back at spawn (see deathRespawnManager.resetForNewRun() above), so
-  // populateWorldResources()'s player-centered scatter recenters correctly.
   resourceManager.clearAll();
   resourceManager.particles.clear();
   populateWorldResources();
 
-  // Prey
+  stoneClusterManager.clearAll();
+  stoneClusterManager.populateWorldClusters({ exclusions: mapExclusions });
+
   preyManager.clearAll();
   populateWorldPrey();
 
-  // Predator
   predatorController.reset();
 
-  // Apex + its one-time encounter trigger
   apexController.reset();
   apexEncounterManager.reset();
 
-  // Rival - inactive until the next Apex Fragment event, exactly like a fresh run.
   rivalController.reset();
 
-  // Genome Fragment + Extraction
   genomeFragmentController.reset();
   fragmentContestManager.reset();
 
-  // Game feel: a shake still decaying, a hitstop still counting down, or damage
-  // numbers still floating from the previous run must not bleed into the new one.
   screenShake.reset();
   hitstopRemaining = 0;
   damageNumbers.clear();
-  // Rocks still in the air would otherwise survive the reset and damage the freshly
-  // spawned enemies of the next run.
   projectileSystem.reset();
 
-  // HUD: instantly dismiss anything left over from the previous run (a mid-timeout
-  // toast, a still-visible boss/rival bar) rather than waiting for it to time out.
   uiManager.dismissTransientUI();
-  objectiveIndicator.update(); // one extra call so it hides itself immediately, not next frame
+  objectiveIndicator.update();
 
-  // Radar: no stale blips/expanded-state/detection-memory/one-shot-signal-toast should
-  // survive into the new run (spec section 58).
   radarController.reset();
   radarHUD.reset();
 
@@ -1056,18 +827,10 @@ const gameFlowController = new GameFlowController({
   runCompleteController,
   runStats,
   resetGame,
-  // Gates leaving the Title screen on the player's real model actually being loaded
-  // (see gameFlowController.js's _handleBeginTap) - the placeholder sphere should
-  // never be the first thing seen in gameplay, only (briefly, if at all) behind the
-  // Title card itself.
   slimeReady: amoeba.ready,
 });
 
 // --- Guided moments -------------------------------------------------------------
-// Two cards, both through GameFlowController so each one genuinely PAUSES the game via
-// the same state gate the Memory Reveal uses. Neither is a control tutorial: energy,
-// weight and speed stay discoverable. These only state things a player cannot deduce -
-// what the run is for, and what a form actually does.
 gameFlowController.onFirstRunBegun = () => {
   gameFlowController.showOpeningObjective({
     kicker: 'THE COLONY',
@@ -1078,7 +841,6 @@ gameFlowController.onFirstRunBegun = () => {
   });
 };
 
-// Fires the instant a transformation completes, never at the MUTATE press.
 playerFormController.onTransformed = (recipe) => {
   if (!recipe) return;
   gameFlowController.showReveal({
@@ -1090,19 +852,18 @@ playerFormController.onTransformed = (recipe) => {
   });
 };
 
-// The ONE authoritative trigger for the ending (spec section 3-4): only fires once
-// the Fragment actually reaches SECURED at extraction, never on mere touch/carry/steal.
 genomeFragmentController.onSecured = () => {
   gameFlowController.onGenomeFragmentSecured();
   if (DEBUG_APEX || DEBUG_RIVAL) console.log(`Human Genome Fragment secured (total: ${genomeFragmentController.collectedCount})`);
 };
 
-// Dev-only inspection hook (devtools console): window.__hollowdrop
+// Dev-only inspection hook
 window.__hollowdrop = {
   player,
-  amoeba, // debug: __hollowdrop.amoeba.bodyMaterial reflects the loaded Jellybean Slime once ready
+  amoeba,
   camera,
   resourceManager,
+  stoneClusterManager,
   inventoryManager,
   burdenSystem,
   playerController,
@@ -1135,25 +896,10 @@ window.__hollowdrop = {
   projectItemToScreen: (item) => inventoryInteraction._worldPositionToScreen(item.visualMesh.getWorldPosition(new THREE.Vector3())),
 };
 
-/**
- * Where Hollowdrop is looking, as a normalised screen-space direction (-1..1 per axis).
- *
- * Returns the direction from the creature's own position on screen toward the pointer,
- * so it tracks the cursor wherever it is rather than just leaning at the screen edges.
- * Distance is normalised against a fixed radius so the eyes reach full deflection once
- * the pointer is a comfortable way off and then stop, instead of scaling with window
- * size.
- *
- * Touch devices have no hover, so with no pointer on the glass this falls back to the
- * direction of travel - the creature looks where it is going. On desktop that fallback
- * only applies before the mouse has ever moved.
- */
 const gazeScratch = new THREE.Vector3();
 const GAZE_REACH_PX = 260;
 function computeGaze() {
   if (!pointerScreen.seen) {
-    // Look along the direction of travel. Screen +Y is down and the camera looks down
-    // -Z, so world -Z maps to screen up: negate to get screen-space Y.
     const v = playerController.currentVelocity;
     const speed = v.length();
     if (speed < 0.2) return { x: 0, y: 0 };
@@ -1172,7 +918,6 @@ function computeGaze() {
 
 // --- Resize handling -----------------------------------------------------------
 function onResize() {
-  // Recomputes the equal-view dolly + fog and sets camera.aspect / projection matrix.
   updateViewZoom();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
@@ -1184,60 +929,32 @@ const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
-  const realDeltaTime = Math.min(clock.getDelta(), 0.05); // clamp to avoid spiral-of-death on tab-switch
+  const realDeltaTime = Math.min(clock.getDelta(), 0.05);
 
-  // Hitstop. `deltaTime` is what the whole simulation below runs on; `realDeltaTime`
-  // stays available for things that must keep moving during the freeze. The hitstop
-  // timer itself burns down in REAL time - draining it with the scaled delta would
-  // make the freeze ~12x longer than requested.
   let deltaTime = realDeltaTime;
   if (hitstopRemaining > 0) {
     hitstopRemaining = Math.max(0, hitstopRemaining - realDeltaTime);
     deltaTime = realDeltaTime * HITSTOP_TIME_SCALE;
   }
 
-  // Drives TITLE/PLAYING/MEMORY/RUN_COMPLETE/RESETTING transitions - called first so a
-  // same-frame transition (e.g. RESETTING -> PLAYING) is reflected in isPlayingState
-  // below without a one-frame lag.
   gameFlowController.update(deltaTime);
   memorySequenceController.update(deltaTime);
 
-  // The single top-level gate for "is the simulation actually running right now"
-  // (spec sections 8-9, 57): everything AI/physics/timer-driven below only advances
-  // while PLAYING. TITLE/MEMORY/RUN_COMPLETE/RESETTING all freeze it in place rather
-  // than deleting or rebuilding anything - renderer/camera/UI keep running regardless.
   const isPlayingState = gameFlowController.state === GAME_STATES.PLAYING;
-  metabolismSystem.enabled = isPlayingState; // MetabolismSystem's own flag already exists for exactly this
-  // Radar (spec section 56/79): skip scanning entirely, and hide the HUD, outside
-  // PLAYING - same "recompute fresh every frame, no change-detection needed" pattern
-  // as the metabolism flag above.
+  metabolismSystem.enabled = isPlayingState;
   radarController.setEnabled(isPlayingState);
   radarHUD.setVisible(isPlayingState);
 
   burdenSystem.update();
-  // Speed/acceleration are recomputed fresh every frame from base x form x burden -
-  // never multiplied onto a running total, so repeated mutate/revert cycles can't stack.
   playerController.movementSpeedMultiplier = playerFormController.getSpeedMultiplier() * burdenSystem.speedMultiplier;
   playerController.accelerationMultiplier = playerFormController.getAccelerationMultiplier() * burdenSystem.accelerationMultiplier;
-  // Jelly wobble only for Slime - Venom Rat keeps its own leg-swing/bob idle animation
-  // untouched (PlayerFormController._updateRatIdle). Reduced from 1.8 now that the
-  // amoeba shader deforms the body's own vertices: this root-level squash and the
-  // shader's pseudopods are two separate wobbles, and at the old value they compounded
-  // into an over-animated mess. Root squash still earns its place - it's what reacts
-  // instantly to a hard stop, which the slower lobe oscillation can't.
   playerController.squashStretchMultiplier = playerFormController.currentForm === PLAYER_FORMS.SLIME ? 1.2 : 1.0;
 
   playerHealth.update(deltaTime);
-  // Same "recompute fresh every frame" rule as the movement multipliers above - the
-  // Rat's faster energy drain is a pure lookup by currentForm, never accumulated.
   metabolismSystem.metabolismMultiplier = playerFormController.getMetabolismMultiplier();
   metabolismSystem.update(deltaTime);
   playerController.setHealthVisual(playerHealth.getHealthRatio());
 
-  // Input only drives movement while actually playing and not mid-transformation -
-  // during death/respawn, MUTATING/REVERTING, or a non-PLAYING game-flow state,
-  // PlayerController still runs (it needs to, to play the collapse/idle animation, or
-  // just to hold a settled pose) but simply receives no new target velocity.
   const canAct = isPlayingState && deathRespawnManager.isPlaying && !playerFormController.isLocked;
   if (canAct) {
     const input = inputController.getMovementInput();
@@ -1246,36 +963,18 @@ function animate() {
     playerController.setTargetFromInput(0, 0, 0);
   }
   playerController.update(deltaTime);
-  // Immediately after integration, before anything reads the new position - the camera
-  // follow, resource attraction and combat all sample it later in this same frame, so
-  // resolving here means none of them ever see the player inside a rock.
   collisionSystem.resolve(player.position, PLAYER_RADIUS, playerController.currentVelocity);
 
-  // Combat is available exactly when the player can act at all AND is currently the
-  // Venom Rat - one authority for "can I fight right now" that covers reversion,
-  // mutating, death/respawn, and non-PLAYING game-flow states all at once
-  // (setAvailable cancels any in-progress bite the instant this flips false).
-  // Same gate as combat: no opening the wheel mid-death, mid-mutation, or on the title
-  // screen. Closes it too, so a wheel left open when the player dies does not linger.
   inventoryWheel.enabled = canAct;
   if (!canAct && inventoryWheel.isOpen) inventoryWheel.cancel();
 
   playerCombatController.setAvailable(canAct && playerFormController.currentForm === PLAYER_FORMS.VENOM_RAT);
   playerCombatController.update(deltaTime);
 
-  // Throwing is the SLIME's attack, deliberately the mirror of Bite's gate above: the
-  // Rat has Venom Bite and the Slime has thrown rock, so each form has exactly one
-  // offensive verb and neither is simply a better version of the other. The button
-  // still appears with zero rocks (dimmed via throw-button--empty) rather than
-  // vanishing - a button that disappears whenever you run out teaches nothing about
-  // why, and the ammo badge is how the player learns rocks are ammunition at all.
   projectileSystem.setAvailable(canAct && playerFormController.currentForm === PLAYER_FORMS.SLIME);
   projectileSystem.update(deltaTime);
 
   if (isPlayingState) {
-    // Mutation timer, AI (Prey/Predator/Apex/Rival), the Fragment contest, resource
-    // attraction/absorption, and death/respawn all stop advancing outside PLAYING
-    // (spec sections 8-9) - none of them are touched/rebuilt, just not ticked.
     playerFormController.update(deltaTime);
     preyManager.update(deltaTime);
     apexEncounterManager.update();
@@ -1287,44 +986,26 @@ function animate() {
 
     const activePlayerPosition = deathRespawnManager.isPlaying ? player.position : OFFSCREEN_POSITION;
     resourceManager.update(deltaTime, activePlayerPosition);
+    stoneClusterManager.update(deltaTime, activePlayerPosition);
     deathRespawnManager.update(deltaTime);
   }
-  objectiveIndicator.update(); // self-hides once the Fragment is no longer active - safe to always call
+  objectiveIndicator.update();
 
   inventoryInteraction.update(deltaTime);
   inventoryManager.update(deltaTime, inventoryInteraction.getExcludedItemId());
-  // No per-frame inventoryUI update: it's event-driven (see the onRecipeChecked wrap
-  // near its construction) rather than polled every frame (spec sections 58-59).
 
-  // Both run on REAL delta: the point of hitstop is that the world freezes while the
-  // camera rattles and the number you just dealt keeps rising. Slowing these two with
-  // everything else would cancel the effect out.
   screenShake.update(realDeltaTime);
   damageNumbers.update(realDeltaTime);
 
-  // Radar: real delta for the same reason as the two above (a HUD instrument reading
-  // the world shouldn't itself freeze during hitstop) - both no-op internally while
-  // disabled/hidden (see the isPlayingState gate above), so this is always safe to call.
   radarController.update(realDeltaTime);
   radarHUD.update(realDeltaTime);
 
-  // Amoeba deformation. Real delta for the same reason as the two above: the membrane
-  // should keep breathing through a hitstop freeze rather than locking mid-lobe.
-  // Both inputs are already computed elsewhere and simply read here - speedRatio is
-  // the same ratio PlayerController's own movement feel uses, and burdenSystem.load is
-  // recomputed from inventory weight every frame.
-  // Every NPC slime ticks itself here - one sweep instead of four controllers each
-  // having to know the shader exists. Real delta, same reasoning as the player's: bodies
-  // keep breathing through a hitstop freeze. Creatures removed from the scene are
-  // dropped from the registry automatically.
   updateSlimeCreatures(realDeltaTime, camera);
 
   amoeba.update(realDeltaTime, {
     speedRatio: playerController.currentVelocity.length() / PLAYER_MAX_SPEED,
     load: burdenSystem.load,
     gaze: computeGaze(),
-    // The eyes billboard against this, so they stay readable no matter which way the
-    // root has yawed to face travel.
     camera,
   });
 

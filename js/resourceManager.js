@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { RESOURCE_TYPES } from './resourceTypes.js';
-import { createResourceMesh } from './resourceModels.js';
-import { AbsorbParticles } from './absorbParticles.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
+import { createResourceMesh } from './resourceModels.js?v=5.3';
+import { AbsorbParticles } from './absorbParticles.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const ATTRACTION_RADIUS = 1.5;
 export const ABSORB_RADIUS = 0.7;
@@ -19,7 +20,7 @@ export const EXPEL_PHYSICS = {
   launchForce: 5.0,
   launchUpwardForce: 3.2,
   recollectDelay: 800, // ms before an expelled item can even be considered for recollection
-  groundRestHeight: 0.2, // matches the normal spawn height used by spawnTestZone
+  groundRestHeight: 0.0, // sits flush on terrain
 };
 const GRAVITY = 14.0;
 const GROUND_FRICTION_RATE = 8.0;
@@ -74,9 +75,12 @@ export class ResourceManager {
     const config = RESOURCE_TYPES[type];
     if (!config) throw new Error(`Unknown resource type: ${type}`);
 
+    const groundY = getTerrainHeight(position.x, position.z);
+    const spawnY = (position.y !== undefined && !isNaN(position.y) && position.y !== 0) ? position.y : groundY;
+
     const mesh = createResourceMesh(type, config.color);
     mesh.scale.setScalar(config.modelScale);
-    mesh.position.copy(position);
+    mesh.position.set(position.x, spawnY, position.z);
     if (DEBUG_RESOURCE_LABELS) mesh.add(createLabelSprite(config.name));
     this.scene.add(mesh);
 
@@ -90,7 +94,7 @@ export class ResourceManager {
       mesh,
       state: 'idle', // idle | attracting | absorbing | rejected
       phase: Math.random() * Math.PI * 2,
-      baseY: position.y,
+      baseY: groundY,
       baseScale: config.modelScale,
       stateTime: 0,
       rejectVelocity: new THREE.Vector3(),
@@ -122,7 +126,7 @@ export class ResourceManager {
       worldDirection.z * speed
     );
     resource.isPhysicsActive = true;
-    resource.baseY = EXPEL_PHYSICS.groundRestHeight;
+    resource.baseY = getTerrainHeight(spawnPosition.x, spawnPosition.z);
     resource.collectible = false;
     resource.collectibleAt = performance.now() + EXPEL_PHYSICS.recollectDelay;
     resource.hasLeftAttractionRadius = false;
@@ -131,18 +135,22 @@ export class ResourceManager {
     return resource;
   }
 
-  /** Scatters countPerType of each resource type (except excludeTypes) in a ring around centerPosition. */
+  /** Scatters countPerType of each resource type (except excludeTypes and stone, which is now gathered from clusters) in a ring around centerPosition. */
   spawnTestZone(centerPosition, countPerType = 4, { minRadius = 3, maxRadius = 15, excludeTypes = [] } = {}) {
+    const combinedExcludes = ['stone', ...excludeTypes];
     const spawnPos = new THREE.Vector3();
     for (const type of Object.keys(RESOURCE_TYPES)) {
-      if (excludeTypes.includes(type)) continue;
+      if (combinedExcludes.includes(type)) continue;
       for (let i = 0; i < countPerType; i++) {
         let x, z;
         do {
           x = (Math.random() * 2 - 1) * maxRadius;
           z = (Math.random() * 2 - 1) * maxRadius;
         } while (x * x + z * z < minRadius * minRadius);
-        spawnPos.set(centerPosition.x + x, 0.2, centerPosition.z + z);
+        const worldX = centerPosition.x + x;
+        const worldZ = centerPosition.z + z;
+        const worldY = getTerrainHeight(worldX, worldZ);
+        spawnPos.set(worldX, worldY, worldZ);
         this.spawnResource(type, spawnPos);
       }
     }
@@ -169,6 +177,24 @@ export class ResourceManager {
    *  Respawning the configured starting population is the caller's job (main.js). */
   clearAll() {
     for (const resource of [...this.resources]) this.removeResource(resource);
+  }
+
+  /**
+   * Re-aligns all active world resources to the current terrain elevation heightmap.
+   * Called when the texture-driven heightmap finishes decoding.
+   */
+  realignToTerrain() {
+    for (const resource of this.resources) {
+      const groundY = getTerrainHeight(resource.mesh.position.x, resource.mesh.position.z);
+      resource.baseY = groundY;
+      if (!resource.isPhysicsActive && resource.state === 'idle') {
+        if (resource.type.endsWith('_dna')) {
+          resource.mesh.position.y = groundY + 0.12;
+        } else {
+          resource.mesh.position.y = groundY;
+        }
+      }
+    }
   }
 
   update(deltaTime, playerPosition) {
@@ -219,7 +245,8 @@ export class ResourceManager {
     v.y -= GRAVITY * deltaTime;
     resource.mesh.position.addScaledVector(v, deltaTime);
 
-    const restHeight = resource.baseY;
+    const restHeight = getTerrainHeight(resource.mesh.position.x, resource.mesh.position.z);
+    resource.baseY = restHeight;
     if (resource.mesh.position.y <= restHeight) {
       resource.mesh.position.y = restHeight;
       if (v.y < 0) {
@@ -310,6 +337,14 @@ export class ResourceManager {
     resource.mesh.position.addScaledVector(resource.rejectVelocity, deltaTime);
     resource.rejectVelocity.multiplyScalar(Math.max(0, 1 - 4 * deltaTime));
 
+    const groundY = getTerrainHeight(resource.mesh.position.x, resource.mesh.position.z);
+    resource.baseY = groundY;
+    if (resource.type.endsWith('_dna')) {
+      resource.mesh.position.y = groundY + 0.12;
+    } else {
+      resource.mesh.position.y = groundY;
+    }
+
     if (resource.stateTime > REJECT_COOLDOWN) {
       resource.state = 'idle';
       resource.mesh.scale.setScalar(resource.baseScale);
@@ -322,54 +357,85 @@ export class ResourceManager {
 
     switch (type) {
       case 'spore':
-      case 'toxic_spore':
-        mesh.position.y = baseY + Math.sin(this._elapsed * 1.6 + phase) * 0.06;
+      case 'toxic_spore': {
+        // Grounded organic pod with rhythmic breathing
+        mesh.position.y = baseY;
+        const breathe = 1 + Math.sin(this._elapsed * 2.2 + phase) * 0.04;
+        mesh.scale.set(baseScale * breathe, baseScale * (2 - breathe), baseScale * breathe);
         if (mesh.userData.pulseMaterials) {
           const pulse = 0.6 + Math.sin(this._elapsed * 3 + phase) * 0.4;
           for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.5 + pulse * 0.5;
         }
         break;
+      }
       case 'mushroom': {
-        const breathe = 1 + Math.sin(this._elapsed * 2 + phase) * 0.05;
-        mesh.scale.setScalar(baseScale * breathe);
+        // Grounded fungal colony
+        mesh.position.y = baseY;
+        const breathe = 1 + Math.sin(this._elapsed * 1.8 + phase) * 0.035;
+        mesh.scale.set(baseScale * breathe, baseScale * (1 + (breathe - 1) * 0.5), baseScale * breathe);
+        if (mesh.userData.pulseMaterials) {
+          const pulse = 0.5 + Math.sin(this._elapsed * 2.5 + phase) * 0.35;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.45 + pulse * 0.45;
+        }
+        break;
+      }
+      case 'blue_mushroom': {
+        // Grounded Azure Glowcap cluster
+        mesh.position.y = baseY;
+        const breathe = 1 + Math.sin(this._elapsed * 2.2 + phase) * 0.04;
+        mesh.scale.set(baseScale * breathe, baseScale * (1 + (breathe - 1) * 0.6), baseScale * breathe);
+        if (mesh.userData.pulseMaterials) {
+          const pulse = 0.7 + Math.sin(this._elapsed * 3.2 + phase) * 0.35;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.6 + pulse * 0.6;
+        }
         break;
       }
       case 'iron':
+        mesh.position.y = baseY;
         if (mesh.userData.pulseMaterials) {
-          const pulse = 0.4 + Math.sin(this._elapsed * 2.2 + phase) * 0.3;
-          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.3 + pulse * 0.5;
+          const pulse = 0.5 + Math.sin(this._elapsed * 2.5 + phase) * 0.35;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.4 + pulse * 0.6;
         }
         break;
-      case 'toxic_gland':
-        mesh.position.y = baseY + Math.sin(this._elapsed * 1.4 + phase) * 0.05;
+      case 'toxic_gland': {
+        // Grounded organic gland with pulsing peristalsis
+        mesh.position.y = baseY;
+        const pulseT = this._elapsed * 2.6 + phase;
+        const squish = Math.sin(pulseT) * 0.06;
+        mesh.scale.set(baseScale * (1 + squish), baseScale * (1 - squish), baseScale * (1 + squish));
         if (mesh.userData.pulseMaterials) {
-          const pulse = 0.5 + Math.sin(this._elapsed * 2.8 + phase) * 0.4;
-          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.5 + pulse * 0.5;
+          const pulse = 0.6 + Math.sin(pulseT) * 0.4;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.6 + pulse * 0.6;
         }
         break;
+      }
       case 'rat_dna':
       case 'beetle_dna':
       case 'predator_dna':
       case 'apex_dna':
       case 'rival_dna': {
-        mesh.position.y = baseY + Math.sin(this._elapsed * 1.2 + phase) * 0.05;
-        mesh.rotation.y = this._elapsed * 0.8 + phase;
-        const pulse = 0.6 + Math.sin(this._elapsed * 2.4 + phase) * 0.4;
-        if (mesh.userData.pulseMaterials) {
-          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.7 + pulse * 0.7;
+        // Levitating bio-containment vial with internal rotating DNA helix
+        mesh.position.y = baseY + 0.12 + Math.sin(this._elapsed * 1.5 + phase) * 0.035;
+        mesh.rotation.y = this._elapsed * 0.5 + phase;
+
+        // Spin internal double-helix
+        if (mesh.userData.dnaHelix) {
+          mesh.userData.dnaHelix.rotation.y = this._elapsed * 2.4 + phase;
         }
-        const orbiters = mesh.userData.dnaOrbiters;
-        if (orbiters) {
-          for (let i = 0; i < orbiters.length; i++) {
-            const orbitAngle = this._elapsed * 2.5 + phase + (i / orbiters.length) * Math.PI * 2;
-            orbiters[i].position.set(Math.cos(orbitAngle) * 0.18, Math.sin(orbitAngle * 1.7) * 0.09, Math.sin(orbitAngle) * 0.18);
-          }
+        if (mesh.userData.apexRing) {
+          mesh.userData.apexRing.rotation.z = -this._elapsed * 1.6;
+        }
+
+        const pulse = 0.6 + Math.sin(this._elapsed * 2.6 + phase) * 0.4;
+        if (mesh.userData.pulseMaterials) {
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.8 + pulse * 0.6;
         }
         break;
       }
       case 'stone':
       default:
-        break; // mostly stationary
+        mesh.position.y = baseY;
+        break; // solid on ground
     }
   }
 }

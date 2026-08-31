@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { createPredatorMesh } from './predatorModel.js';
-import { updateEntityHealthBar } from './entityHealthBar.js';
+import { createPredatorMesh } from './predatorModel.js?v=5.3';
+import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const DEBUG_PREDATOR = false;
 export const DEBUG_PREDATOR_COMBAT = false;
@@ -237,6 +238,12 @@ export class PredatorController {
     // player, so this is purely a safety net for the player walking into them.
     if (this.state === STATES.WANDER || this.state === STATES.ALERT || this.state === STATES.RETURN) {
       this._enforceMinSeparation(deltaTime);
+    }
+
+    if (this.state !== STATES.DEAD) {
+      const targetY = getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
+      const ySmooth = 1 - Math.exp(-12.0 * deltaTime);
+      this.mesh.position.y += (targetY - this.mesh.position.y) * ySmooth;
     }
 
     this._applyAnimation(deltaTime);
@@ -498,7 +505,9 @@ export class PredatorController {
       for (let i = 0; i < count; i++) {
         const angle = (dropIndex / dropCount) * Math.PI * 2;
         tempLootOffset.set(Math.cos(angle) * 0.4, 0, Math.sin(angle) * 0.4);
-        this.resourceManager.spawnResource(type, new THREE.Vector3(center.x + tempLootOffset.x, 0.2, center.z + tempLootOffset.z));
+        const dropX = center.x + tempLootOffset.x;
+        const dropZ = center.z + tempLootOffset.z;
+        this.resourceManager.spawnResource(type, new THREE.Vector3(dropX, getTerrainHeight(dropX, dropZ), dropZ));
         dropIndex++;
       }
     }
