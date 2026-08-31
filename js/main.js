@@ -81,8 +81,11 @@ const CAMERA_FOLLOW_SMOOTHING = 3.5; // lower = laggier camera, doesn't affect p
 const REFERENCE_ASPECT = 16 / 9;
 // Ceiling on the dolly-back so an extreme portrait aspect can't shrink the player to a
 // speck. Past this, very tall/thin screens give up some horizontal parity but still
-// keep the full vertical slice.
-const CAMERA_MAX_ZOOM_OUT = 3;
+// keep the full vertical slice. A typical phone's own portrait aspect (~0.45-0.5) hits
+// this ceiling directly (REFERENCE_ASPECT/aspect works out to ~3.5-4 there), so this
+// number IS the effective zoom level on most real devices, not just a rare-case cap -
+// lowered from 3 to 2.2 (a real screenshot read as too zoomed out at 3).
+const CAMERA_MAX_ZOOM_OUT = 2.2;
 let viewZoom = 1; // multiplies CAMERA_OFFSET everywhere it's used; set by updateViewZoom()
 
 /** Recompute viewZoom from the current window aspect, and push fog + far plane out with
