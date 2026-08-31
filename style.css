@@ -702,75 +702,13 @@ html, body {
   gap: 4px;
 }
 
-/* Small always-on legend (unlike #radar-legend below, this one is NEVER expand-gated -
-   the reference keeps a legend permanently in view beside the dial). Icon + short label
-   rather than the reference's full row of decorative badges: only the three categories
-   a player actually needs to recognize at a glance while playing. */
-#radar-mini-legend {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 10px;
-  padding: 6px 9px;
-  border-radius: 10px;
-  background: var(--surface-panel);
-  border: 1px solid rgb(var(--accent-rgb) / 0.18);
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.radar-mini-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-/* A small badge (icon + colored glow ring), not a bare dot - JS (radarHUD.js) fills
-   each [data-radar-icon] with the SAME svg its matching blip uses, once at startup. */
-.radar-mini-legend-icon {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.radar-mini-legend-icon svg {
-  width: 68%;
-  height: 68%;
-}
-
-.radar-mini-legend-icon--enemy {
-  background: radial-gradient(circle at 34% 30%, rgba(255, 64, 88, 0.45), rgba(255, 64, 88, 0.1) 70%);
-  border: 1px solid rgba(255, 64, 88, 0.6);
-  box-shadow: 0 0 4px rgba(255, 64, 88, 0.5);
-  color: var(--radar-enemy);
-}
-
-.radar-mini-legend-icon--boss {
-  background: radial-gradient(circle at 34% 30%, rgba(176, 92, 255, 0.45), rgba(176, 92, 255, 0.1) 70%);
-  border: 1px solid rgba(176, 92, 255, 0.6);
-  box-shadow: 0 0 4px rgba(176, 92, 255, 0.5);
-  color: var(--radar-boss);
-}
-
-.radar-mini-legend-icon--dna {
-  background: radial-gradient(circle at 34% 30%, rgba(114, 255, 98, 0.45), rgba(114, 255, 98, 0.1) 70%);
-  border: 1px solid rgba(114, 255, 98, 0.6);
-  box-shadow: 0 0 4px rgba(114, 255, 98, 0.5);
-  color: var(--radar-dna);
-}
-
 /* Expanded: a centered full-screen overlay rather than growing in place toward the
    top-right corner, which would run the larger circle off the edge of a narrow phone
    screen. Deliberately does NOT pause the game (spec section 53) - it's a backdrop
-   tint, not a modal blocking gameplay state. */
+   tint, not a modal blocking gameplay state. #radar-legend below (expanded-only) is
+   the one and only legend now - the compact dial's own mini-legend was removed by
+   request (it crowded the vitals HUD on narrow phones), and this one already covers
+   the same categories with room to spell them out properly. */
 #species-radar.species-radar--expanded {
   inset: 0;
   flex-direction: column;
@@ -780,11 +718,6 @@ html, body {
   padding: 24px;
   padding-top: max(24px, env(safe-area-inset-top));
   gap: 16px;
-}
-
-/* The full legend takes over once expanded - the mini one would be redundant. */
-#species-radar.species-radar--expanded #radar-mini-legend {
-  display: none;
 }
 
 /* Compact-only decorative housing around the dial: a real (if simplified) vine/wood

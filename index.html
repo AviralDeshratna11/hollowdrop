@@ -235,17 +235,9 @@
      position, read fresh every ~100ms. Compact in the top-right corner by default; tap
      it (or the X once expanded) to toggle the larger view with its legend. -->
 <div id="species-radar">
-  <!-- Small always-on legend (compact AND expanded) - the reference art keeps this
-       panel permanently visible beside the dial, so unlike the rest of the HUD this one
-       is never gated to expanded-only. Positioned to the LEFT of the dial in compact
-       mode (row layout) and hidden once expanded, where the full #radar-legend below
-       takes over with room to spell out every category. Each row is an icon BADGE (same
-       SVG as its blip) plus a label, matching the reference's dark glass side panel. -->
-  <div id="radar-mini-legend">
-    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--enemy" data-radar-icon="enemy"></span>Enemy</div>
-    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--boss" data-radar-icon="boss"></span>Boss</div>
-    <div class="radar-mini-legend-row"><span class="radar-mini-legend-icon radar-mini-legend-icon--dna" data-radar-icon="dna"></span>Resource</div>
-  </div>
+  <!-- The compact dial's own mini-legend was removed by request - it crowded the
+       vitals HUD on narrow phones, and the full #radar-legend below (expanded mode
+       only) already covers the same categories with room to spell them out properly. -->
 
   <div class="radar-column">
     <!-- Compact-only decorative frame around the dial (organic vine ring, leaf/mushroom
