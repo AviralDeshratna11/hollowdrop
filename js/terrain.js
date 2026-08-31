@@ -191,7 +191,7 @@ export function initTextureElevation(image, onReady = null) {
 if (typeof Image !== 'undefined') {
   const autoImg = new Image();
   autoImg.crossOrigin = 'anonymous';
-  autoImg.src = 'assets/textures/cave_ground.jpg';
+  autoImg.src = 'assets/textures/cave_ground_new.png';
   autoImg.onload = () => {
     initTextureElevation(autoImg);
   };
