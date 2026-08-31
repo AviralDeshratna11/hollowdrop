@@ -181,25 +181,35 @@ for (let i = 0; i < groundPositions.count; i++) {
 groundGeometry.setAttribute('color', new THREE.BufferAttribute(groundColorArray, 3));
 
 // User-generated cave-floor artwork, tiled across the whole 200x200 ground rather than
-// stretched once (a single ~1000px painting stretched over 200 world units would be a
-// blurry smear with no readable detail up close). The source crop was picked to be
+// stretched once (a single ~1000px painting stretched once over 200 world units would
+// be a blurry smear with no readable detail up close). The source crop was picked to be
 // fairly uniform (scattered teal glow + rock + moss, no single dominant feature) -
 // earlier crops that included the art's one-off purple mushroom cluster made that
-// cluster read as an obvious duplicated landmark once mirrored/repeated, which is far
-// more objectionable than a repeating pattern with nothing distinctive to notice.
+// cluster read as an obvious duplicated landmark once repeated, far more objectionable
+// than a repeating pattern with nothing distinctive to notice.
+//
+// GROUND_SIZE (200) is much bigger than where the game actually happens - the player
+// spawns at the origin and every hand-placed thing (predator home, the Apex arena, the
+// Rival's escape target) sits within roughly 30 units of it, per main.js's own spawn
+// coordinates. GROUND_TEXTURE_REPEAT is picked so ONE tile (200 / repeat world units
+// wide) comfortably covers that whole active area on its own - a real player essentially
+// never sees the texture repeat, only the decorative far edges of the plane would.
 // Plain RepeatWrapping (not Mirrored): mirroring matches every tile edge exactly with
 // no manual seam work, but this source has soft directional painted shading that
 // mirrors into an unnaturally dark line right along the seam - worse than the milder
 // color/pattern discontinuity a plain repeat leaves, now that there's no rare feature
-// for that discontinuity to draw the eye toward. offset shifts the tiling by half a
-// tile so a seam doesn't land exactly on the world origin - the player's spawn point,
-// the single most-viewed spot in the game.
+// for that discontinuity to draw the eye toward.
+//
+// An ODD repeat count centers a tile on the world origin - the player's spawn point,
+// the single most-viewed spot in the game - with no extra offset needed: PlaneGeometry
+// maps its own local origin to UV (0.5, 0.5), and (0.5 * odd) mod 1 = 0.5 (a tile's own
+// center), whereas an even count lands exactly on a tile boundary (a seam) instead -
+// which is what actually put the very first version's dark seam line through spawn.
 const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground.jpg');
 groundTexture.wrapS = THREE.RepeatWrapping;
 groundTexture.wrapT = THREE.RepeatWrapping;
-const GROUND_TEXTURE_REPEAT = 5; // each tile ~40 world units - large enough that seams cross the active play area only rarely
+const GROUND_TEXTURE_REPEAT = 3; // odd - each tile ~67 world units, one tile spans the whole active play area
 groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
-groundTexture.offset.set(0.5 / GROUND_TEXTURE_REPEAT, 0.5 / GROUND_TEXTURE_REPEAT);
 groundTexture.colorSpace = THREE.SRGBColorSpace;
 groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
