@@ -141,11 +141,19 @@ scene.add(rimLight);
 // acceptable here in the first place. Instead the plane carries per-vertex colour
 // mottling - broad patches for large-scale travel, finer break-up so nearby motion
 // still registers - which reads as cave floor rather than as debug scaffolding.
-const GROUND_SIZE = 200;
-// 240 segments = 0.83 world units between vertices. The high-frequency octave below
-// has a ~2.4-unit wavelength, so this has to stay dense enough to actually represent
-// it - at the more obvious 120 the fine detail aliases away and the floor goes back to
-// looking flat while you move over it.
+// Sized to the actual play area, not a large arbitrary world - every hand-placed thing
+// (predator home, the Apex arena + its trigger radius, the Rival's escape target) and
+// the decorative prop scatter's own outer radius (34, see worldDressing.js) all sit
+// within roughly 30-34 units of the origin, so a 90-unit plane (45-unit half-width)
+// covers all of it with margin to spare. This is also what lets the ground texture
+// below map across the WHOLE plane at repeat 1 - one image, stretched once, with
+// nothing left over to tile or seam (see that block for why tiling was the problem).
+const GROUND_SIZE = 90;
+// 240 segments = 0.375 world units between vertices at this smaller size (finer than
+// the 0.83 units it gave at the old 200-unit size) - see groundMottle() below for what
+// this resolution is actually for; a flat texture-only surface wouldn't need it, but
+// the geometry's own 'color' attribute is still built from this same subdivision even
+// though the material no longer reads it (see the ground material's own note below).
 const GROUND_SEGMENTS = 240;
 
 /** Deterministic (no Math.random) smooth value field in roughly -1..1, summed from
@@ -181,36 +189,17 @@ for (let i = 0; i < groundPositions.count; i++) {
 }
 groundGeometry.setAttribute('color', new THREE.BufferAttribute(groundColorArray, 3));
 
-// User-generated cave-floor artwork, tiled across the whole 200x200 ground rather than
-// stretched once (a single ~1000px painting stretched once over 200 world units would
-// be a blurry smear with no readable detail up close). The source crop was picked to be
-// fairly uniform (scattered teal glow + rock + moss, no single dominant feature) -
-// earlier crops that included the art's one-off purple mushroom cluster made that
-// cluster read as an obvious duplicated landmark once repeated, far more objectionable
-// than a repeating pattern with nothing distinctive to notice.
-//
-// GROUND_SIZE (200) is much bigger than where the game actually happens - the player
-// spawns at the origin and every hand-placed thing (predator home, the Apex arena, the
-// Rival's escape target) sits within roughly 30 units of it, per main.js's own spawn
-// coordinates. GROUND_TEXTURE_REPEAT is picked so ONE tile (200 / repeat world units
-// wide) comfortably covers that whole active area on its own - a real player essentially
-// never sees the texture repeat, only the decorative far edges of the plane would.
-// Plain RepeatWrapping (not Mirrored): mirroring matches every tile edge exactly with
-// no manual seam work, but this source has soft directional painted shading that
-// mirrors into an unnaturally dark line right along the seam - worse than the milder
-// color/pattern discontinuity a plain repeat leaves, now that there's no rare feature
-// for that discontinuity to draw the eye toward.
-//
-// An ODD repeat count centers a tile on the world origin - the player's spawn point,
-// the single most-viewed spot in the game - with no extra offset needed: PlaneGeometry
-// maps its own local origin to UV (0.5, 0.5), and (0.5 * odd) mod 1 = 0.5 (a tile's own
-// center), whereas an even count lands exactly on a tile boundary (a seam) instead -
-// which is what actually put the very first version's dark seam line through spawn.
+// User-generated cave-floor artwork. Earlier passes tried tiling this across a much
+// larger plane (any repeat count > 1 - even an odd one centered on the origin, even
+// with the source's rare purple-cluster landmark cropped out) and a real screenshot
+// kept showing the actual tile-boundary line the moment the camera's view crossed one -
+// a flat plane just doesn't hide a seam the way a broken-up rock surface would.
+// Removing GROUND_SIZE's excess (see above) is what actually fixes this: at repeat 1
+// (the default - no wrapS/wrapT/repeat set below), this one image stretches exactly
+// once across the WHOLE plane, so there is no seam or repeat anywhere left to see, at
+// the cost of the source's own ~1000px resolution being what the entire map's fidelity
+// now rests on (still sharp enough at this camera distance - see CAMERA_OFFSET).
 const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground.jpg');
-groundTexture.wrapS = THREE.RepeatWrapping;
-groundTexture.wrapT = THREE.RepeatWrapping;
-const GROUND_TEXTURE_REPEAT = 3; // odd - each tile ~67 world units, one tile spans the whole active play area
-groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
 groundTexture.colorSpace = THREE.SRGBColorSpace;
 groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
