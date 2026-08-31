@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createSlimeCreature } from './slimeCreature.js';
+import { createSlimeCreature } from './slimeCreature.js?v=5.3';
 
 /**
  * The Rival Slime: an exact replica of the player, distinguished only by its eyes.

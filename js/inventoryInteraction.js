@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { RESOURCE_TYPES } from './resourceTypes.js';
-import { DEBUG_BURDEN } from './burdenSystem.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
+import { DEBUG_BURDEN } from './burdenSystem.js?v=5.3';
 
 export const ITEM_TOUCH_CONFIG = {
   itemTouchRadiusPx: 34, // generous screen-space touch target - items render only a few px across

@@ -33,6 +33,19 @@
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/fflate.module.js" />
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSCurve.js" />
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSUtils.js" />
+<script>
+  // Force unregister stale service workers and clear browser cache storage on reload
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      for (var r of regs) r.unregister();
+    });
+  }
+  if ('caches' in window) {
+    caches.keys().then(function(names) {
+      for (var n of names) caches.delete(n);
+    });
+  }
+</script>
 </head>
 <body>
 <canvas id="game-canvas"></canvas>
@@ -430,6 +443,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=5.3"></script>
 </body>
 </html>

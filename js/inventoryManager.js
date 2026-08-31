@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { RESOURCE_TYPES } from './resourceTypes.js';
-import { createResourceMesh } from './resourceModels.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
+import { createResourceMesh } from './resourceModels.js?v=5.3';
 
 export const MAX_WEIGHT = 15;
 
@@ -131,6 +131,9 @@ export class InventoryManager {
         item.basePosition.z + Math.cos(t * 0.8) * bobAmount * 0.5
       );
       item.visualMesh.rotation.y += deltaTime * ROTATE_SPEED;
+      if (item.visualMesh.userData.dnaHelix) {
+        item.visualMesh.userData.dnaHelix.rotation.y += deltaTime * 2.0;
+      }
     }
   }
 }

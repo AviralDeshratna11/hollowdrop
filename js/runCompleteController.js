@@ -1,4 +1,4 @@
-import { formatRunTime } from './runStats.js';
+import { formatRunTime } from './runStats.js?v=5.3';
 
 /**
  * The final results screen (spec sections 21-26). Thin by design - all it does is

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createSlimeCreature, registerSlimeUpdater, weldVertices } from './slimeCreature.js';
+import { createSlimeCreature, registerSlimeUpdater, weldVertices } from './slimeCreature.js?v=5.3';
 
 /**
  * Murkmaw, the Apex: a segmented centipede of slime.

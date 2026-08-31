@@ -1,4 +1,4 @@
-import { buildArenaDressing } from './worldDressing.js';
+import { buildArenaDressing } from './worldDressing.js?v=5.3';
 
 /**
  * Owns the one-time "player entered Apex territory" trigger. Everything about the

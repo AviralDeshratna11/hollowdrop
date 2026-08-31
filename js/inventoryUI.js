@@ -1,7 +1,7 @@
-import { RESOURCE_TYPES } from './resourceTypes.js';
-import { MUTATION_RECIPES, LOCKED_MUTATIONS } from './mutationSystem.js';
-import { FRAGMENT_STATES } from './genomeFragmentController.js';
-import { BURDEN_CONFIG } from './burdenSystem.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
+import { MUTATION_RECIPES, LOCKED_MUTATIONS } from './mutationSystem.js?v=5.3';
+import { FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
+import { BURDEN_CONFIG } from './burdenSystem.js?v=5.3';
 
 function colorToCss(hex) {
   return `#${hex.toString(16).padStart(6, '0')}`;
@@ -33,6 +33,7 @@ const CATEGORY_LABELS = {
 // item just because it lacks art).
 const INVENTORY_ICON_MAP = {
   mushroom: 'assets/ui/inventory/bioluminescent_moonlight_mushroom_cluster.png',
+  blue_mushroom: 'assets/ui/inventory/bioluminescent_moonlight_mushroom_cluster.png',
   spore: 'assets/ui/inventory/bioluminescent_alien_nutrient_cluster.png',
   iron: 'assets/ui/inventory/bioluminescent_cyan_ore_cluster.png',
   rat_dna: 'assets/ui/inventory/neon_toxic_rat_dna_vial.png',
