@@ -1,13 +1,11 @@
 import * as THREE from 'three';
-import { createApexMesh } from './apexModel.js';
+import { createApexMesh } from './apexModel.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const DEBUG_APEX = false;
 
 export const APEX_CONFIG = {
-  // 180 = 12 Venom Bites at 15 damage each. Was temporarily 30 for testing, which made
-  // the boss die in two hits and - worse - put the phase-2 transition (60% health) at
-  // 18 HP, i.e. after a single bite, so the second phase was effectively unreachable.
-  maxHealth: 180,
+  maxHealth: 30, // TEMP for testing: 2 Venom Bites (15 dmg each) kills it - real value is 180, restore before shipping
   moveSpeed: 1.8,
   phase2MoveSpeedMultiplier: 1.15,
   phase2RecoveryMultiplier: 0.85,
@@ -276,6 +274,12 @@ export class ApexController {
     this._elapsed += deltaTime;
     this.stateTime += deltaTime;
 
+    if (this.state !== STATES.DEAD && this.state !== STATES.DORMANT) {
+      const targetY = getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
+      const ySmooth = 1 - Math.exp(-12.0 * deltaTime);
+      this.mesh.position.y += (targetY - this.mesh.position.y) * ySmooth;
+    }
+
     switch (this.state) {
       case STATES.INTRO:
         this._updateIntro(deltaTime);
@@ -402,7 +406,7 @@ export class ApexController {
       this._chargeStartPosition.copy(this.mesh.position);
       this._chargeTraveled = 0;
 
-      this._chargeStreak.position.set(this.mesh.position.x, 0.03, this.mesh.position.z);
+      this._chargeStreak.position.set(this.mesh.position.x, getTerrainHeight(this.mesh.position.x, this.mesh.position.z) + 0.04, this.mesh.position.z);
       this._chargeStreak.rotation.z = Math.atan2(tempDirection.x, tempDirection.z);
       this._chargeStreak.scale.set(1, APEX_CONFIG.charge.maxDistance, 1);
       this._chargeStreak.material.opacity = 0.35;
@@ -440,7 +444,7 @@ export class ApexController {
 
   _updateSlamTelegraph(deltaTime) {
     this._faceToward(this.player.position, deltaTime, APEX_CONFIG.turnSmoothing * 1.5);
-    this._slamRing.position.set(this.mesh.position.x, 0.03, this.mesh.position.z);
+    this._slamRing.position.set(this.mesh.position.x, getTerrainHeight(this.mesh.position.x, this.mesh.position.z) + 0.04, this.mesh.position.z);
     this._slamRing.material.opacity = 0.5 * Math.min(this.stateTime / APEX_CONFIG.slam.telegraph, 1);
 
     if (this.stateTime >= APEX_CONFIG.slam.telegraph) {
@@ -482,7 +486,7 @@ export class ApexController {
 
   _updateToxicTelegraph(deltaTime) {
     const t = Math.min(this.stateTime / APEX_CONFIG.toxic.telegraph, 1);
-    this._toxicRing.position.set(this._toxicCenter.x, 0.03, this._toxicCenter.z);
+    this._toxicRing.position.set(this._toxicCenter.x, getTerrainHeight(this._toxicCenter.x, this._toxicCenter.z) + 0.04, this._toxicCenter.z);
     // Pulses rather than a flat fade-in, to read clearly as "danger incoming".
     this._toxicRing.material.opacity = 0.15 + t * 0.35 + Math.sin(this.stateTime * 10) * 0.08;
 
@@ -591,8 +595,9 @@ export class ApexController {
     for (const { type, count } of APEX_LOOT) {
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const offset = new THREE.Vector3(Math.cos(angle) * 0.5, 0, Math.sin(angle) * 0.5);
-        this.resourceManager.spawnResource(type, new THREE.Vector3(this.mesh.position.x + offset.x, 0.2, this.mesh.position.z + offset.z));
+        const dropX = this.mesh.position.x + Math.cos(angle) * 0.5;
+        const dropZ = this.mesh.position.z + Math.sin(angle) * 0.5;
+        this.resourceManager.spawnResource(type, new THREE.Vector3(dropX, getTerrainHeight(dropX, dropZ), dropZ));
       }
     }
     if (DEBUG_APEX) for (const { type, count } of APEX_LOOT) console.log(`Dropped ${count}x ${type}`);

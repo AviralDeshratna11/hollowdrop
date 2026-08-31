@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { DEBUG_HEALTH } from './playerHealth.js';
+import { DEBUG_HEALTH } from './playerHealth.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const GAME_STATE = {
   PLAYING: 'playing',
@@ -125,11 +126,10 @@ export class DeathRespawnManager {
         const angle = Math.random() * Math.PI * 2;
         const radius = DEATH_CONFIG.scatterMinRadius + Math.random() * (DEATH_CONFIG.scatterMaxRadius - DEATH_CONFIG.scatterMinRadius);
         tempScatterDir.set(Math.cos(angle), 0, Math.sin(angle));
-        tempScatterPos.set(
-          this.lastDeathPosition.x + tempScatterDir.x * 0.4,
-          0.45,
-          this.lastDeathPosition.z + tempScatterDir.z * 0.4
-        );
+        const dropX = this.lastDeathPosition.x + tempScatterDir.x * 0.4;
+        const dropZ = this.lastDeathPosition.z + tempScatterDir.z * 0.4;
+        const dropY = getTerrainHeight(dropX, dropZ) + 0.25;
+        tempScatterPos.set(dropX, dropY, dropZ);
         // Reuses the exact same system swipe-to-expel uses: same resource types,
         // same world models, same recollection cooldown, same absorption on pickup.
         this.resourceManager.spawnDroppedResource(item.type, tempScatterPos, tempScatterDir);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 /**
  * Shared slime-creature factory: a procedurally deforming translucent body.
@@ -140,16 +141,6 @@ export const EYE_DEFAULTS = {
   lidAngle: 0,
   lidColor: 0x000000,
 
-  // Cartoon eye: a pale sclera with a large dark pupil floating in it, instead of the
-  // default single dark iris with a highlight dot. Combined with lidAngle this produces
-  // the classic angry eye - a wedge with a flat, inward-sloping top edge and a rounded
-  // bottom, pupil staring out of it.
-  sclera: false,
-  scleraColor: 0xf4f4f2,
-  pupilColor: 0x0d0d10,
-  pupilRadius: 0.6,   // fraction of eye radius
-  pupilOffsetY: -0.1, // pupil sits slightly low, which reads as a downward glare
-
   // How far the eyeball can shift inside its socket, as a fraction of eye radius.
   gazeRange: 0.42,
   // Lower = laggier, heavier-feeling gaze. Deliberately not instant: eyes that snap
@@ -272,9 +263,9 @@ function createEyes(bodyRadius, eye) {
   // transparent + depthWrite:false puts these in the transparent pass so renderOrder
   // below can force them after the membrane; opacity stays 1 so they are still solid.
   const irisMaterial = new THREE.MeshStandardMaterial({
-    color: eye.sclera ? eye.scleraColor : eye.irisColor,
-    emissive: eye.sclera ? 0x000000 : eye.irisEmissive,
-    emissiveIntensity: eye.sclera ? 0 : eye.irisEmissiveIntensity,
+    color: eye.irisColor,
+    emissive: eye.irisEmissive,
+    emissiveIntensity: eye.irisEmissiveIntensity,
     roughness: 0.15,
     metalness: 0,
     transparent: true,
@@ -291,11 +282,6 @@ function createEyes(bodyRadius, eye) {
   });
 
   const irisGeometry = new THREE.SphereGeometry(eyeRadius, 20, 16);
-  const pupilGeometry = new THREE.SphereGeometry(eyeRadius * eye.pupilRadius, 16, 12);
-  const pupilMaterial = new THREE.MeshBasicMaterial({
-    color: eye.pupilColor, transparent: true, opacity: 1, depthWrite: false,
-  });
-
   const lidGeometry = new THREE.PlaneGeometry(1, 2); // scaled per-eye below
   const lidMaterial = new THREE.MeshBasicMaterial({
     color: eye.lidColor,
@@ -335,26 +321,14 @@ function createEyes(bodyRadius, eye) {
     const iris = new THREE.Mesh(irisGeometry, irisMaterial);
     gaze.add(iris);
 
-    if (eye.sclera) {
-      // Pupil, in front of the sclera. Part of the gaze group so it tracks with the eye
-      // rather than staying pinned while the eyeball moves under it.
-      const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-      pupil.position.set(0, eyeRadius * eye.pupilOffsetY, eyeRadius * 0.62);
-      pupil.renderOrder = 11;
-      gaze.add(pupil);
-    }
-
     const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
     // Up and toward the same side on both eyes (not mirrored) - a shared light source
     // would land on the same side of each eye, and mirroring it looks subtly wrong.
     highlight.position.set(
       eyeRadius * eye.highlightOffset * 0.8,
       eyeRadius * eye.highlightOffset,
-      // Pushed clear of the pupil when there is one, so the catchlight sits ON it rather
-      // than being swallowed by it.
-      eyeRadius * (eye.sclera ? 0.78 : 0.72)
+      eyeRadius * 0.72
     );
-    if (eye.sclera) highlight.scale.setScalar(0.55);
     gaze.add(highlight);
 
     if (eye.lidAngle) {
@@ -366,13 +340,8 @@ function createEyes(bodyRadius, eye) {
       // read as a pale eyebrow floating above the head rather than a lid on the eye.
       // Half-height 0.9r with the centre at 0.5r pushes the lower edge to -0.4r, biting
       // into the eye so a genuine angled semicircle is left showing beneath it.
-      // Coverage is set by where the lower edge lands: centre - halfHeight. At centre
-      // 0.5r / half 0.9r that edge sat at -0.4r and swallowed ~70% of the eye, leaving
-      // only a crescent. Centre 0.95r / half 0.8r puts it at +0.15r, clipping just the
-      // top of the eye so the pupil stays fully readable - which is what the reference
-      // actually shows.
-      lid.scale.set(eyeRadius * 2.3, eyeRadius * 0.8, 1);
-      lid.position.set(0, eyeRadius * 0.95, eyeRadius * 1.15);
+      lid.scale.set(eyeRadius * 2.2, eyeRadius * 0.9, 1);
+      lid.position.set(0, eyeRadius * 0.5, eyeRadius * 1.15);
       // side * angle drops the inner edge on both eyes: the left eye's +X edge and the
       // right eye's -X edge. Reversing the sign would produce a sad/worried face instead.
       lid.rotation.z = side * eye.lidAngle;
@@ -585,7 +554,7 @@ export function applyJellyRimTreatment(material, options = {}) {
  */
 export function applyJellyDisplacement(material, options = {}) {
   const cfg = { ...SLIME_DEFAULTS, ...options };
-  const uniforms = {
+  const uniforms = options.uniforms || {
     uTime: { value: 0 },
     uSpeedRatio: { value: 0 },
     uLoad: { value: 0 },
@@ -851,6 +820,20 @@ export function createSlimeCreature(options = {}) {
   // that would squash them along with the body. This is what turns one shared icosphere
   // into a long low Stalker or a squat domed Beetle without new geometry.
   mesh.scale.set(cfg.bodyScale[0], cfg.bodyScale[1], cfg.bodyScale[2]);
+
+  // Foliage-Gated Occlusion Boundary Ring: renders under tree leaves, 0% on ground
+  const occlusion = attachOcclusionOutline(mesh, {
+    color: cfg.color,
+    rimColor: options.occlusionRimColor || 0xffffff,
+    opacity: 0.92,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.22,
+    uniforms,
+    hasDisplacement: true,
+  });
+
   const group = new THREE.Group();
   group.add(mesh);
 
@@ -1068,17 +1051,12 @@ export function registerSlimeUpdater(entry) {
  * every controller to remember to deregister - the parent link is already the
  * authoritative "is this still in the world" signal.
  */
-export function updateSlimeCreatures(deltaTime, camera = null) {
+export function updateSlimeCreatures(deltaTime) {
   for (const creature of activeCreatures) {
     if (!creature.group.parent) {
       activeCreatures.delete(creature);
       continue;
     }
-    // The camera is passed so NPC faces billboard exactly like the player's. Without it
-    // the eye group stayed in model space, which broke two things at once: the eye pair
-    // was separated along the model's own X instead of across the screen, and the eyelid -
-    // a flat plane - was seen edge-on by the top-down camera and collapsed into a thin
-    // line. Billboarding makes every face read from any heading.
-    creature.update(deltaTime, { camera });
+    creature.update(deltaTime);
   }
 }

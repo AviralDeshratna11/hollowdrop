@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { PLAYER_MAX_SPEED } from './playerController.js';
-import { DEBUG_MUTATION } from './mutationSystem.js';
+import { PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
+import { DEBUG_MUTATION } from './mutationSystem.js?v=5.3';
 
 export const DEBUG_MUTATION_TIMER = false;
 

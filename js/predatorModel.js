@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { createEntityHealthBar } from './entityHealthBar.js';
-import { createSlimeCreature } from './slimeCreature.js';
+import { createEntityHealthBar } from './entityHealthBar.js?v=5.3';
+import { createSlimeCreature } from './slimeCreature.js?v=5.3';
 
 /**
  * Cave Stalker: a long, low, restless slime with a single narrow eye and six thin legs.

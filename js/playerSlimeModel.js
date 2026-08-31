@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { loadFbxCharacter } from './fbxCharacterLoader.js';
-import { applyJellyRimTreatment, applyJellyDisplacement } from './slimeCreature.js';
+import { loadFbxCharacter } from './fbxCharacterLoader.js?v=5.3';
+import { applyJellyRimTreatment, applyJellyDisplacement } from './slimeCreature.js?v=5.3';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 // Meshy AI "Jellybean Smile" - a static (unrigged, no animation) single mesh with its
 // own 4-texture PBR set. Loaded async (see loadFbxCharacter), so this module hands back
@@ -112,6 +113,15 @@ export function createPlayerSlimeVisual(radius = 0.6) {
   const placeholderMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), placeholderMaterial);
   group.add(placeholderMesh);
 
+  let placeholderOcclusion = attachOcclusionOutline(placeholderMesh, {
+    color: 0x8dffc4,
+    rimColor: 0xbfffe0,
+    emissiveIntensity: 2.6,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.22,
+  });
+
   const api = {
     group,
     bodyMaterial: placeholderMaterial,
@@ -134,6 +144,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
   let squintTime = null;
   let breatheTime = 0;
   let displacement = null; // set once the real model + its shader treatment are ready
+  let fbxOcclusion = null;
 
   // Crossfade state - null outside the brief window right after the FBX arrives.
   let fadeTimer = null;
@@ -172,7 +183,16 @@ export function createPlayerSlimeVisual(radius = 0.6) {
         coreStrength: 0.12,
       });
       displacement = applyJellyDisplacement(material, DISPLACEMENT_CONFIG);
-
+      fbxOcclusion = attachOcclusionOutline(fbxGroup, {
+        color: 0x8dffc4,
+        rimColor: 0xbfffe0,
+        emissiveIntensity: 2.6,
+        rimStrength: 3.4,
+        rimPower: 1.8,
+        innerAlpha: 0.22,
+        uniforms: displacement?.uniforms,
+        hasDisplacement: !!displacement,
+      });
       fbxMaterial = material;
       group.add(fbxGroup);
       fadeTimer = 0;
@@ -213,6 +233,10 @@ export function createPlayerSlimeVisual(radius = 0.6) {
       placeholderMaterial.opacity = PLACEHOLDER_OPACITY * (1 - t);
       fbxMaterial.opacity = TARGET_OPACITY * t;
       if (t >= 1) {
+        if (placeholderOcclusion) {
+          placeholderOcclusion.dispose();
+          placeholderOcclusion = null;
+        }
         group.remove(placeholderMesh);
         placeholderMesh.geometry.dispose();
         placeholderMaterial.dispose();
@@ -225,6 +249,8 @@ export function createPlayerSlimeVisual(radius = 0.6) {
     }
 
     if (displacement) displacement.update(deltaTime, speedRatio, load);
+    if (fbxOcclusion) fbxOcclusion.update(deltaTime, speedRatio, load);
+    if (placeholderOcclusion) placeholderOcclusion.update(deltaTime, speedRatio, load);
 
     let widenScale = 0;
     if (widenTime !== null) {

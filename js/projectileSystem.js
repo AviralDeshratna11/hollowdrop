@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { RESOURCE_TYPES } from './resourceTypes.js';
-import { createResourceMesh } from './resourceModels.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
+import { createResourceMesh } from './resourceModels.js?v=5.3';
 
 export const DEBUG_PROJECTILE = false;
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 /**
  * Decorative world props - dark rocks and glowing toxic flora. Originally lived
@@ -23,8 +24,8 @@ const rockGeometry = new THREE.DodecahedronGeometry(ROCK_BASE_RADIUS, 0);
 export function rockColliderRadius(scale) {
   return ROCK_BASE_RADIUS * scale * 0.78;
 }
-const plantBodyGeometry = new THREE.ConeGeometry(0.18, 0.6, 6);
-const plantGlowGeometry = new THREE.SphereGeometry(0.08, 8, 6);
+const plantBodyGeometry = new THREE.CylinderGeometry(0.04, 0.08, 0.35, 8);
+const plantGlowGeometry = new THREE.SphereGeometry(0.14, 10, 8);
 
 // Scratch objects - instance matrices are composed here rather than allocating a
 // Matrix4/Quaternion per prop.
@@ -52,13 +53,54 @@ function createRockMaterial(color) {
   return new THREE.MeshStandardMaterial({ flatShading: true, color, roughness: 0.9 });
 }
 
-/** Builds the three InstancedMeshes for a set of already-decided prop placements.
+const registeredDressingGroups = [];
+const registeredGroundPlanes = [];
+
+/** Re-aligns all decorative instanced rocks, arena flora, and arena ground disks to current terrain height. */
+export function realignDressingToTerrain() {
+  for (const entry of registeredDressingGroups) {
+    const { rockMesh, rocks, bodyMesh, glowMesh, plants } = entry;
+    if (rockMesh && rocks) {
+      rocks.forEach((r, i) => {
+        const groundY = getTerrainHeight(r.x, r.z);
+        tempPosition.set(r.x, groundY + 0.3 * r.scale, r.z);
+        tempEuler.set(r.rotation.x, r.rotation.y, r.rotation.z);
+        tempQuaternion.setFromEuler(tempEuler);
+        tempScale.setScalar(r.scale);
+        rockMesh.setMatrixAt(i, tempMatrix.compose(tempPosition, tempQuaternion, tempScale));
+      });
+      rockMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    if (bodyMesh && glowMesh && plants) {
+      plants.forEach((p, i) => {
+        tempQuaternion.identity();
+        tempScale.setScalar(p.scale);
+        const groundY = getTerrainHeight(p.x, p.z);
+        tempPosition.set(p.x, groundY + 0.3 * p.scale, p.z);
+        bodyMesh.setMatrixAt(i, tempMatrix.compose(tempPosition, tempQuaternion, tempScale));
+        tempPosition.set(p.x, groundY + 0.62 * p.scale, p.z);
+        glowMesh.setMatrixAt(i, tempMatrix.compose(tempPosition, tempQuaternion, tempScale));
+      });
+      bodyMesh.instanceMatrix.needsUpdate = true;
+      glowMesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  for (const plane of registeredGroundPlanes) {
+    plane.mesh.position.y = getTerrainHeight(plane.center.x, plane.center.z) + 0.01;
+  }
+}
+
+/** Builds the InstancedMeshes for a set of already-decided prop placements.
  *  `rocks` and `plants` are arrays of { x, z, scale, rotation }. */
-function buildInstances(scene, rocks, plants, { rockColor, plantBodyColor, plantGlowColor, glowIntensity }) {
+function buildInstances(scene, rocks, plants = [], { rockColor, plantBodyColor, plantGlowColor, glowIntensity } = {}) {
+  let rockMesh = null;
   if (rocks.length > 0) {
-    const rockMesh = new THREE.InstancedMesh(rockGeometry, createRockMaterial(rockColor), rocks.length);
+    rockMesh = new THREE.InstancedMesh(rockGeometry, createRockMaterial(rockColor), rocks.length);
     rocks.forEach((r, i) => {
-      tempPosition.set(r.x, 0.3 * r.scale, r.z);
+      const groundY = getTerrainHeight(r.x, r.z);
+      tempPosition.set(r.x, groundY + 0.3 * r.scale, r.z);
       tempEuler.set(r.rotation.x, r.rotation.y, r.rotation.z);
       tempQuaternion.setFromEuler(tempEuler);
       tempScale.setScalar(r.scale);
@@ -68,33 +110,37 @@ function buildInstances(scene, rocks, plants, { rockColor, plantBodyColor, plant
     scene.add(rockMesh);
   }
 
-  if (plants.length === 0) return;
+  let bodyMesh = null;
+  let glowMesh = null;
+  if (plants.length > 0) {
+    const bodyMaterial = new THREE.MeshStandardMaterial({ flatShading: true, color: plantBodyColor, roughness: 0.7 });
+    const glowMaterial = new THREE.MeshStandardMaterial({
+      color: plantGlowColor,
+      emissive: plantGlowColor,
+      emissiveIntensity: glowIntensity,
+      roughness: 0.3,
+    });
 
-  const bodyMaterial = new THREE.MeshStandardMaterial({ flatShading: true, color: plantBodyColor, roughness: 0.7 });
-  const glowMaterial = new THREE.MeshStandardMaterial({
-    color: plantGlowColor,
-    emissive: plantGlowColor,
-    emissiveIntensity: glowIntensity,
-    roughness: 0.3,
-  });
+    bodyMesh = new THREE.InstancedMesh(plantBodyGeometry, bodyMaterial, plants.length);
+    glowMesh = new THREE.InstancedMesh(plantGlowGeometry, glowMaterial, plants.length);
+    plants.forEach((p, i) => {
+      tempQuaternion.identity();
+      tempScale.setScalar(p.scale);
 
-  const bodyMesh = new THREE.InstancedMesh(plantBodyGeometry, bodyMaterial, plants.length);
-  const glowMesh = new THREE.InstancedMesh(plantGlowGeometry, glowMaterial, plants.length);
-  plants.forEach((p, i) => {
-    tempQuaternion.identity();
-    tempScale.setScalar(p.scale);
+      const groundY = getTerrainHeight(p.x, p.z);
 
-    // Stalk and glow-tip share one placement; only their local height differs, so the
-    // two instanced meshes stay perfectly registered with each other.
-    tempPosition.set(p.x, 0.3 * p.scale, p.z);
-    bodyMesh.setMatrixAt(i, tempMatrix.compose(tempPosition, tempQuaternion, tempScale));
+      tempPosition.set(p.x, groundY + 0.3 * p.scale, p.z);
+      bodyMesh.setMatrixAt(i, tempMatrix.compose(tempPosition, tempQuaternion, tempScale));
 
-    tempPosition.set(p.x, 0.62 * p.scale, p.z);
-    glowMesh.setMatrixAt(i, tempMatrix.compose(tempPosition, tempQuaternion, tempScale));
-  });
-  bodyMesh.instanceMatrix.needsUpdate = true;
-  glowMesh.instanceMatrix.needsUpdate = true;
-  scene.add(bodyMesh, glowMesh);
+      tempPosition.set(p.x, groundY + 0.62 * p.scale, p.z);
+      glowMesh.setMatrixAt(i, tempMatrix.compose(tempPosition, tempQuaternion, tempScale));
+    });
+    bodyMesh.instanceMatrix.needsUpdate = true;
+    glowMesh.instanceMatrix.needsUpdate = true;
+    scene.add(bodyMesh, glowMesh);
+  }
+
+  registeredDressingGroups.push({ rockMesh, rocks, bodyMesh, glowMesh, plants });
 }
 
 /**
@@ -108,8 +154,9 @@ export function buildArenaDressing(scene, center, radius, rng = makeRng(0x4a11))
   const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x140a1c, roughness: 1, transparent: true, opacity: 0.55 });
   const ground = new THREE.Mesh(new THREE.CircleGeometry(radius * 1.15, 32), groundMaterial);
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(center.x, 0.01, center.z);
+  ground.position.set(center.x, getTerrainHeight(center.x, center.z) + 0.01, center.z);
   scene.add(ground);
+  registeredGroundPlanes.push({ mesh: ground, center });
 
   const rocks = [];
   const rockCount = 6;
@@ -167,7 +214,6 @@ export function scatterWorldDressing(scene, {
   // band the player actually walks through, for props they'd never see.
   outerRadius = 34,
   rockCount = 70,
-  plantCount = 46,
   exclusions = [],
   seed = 0x484f4c,
 } = {}) {
@@ -206,26 +252,16 @@ export function scatterWorldDressing(scene, {
     });
   }
 
-  const plants = [];
-  for (let i = 0; i < plantCount; i++) {
-    const p = samplePoint();
-    if (!p) continue;
-    plants.push({ x: p.x, z: p.z, scale: 0.6 + rng() * 0.6 });
-  }
-
   // The rock colour is deliberately DARKER than the darkest part of the ground
   // mottling rather than a mid-tone: a rock tinted close to the floor's own range just
   // disappears into it. Sitting below the floor's value makes each one read as a
   // silhouette, and the scene's rim light then catches its top edge - the same thing
   // that makes the creatures legible against this background.
   //
-  // The flora is cooler and dimmer than the arena's violet set: out here it's ambient
-  // scenery and must never compete with a collectible Glow Spore for attention.
-  buildInstances(scene, rocks, plants, {
+  // Unpickable greenish flora has been removed so all glowing mushrooms/spores on the
+  // ground are exclusively collectible resources.
+  buildInstances(scene, rocks, [], {
     rockColor: 0x0d1310,
-    plantBodyColor: 0x0a1512,
-    plantGlowColor: 0x3fb98a,
-    glowIntensity: 0.8,
   });
 
   return { rocks };

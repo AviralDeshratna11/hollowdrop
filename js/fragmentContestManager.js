@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FRAGMENT_STATES } from './genomeFragmentController.js';
+import { FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
 
 export const DEBUG_FRAGMENT_CONTEST = false;
 

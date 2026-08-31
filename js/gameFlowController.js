@@ -1,4 +1,4 @@
-import { resetRunStats } from './runStats.js';
+import { resetRunStats } from './runStats.js?v=5.3';
 
 export const GAME_STATES = {
   TITLE: 'title',
