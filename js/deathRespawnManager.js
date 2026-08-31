@@ -11,10 +11,20 @@ export const GAME_STATE = {
 export const DEATH_CONFIG = {
   deathDuration: 1.2, // matches PlayerController's death collapse animation length
   fadeDuration: 0.3,
-  dropRatio: 0.6, // fraction of inventory entries that become world resources again
-  scatterMinRadius: 1.2,
-  scatterMaxRadius: 3.5, // combined with launch-physics travel, keeps recovery within ~2-5 units
+  // Minecraft-style FULL drop: every held item is dropped at the death spot (no ratio -
+  // nothing is kept). Offsets are kept tight because launch-physics travel (see
+  // ResourceManager.spawnDroppedResource) adds its own natural scatter on top.
+  scatterMinRadius: 0.3,
+  scatterMaxRadius: 1.2,
+  dropSpawnHeight: 0.45, // slightly above ground; launch physics settles it to groundRestHeight
+  dropPlacementAttempts: 6, // tries per item to find a spot clear of static geometry, then falls back to the death spot
+  dropClearance: 0.25, // collider clearance a drop point needs (small - items are tiny pickups)
   respawnInvulnerability: 1.5,
+  // How close the player must get to the death-drop spot for the radar beacon to retire
+  // (it has served its "navigate back here" purpose). Only arms once the player has first
+  // moved OUTSIDE it - which respawn's minimum-distance guarantees - so the death spot the
+  // player is standing on at the moment of death never counts as already-reached.
+  deathDropReachRadius: 2.5,
 };
 
 const tempScatterDir = new THREE.Vector3();
@@ -217,37 +227,10 @@ export class DeathRespawnManager {
 import * as THREE from 'three';
 import { DEBUG_HEALTH } from './playerHealth.js';
 
-export const GAME_STATE = {
-  PLAYING: 'playing',
-  DYING: 'dying',
-  RESPAWNING: 'respawning',
-};
-
 // Single-scene prototype - one identifier for now, but stamped on every death record so a
 // future multi-biome radar can distinguish where a death actually happened.
 export const WORLD_ID = 'living-colony';
 
-export const DEATH_CONFIG = {
-  deathDuration: 1.2, // matches PlayerController's death collapse animation length
-  fadeDuration: 0.3,
-  // Minecraft-style FULL drop: every held item is dropped at the death spot (no ratio -
-  // nothing is kept). Offsets are kept tight because launch-physics travel (see
-  // ResourceManager.spawnDroppedResource) adds its own natural scatter on top.
-  scatterMinRadius: 0.3,
-  scatterMaxRadius: 1.2,
-  dropSpawnHeight: 0.45, // slightly above ground; launch physics settles it to groundRestHeight
-  dropPlacementAttempts: 6, // tries per item to find a spot clear of static geometry, then falls back to the death spot
-  dropClearance: 0.25, // collider clearance a drop point needs (small - items are tiny pickups)
-  respawnInvulnerability: 1.5,
-  // How close the player must get to the death-drop spot for the radar beacon to retire
-  // (it has served its "navigate back here" purpose). Only arms once the player has first
-  // moved OUTSIDE it - which respawn's minimum-distance guarantees - so the death spot the
-  // player is standing on at the moment of death never counts as already-reached.
-  deathDropReachRadius: 2.5,
-};
-
-const tempScatterDir = new THREE.Vector3();
-const tempScatterPos = new THREE.Vector3();
 
 /**
  * Orchestrates the narrative sequence around death: dropping inventory back into
