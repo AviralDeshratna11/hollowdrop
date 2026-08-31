@@ -32,6 +32,17 @@ export const RESOURCE_TYPES = {
     energyValue: 20,
     description: 'A luminous colony fungus, rich in metabolic energy.',
   },
+  blue_mushroom: {
+    name: 'Azure Glowcap',
+    category: 'organic',
+    weight: 0.8,
+    value: 3,
+    color: 0x00d2ff,
+    modelScale: 1.0,
+    edible: true,
+    energyValue: 24,
+    description: 'A radiant bioluminescent blue mushroom pulsing with vital nutrients.',
+  },
   stone: {
     name: 'Stone',
     category: 'mineral',

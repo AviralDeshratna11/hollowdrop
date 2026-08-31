@@ -47,7 +47,9 @@ export class RadarHUD {
     this.root = document.getElementById('species-radar');
     this.display = document.getElementById('radar-display');
     this.blipsContainer = document.getElementById('radar-blips');
-    this.compass = document.getElementById('radar-compass');
+    // North-up / world-locked dial: the compass ring stays fixed (N always at the top),
+    // so unlike player-up mode it's never rotated from JS - it just sits in the DOM.
+    this.playerMarker = this.root?.querySelector('.radar-player');
     this.beam = document.getElementById('radar-beam');
     this.nearestEl = document.getElementById('radar-nearest');
     this.closeButton = document.getElementById('radar-close');
@@ -88,6 +90,7 @@ export class RadarHUD {
     this._hasShownApexSignal = false;
     if (this.nearestEl) this.nearestEl.textContent = '';
     if (this.beam) this.beam.style.opacity = '0';
+    if (this.playerMarker) this.playerMarker.style.transform = 'rotate(0rad)';
   }
 
   update(deltaTime) {
@@ -103,7 +106,7 @@ export class RadarHUD {
       entry.el.style.transform = `translate(${entry.x * this._radiusPx}px, ${entry.y * this._radiusPx}px)`;
     }
 
-    this._updateCompass();
+    this._updatePlayerMarker();
     this._updateNearestLabel();
     this._updateBeam();
   }
@@ -182,11 +185,11 @@ export class RadarHUD {
 
   /** Directional lock-on beam toward the current highest-priority signal (spec-inspired
    *  addition matching the reference art's beam toward its Boss blip). getNearestSignal()
-   *  already returns that target's x/y in the SAME player-relative screen space a blip's
-   *  own translate() uses, so - like a blip - this needs no separate heading correction,
-   *  just the angle from center to that point. atan2(x, -y) rather than the more usual
-   *  atan2(y, x): 0 rad must mean "pointing up" (screen -y) to match both the player
-   *  marker's own resting orientation and rotate()'s clockwise-positive convention. */
+   *  already returns that target's x/y in the SAME world-locked radar space a blip's own
+   *  translate() uses, so - like a blip - this needs no heading correction, just the
+   *  angle from center to that point. atan2(x, -y) rather than the more usual atan2(y, x):
+   *  0 rad must mean "pointing up" (screen -y) to match rotate()'s clockwise-positive
+   *  convention. */
   _updateBeam() {
     if (!this.beam) return;
     const nearest = this.radarController.getNearestSignal();
@@ -199,14 +202,22 @@ export class RadarHUD {
     this.beam.style.opacity = '1';
   }
 
-  // --- Compass / nearest-signal readout --------------------------------------------
+  // --- Centre marker / nearest-signal readout --------------------------------------
 
-  _updateCompass() {
-    if (!this.compass) return;
+  /** North-up dial: the world doesn't rotate under a fixed marker any more - the marker
+   *  itself turns to show which way the player is facing/travelling (the player root
+   *  yaws to its direction of travel every frame, so player.rotation.y is that heading).
+   *
+   *  The marker SVG points screen-up at rest, which is world -Z (north) - the same zero
+   *  the dial is laid out against. A world-forward vector of (-sin h, -cos h) maps to
+   *  screen (-sin h, -cos h), and a CSS clockwise rotate(phi) turns screen-up into
+   *  (sin phi, -cos phi); equating the two gives phi = -h. .radar-player is centred via
+   *  a margin offset, so rotate() spins it about its own tip-to-tail axis with no extra
+   *  translate needed. */
+  _updatePlayerMarker() {
+    if (!this.playerMarker) return;
     const heading = this.radarController.player.rotation.y;
-    // #radar-compass is `inset: 0` (not left/top: 50% + a centering translate), so a
-    // plain rotate() around its own center is all that's needed here.
-    this.compass.style.transform = `rotate(${heading}rad)`;
+    this.playerMarker.style.transform = `rotate(${-heading}rad)`;
   }
 
   _updateNearestLabel() {

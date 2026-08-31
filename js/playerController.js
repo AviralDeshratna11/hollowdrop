@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 // --- Tunable movement architecture ---------------------------------------
 export const PLAYER_MAX_SPEED = 6.0;      // world units / second at full swipe
@@ -117,7 +118,17 @@ export class PlayerController {
     this.activeMaterial = material;
     this._baseEmissive.copy(material.emissive);
     this._baseEmissiveIntensity = material.emissiveIntensity;
-    this._baseOpacity = material.opacity;
+    // Everything below baselines from the material's CURRENT values, which is only
+    // correct if the material is at rest when it is handed over. A material still
+    // animating reports an instantaneous value, not its baseline - and that has already
+    // cost this project once: the imported slime is built at opacity 0 and crossfaded
+    // up, so baselining mid-fade captured 0, the death dissolve then had nothing to fade,
+    // and resetToBaseSlime() restored the body to fully transparent - invisible for the
+    // rest of the run after one death. playerSlimeModel.js fixes that at the source by
+    // deferring its onReady until the crossfade settles. This fallback is the belt to
+    // that braces: a caller that cannot defer can declare userData.restOpacity instead
+    // of silently poisoning the baseline.
+    this._baseOpacity = material.userData?.restOpacity ?? material.opacity;
   }
 
   /** Called by BurdenSystem each frame with the current load ratio + target body scale. */
@@ -337,6 +348,26 @@ export class PlayerController {
     this.mesh.position.x += this.currentVelocity.x * deltaTime;
     this.mesh.position.z += this.currentVelocity.z * deltaTime;
 
+    const baseRadius = this._baseScale ? this._baseScale.y * 0.6 : 0.6;
+    const targetY = getTerrainHeight(this.mesh.position.x, this.mesh.position.z) + baseRadius;
+    const ySmooth = 1 - Math.exp(-12.0 * deltaTime);
+    this.mesh.position.y += (targetY - this.mesh.position.y) * ySmooth;
+
+    // Compute terrain slope from 4 neighbors to tilt the slime onto the surface.
+    const px = this.mesh.position.x;
+    const pz = this.mesh.position.z;
+    const slopeStep = 0.8;
+    const hRight = getTerrainHeight(px + slopeStep, pz);
+    const hLeft  = getTerrainHeight(px - slopeStep, pz);
+    const hFwd   = getTerrainHeight(px, pz + slopeStep);
+    const hBack  = getTerrainHeight(px, pz - slopeStep);
+    // Slope angles: positive X slope tilts Z rotation, positive Z slope tilts X rotation
+    const slopeX = (hBack - hFwd) / (2 * slopeStep); // tilt around X axis
+    const slopeZ = (hRight - hLeft) / (2 * slopeStep); // tilt around Z axis
+    const MAX_SLOPE_TILT = 0.5; // max ~28 degrees
+    this._slopeTiltX = Math.max(-MAX_SLOPE_TILT, Math.min(MAX_SLOPE_TILT, slopeX));
+    this._slopeTiltZ = Math.max(-MAX_SLOPE_TILT, Math.min(MAX_SLOPE_TILT, -slopeZ));
+
     this._applyMovementFeel(deltaTime);
     this._applyHitFlash(deltaTime);
   }
@@ -352,9 +383,11 @@ export class PlayerController {
     const wobbleBoost = (1 + this._load * 0.4) * vitalityWobble;
     const smooth = 1 - Math.exp(-(FEEL_SMOOTHING * (1 - this._load * 0.3)) * deltaTime);
 
-    // Subtle lean into the direction of travel.
-    const targetTiltZ = speed > 0.05 ? -(this.currentVelocity.x / PLAYER_MAX_SPEED) * LEAN_MAX_ANGLE : 0;
-    const targetTiltX = speed > 0.05 ? (this.currentVelocity.z / PLAYER_MAX_SPEED) * LEAN_MAX_ANGLE : 0;
+    // Lean into direction of travel + tilt onto terrain slope.
+    const slopeX = this._slopeTiltX || 0;
+    const slopeZ = this._slopeTiltZ || 0;
+    const targetTiltZ = slopeZ + (speed > 0.05 ? -(this.currentVelocity.x / PLAYER_MAX_SPEED) * LEAN_MAX_ANGLE : 0);
+    const targetTiltX = slopeX + (speed > 0.05 ? (this.currentVelocity.z / PLAYER_MAX_SPEED) * LEAN_MAX_ANGLE : 0);
     this.mesh.rotation.x += (targetTiltX - this.mesh.rotation.x) * smooth;
     this.mesh.rotation.z += (targetTiltZ - this.mesh.rotation.z) * smooth;
 

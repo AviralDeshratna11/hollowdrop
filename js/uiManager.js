@@ -57,6 +57,8 @@ export class UIManager {
     this.mutationTimerText = document.getElementById('mutation-timer-text');
 
     this.biteButton = document.getElementById('bite-button');
+    this.throwButton = document.getElementById('throw-button');
+    this.throwAmmoEl = this.throwButton?.querySelector('.throw-ammo');
 
     this.bossHealthUi = document.getElementById('boss-health-ui');
     this.bossHealthFill = document.getElementById('boss-health-fill');
@@ -110,6 +112,38 @@ export class UIManager {
     const ratio = cooldownTotal > 0 ? Math.max(cooldownRemaining, 0) / cooldownTotal : 0;
     this.biteButton.style.setProperty('--cd', ratio);
     this.biteButton.classList.toggle('bite-button--cooldown', !ready);
+  }
+
+  /** Shows the THROW button. Same (re)bind-on-call contract as showBiteButton, so
+   *  ProjectileSystem can call it from setAvailable() without tracking listeners. */
+  showThrowButton(onThrow) {
+    if (!this.throwButton) return;
+    this.throwButton.classList.add('throw-button--visible');
+    this.throwButton.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // a tap here must never fall through to movement/inventory gestures
+      onThrow();
+    };
+  }
+
+  hideThrowButton() {
+    if (!this.throwButton) return;
+    this.throwButton.classList.remove('throw-button--visible', 'throw-button--cooldown', 'throw-button--empty');
+    this.throwButton.onclick = null;
+  }
+
+  /** Called every frame while throwing is available. Carries the ammo count as well as
+   *  the cooldown because the count IS the reason the button can be dead: an empty
+   *  inventory and a running cooldown both mean "a tap does nothing", and without the
+   *  number the player cannot tell which. `throw-button--empty` is a distinct class
+   *  from the cooldown dim so CSS can style "out of rocks" differently from "wait". */
+  updateThrowState(ammoCount, cooldownRemaining, cooldownTotal, ready) {
+    if (!this.throwButton) return;
+    const ratio = cooldownTotal > 0 ? Math.max(cooldownRemaining, 0) / cooldownTotal : 0;
+    this.throwButton.style.setProperty('--cd', ratio);
+    this.throwButton.classList.toggle('throw-button--cooldown', !ready);
+    this.throwButton.classList.toggle('throw-button--empty', ammoCount === 0);
+    if (this.throwAmmoEl) this.throwAmmoEl.textContent = String(ammoCount);
   }
 
   /** Shows the MUTATE button. `onMutate` is (re)bound each call so callers don't
@@ -464,6 +498,7 @@ export class UIManager {
     this.hideMutationReady();
     this.hideRevertReady();
     this.hideBiteButton();
+    this.hideThrowButton();
     this.hideMutationTimerUI();
     this.hideBossHealth();
     this.hideRivalEscapeChannel();
@@ -555,12 +590,20 @@ export class UIManager {
   }
 
   /** One-time tutorial hint the first time BurdenSystem reports the heavy threshold reached. */
-  showHeavyHint() {
+  /** `ammoCount` is how many throwable rocks are aboard - the hint names the throw
+   *  button when rocks are the problem (they are the heaviest thing in the game and
+   *  the most likely cause of being overloaded) and falls back to the wheel otherwise.
+   *  Pointing a player at the wheel to drop a rock they could simply throw at something
+   *  teaches the worse of the two answers at the exact moment they are listening. */
+  showHeavyHint(ammoCount = 0) {
     // Teaches the long-press wheel at the exact moment it becomes useful, which is the
     // only genuinely undiscoverable control in the game. This previously read "Swipe an
     // item out to move faster" and was simply false once swipe-to-expel was removed - it
     // sent the player hunting for a gesture that no longer exists.
-    this._showNotification('Too heavy \u2014 hold on your body to open the wheel and drop something', 'notification--hint', HEAVY_HINT_VISIBLE_MS);
+    const message = ammoCount > 0
+      ? 'Too heavy \u2014 throw a rock to hit something and lighten the load'
+      : 'Too heavy \u2014 hold on your body to open the wheel and drop something';
+    this._showNotification(message, 'notification--hint', HEAVY_HINT_VISIBLE_MS);
   }
 
   // Reuses a single element so rapid messages update/restart the toast instead of stacking.

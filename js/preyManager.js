@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { createGlowBeetleMesh } from './preyModel.js';
-import { PLAYER_FORMS } from './playerFormController.js';
-import { updateEntityHealthBar } from './entityHealthBar.js';
+import { createGlowBeetleMesh } from './preyModel.js?v=5.3';
+import { PLAYER_FORMS } from './playerFormController.js?v=5.3';
+import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const DEBUG_PREY = false;
 
@@ -131,6 +132,12 @@ export class PreyManager {
 
       if (entity.state === PREY_STATES.WANDER) this._updateWander(entity, deltaTime);
       else if (entity.state === PREY_STATES.FLEE) this._updateFlee(entity, deltaTime);
+
+      if (entity.state !== PREY_STATES.DEAD) {
+        const targetY = getTerrainHeight(entity.mesh.position.x, entity.mesh.position.z);
+        const ySmooth = 1 - Math.exp(-12.0 * deltaTime);
+        entity.mesh.position.y += (targetY - entity.mesh.position.y) * ySmooth;
+      }
 
       this._updateHitFlash(entity, deltaTime);
       this._updateHealthBar(entity, deltaTime);
@@ -277,8 +284,8 @@ export class PreyManager {
   _dropLoot(entity) {
     const center = entity.mesh.position;
     const scatter = GLOW_BEETLE_CONFIG.lootScatter;
-    const dnaPos = new THREE.Vector3(center.x - scatter, 0.2, center.z);
-    const biomassPos = new THREE.Vector3(center.x + scatter, 0.2, center.z);
+    const dnaPos = new THREE.Vector3(center.x - scatter, getTerrainHeight(center.x - scatter, center.z), center.z);
+    const biomassPos = new THREE.Vector3(center.x + scatter, getTerrainHeight(center.x + scatter, center.z), center.z);
 
     this.resourceManager.spawnResource('beetle_dna', dnaPos);
     // "Organic Biomass" reuses the existing edible Moon Mushroom resource rather than

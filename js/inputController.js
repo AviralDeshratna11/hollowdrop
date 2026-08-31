@@ -1,10 +1,16 @@
 // InputController: turns a finger/mouse drag into a normalized direction + magnitude.
 // Knows nothing about Three.js, the player, or movement speed — pure input state.
 export class InputController {
-  constructor(domElement, { deadZone = 12, maxDistance = 90 } = {}) {
+  constructor(domElement, { deadZone = 12, maxDistance = 90, joystickElement = null } = {}) {
     this.domElement = domElement;
     this.deadZone = deadZone;
     this.maxDistance = maxDistance;
+
+    // Purely-visual floating stick. Optional - movement works identically without it.
+    // The container is centred on the touch point; its single child is the knob, moved
+    // by a transform each pointermove. See index.html / style.css.
+    this._joystickEl = joystickElement;
+    this._joystickKnob = joystickElement ? joystickElement.querySelector('#move-joystick-knob') : null;
 
     this.activePointerId = null;
     this.isDragging = false;
@@ -44,6 +50,7 @@ export class InputController {
     this.isDragging = true;
     this.startX = this.currentX = e.clientX;
     this.startY = this.currentY = e.clientY;
+    this._showJoystick(this.startX, this.startY);
 
     if (this.domElement.setPointerCapture) {
       try { this.domElement.setPointerCapture(e.pointerId); } catch (_) { /* no-op */ }
@@ -55,6 +62,7 @@ export class InputController {
     e.preventDefault();
     this.currentX = e.clientX;
     this.currentY = e.clientY;
+    this._moveJoystick(this.currentX - this.startX, this.currentY - this.startY);
   }
 
   _onPointerEnd(e) {
@@ -62,12 +70,40 @@ export class InputController {
     e.preventDefault();
     this.isDragging = false;
     this.activePointerId = null;
+    this._hideJoystick();
   }
 
   /** Clears any in-progress drag (e.g. when a UI overlay opens mid-swipe). */
   cancel() {
     this.isDragging = false;
     this.activePointerId = null;
+    this._hideJoystick();
+  }
+
+  // --- Visual joystick ---------------------------------------------------------
+  // No-ops when no joystickElement was passed. Coordinates are viewport-space
+  // (clientX/clientY), which is exactly what the container's position:fixed expects.
+
+  _showJoystick(x, y) {
+    if (!this._joystickEl) return;
+    this._joystickEl.style.left = `${x}px`;
+    this._joystickEl.style.top = `${y}px`;
+    if (this._joystickKnob) this._joystickKnob.style.transform = 'translate(0px, 0px)';
+    this._joystickEl.classList.add('is-active');
+  }
+
+  _moveJoystick(dx, dy) {
+    if (!this._joystickKnob) return;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Clamp the knob to the ring edge (ring radius === maxDistance, see style.css) so it
+    // visually saturates at the same point the movement magnitude does.
+    const scale = distance > this.maxDistance ? this.maxDistance / distance : 1;
+    this._joystickKnob.style.transform = `translate(${dx * scale}px, ${dy * scale}px)`;
+  }
+
+  _hideJoystick() {
+    if (!this._joystickEl) return;
+    this._joystickEl.classList.remove('is-active');
   }
 
   /**

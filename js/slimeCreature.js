@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 /**
  * Shared slime-creature factory: a procedurally deforming translucent body.
@@ -553,7 +554,7 @@ export function applyJellyRimTreatment(material, options = {}) {
  */
 export function applyJellyDisplacement(material, options = {}) {
   const cfg = { ...SLIME_DEFAULTS, ...options };
-  const uniforms = {
+  const uniforms = options.uniforms || {
     uTime: { value: 0 },
     uSpeedRatio: { value: 0 },
     uLoad: { value: 0 },
@@ -819,6 +820,20 @@ export function createSlimeCreature(options = {}) {
   // that would squash them along with the body. This is what turns one shared icosphere
   // into a long low Stalker or a squat domed Beetle without new geometry.
   mesh.scale.set(cfg.bodyScale[0], cfg.bodyScale[1], cfg.bodyScale[2]);
+
+  // Foliage-Gated Occlusion Boundary Ring: renders under tree leaves, 0% on ground
+  const occlusion = attachOcclusionOutline(mesh, {
+    color: cfg.color,
+    rimColor: options.occlusionRimColor || 0xffffff,
+    opacity: 0.92,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.22,
+    uniforms,
+    hasDisplacement: true,
+  });
+
   const group = new THREE.Group();
   group.add(mesh);
 

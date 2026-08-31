@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { createRivalSlimeMesh } from './rivalSlimeModel.js';
-import { createFireLizardMesh } from './fireLizardModel.js';
-import { updateEntityHealthBar } from './entityHealthBar.js';
-import { FRAGMENT_STATES } from './genomeFragmentController.js';
+import { createRivalSlimeMesh } from './rivalSlimeModel.js?v=5.3';
+import { createFireLizardMesh } from './fireLizardModel.js?v=5.3';
+import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
+import { FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const DEBUG_RIVAL = false;
 
@@ -410,6 +411,12 @@ export class RivalController {
         break;
     }
 
+    if (this.state !== STATES.DEAD && this.state !== STATES.INACTIVE) {
+      const targetY = getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
+      const ySmooth = 1 - Math.exp(-12.0 * deltaTime);
+      this.mesh.position.y += (targetY - this.mesh.position.y) * ySmooth;
+    }
+
     this._applyIdleAnimation(deltaTime);
   }
 
@@ -772,8 +779,10 @@ export class RivalController {
 
   _dropLoot() {
     const angle = Math.random() * Math.PI * 2;
-    const offset = new THREE.Vector3(Math.cos(angle) * 0.3, 0, Math.sin(angle) * 0.3);
-    this.resourceManager.spawnResource('rival_dna', new THREE.Vector3(this.mesh.position.x + offset.x, 0.2, this.mesh.position.z + offset.z));
+    const dropX = this.mesh.position.x + Math.cos(angle) * 0.3;
+    const dropZ = this.mesh.position.z + Math.sin(angle) * 0.3;
+    const dropY = getTerrainHeight(dropX, dropZ);
+    this.resourceManager.spawnResource('rival_dna', new THREE.Vector3(dropX, dropY, dropZ));
     if (DEBUG_RIVAL) console.log('Dropped Rival DNA');
   }
 
