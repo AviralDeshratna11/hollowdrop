@@ -1,4 +1,4 @@
-import { RADAR_TARGET_TYPES } from './radarController.js';
+import { RADAR_TARGET_TYPES } from './radarController.js?v=5.3';
 
 // One simple, single-color line-art icon per target type (spec section 60 - "no emoji,
 // stylistically consistent"). fill/stroke both use currentColor so each blip's own CSS

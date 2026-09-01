@@ -1,5 +1,5 @@
-import { RESOURCE_TYPES } from './resourceTypes.js';
-import { FRAGMENT_STATES } from './genomeFragmentController.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
+import { FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
 
 export const DEBUG_RADAR = false;
 
@@ -173,7 +173,7 @@ export class RadarController {
           position: predator.mesh.position,
           distanceSq,
           clampToEdge: false,
-          label: 'Cave Stalker',
+          label: 'Venom Rat',
           chasing,
           priority: BASE_PRIORITY[RADAR_TARGET_TYPES.ENEMY],
         });

@@ -36,6 +36,17 @@ const RAT_MODEL_URLS = {
   metalnessUrl: 'models/plague_sludge_rat/rat_metallic.png',
 };
 
+// The player's own cute Venom Rat (Meshy "Crystal Violet Mouse") - its own purple PBR
+// texture set, so the 'cute' variant loads this directly instead of recolouring the boss
+// model. Meshy's default export names the albedo map `..._texture.png` (no suffix).
+const CUTE_RAT_MODEL_URLS = {
+  fbxUrl: 'models/cute_rat/Meshy_AI_Crystal_Violet_Mouse_0901094918_texture.fbx',
+  baseColorUrl: 'models/cute_rat/Meshy_AI_Crystal_Violet_Mouse_0901094918_texture.png',
+  normalUrl: 'models/cute_rat/Meshy_AI_Crystal_Violet_Mouse_0901094918_texture_normal.png',
+  roughnessUrl: 'models/cute_rat/Meshy_AI_Crystal_Violet_Mouse_0901094918_texture_roughness.png',
+  metalnessUrl: 'models/cute_rat/Meshy_AI_Crystal_Violet_Mouse_0901094918_texture_metallic.png',
+};
+
 // Fixed correction so the model's own front lines up with this project's forward
 // convention (Model faces -Z at rotation.y = 0) - verified with an isolated probe
 // render: at rotation.y = 0 the snout points backward (+Z) with the tail trailing
@@ -72,7 +83,17 @@ const RAT_CONFIG = {
 };
 
 /** Faces -Z at rotation.y = 0, the convention every model here follows. */
-export function createRatMesh() {
+export function createRatMesh({ variant = 'venom' } = {}) {
+  // 'venom' (default) = the boss's pink Plague Sludge look, unchanged. 'cute' = the
+  // player's own purple, big-eyed evolution of it (see the Rat DNA progression) - the
+  // exact same mesh/gait/combat, only the material, added eyes and a gentler rounder
+  // proportion differ, so the player never reads as identical to the boss.
+  const isCute = variant === 'cute';
+  const modelUrls = isCute ? CUTE_RAT_MODEL_URLS : RAT_MODEL_URLS;
+  const outlineColor = isCute ? 0x9b5cf0 : 0xff2d9e;
+  const outlineRimColor = isCute ? 0xe6d5ff : 0xffccee;
+  const glowColor = isCute ? 0x3a1a55 : RAT_CONFIG.venomGlowColor; // countdown-glow base hue
+
   const group = new THREE.Group();
 
   const placeholderMaterial = new THREE.MeshStandardMaterial({
@@ -88,8 +109,8 @@ export function createRatMesh() {
   group.add(placeholderMesh);
 
   let placeholderOcclusion = attachOcclusionOutline(placeholderMesh, {
-    color: 0xff2d9e,
-    rimColor: 0xffccee,
+    color: outlineColor,
+    rimColor: outlineRimColor,
     opacity: 0.92,
     emissiveIntensity: 2.8,
     rimStrength: 3.4,
@@ -123,7 +144,7 @@ export function createRatMesh() {
   group.userData.onReady = null;
 
   loadFbxCharacter({
-    ...RAT_MODEL_URLS,
+    ...modelUrls,
     targetRadius: RAT_CONFIG.bodyRadius,
     facingRotationY: FACING_ROTATION_Y,
     materialOptions: {
@@ -136,7 +157,7 @@ export function createRatMesh() {
       // The countdown-glow color IS the load-bearing signal here (see the file header
       // and PlayerFormController._updateRatIdle) - emissiveIntensity gets driven every
       // frame by that method, from 0.6 at rest up through a flicker near expiry.
-      emissive: RAT_CONFIG.venomGlowColor,
+      emissive: glowColor,
       emissiveIntensity: 0.6,
     },
   })
@@ -150,8 +171,8 @@ export function createRatMesh() {
       placeholderMaterial.dispose();
 
       attachOcclusionOutline(fbxGroup, {
-        color: 0xff2d9e,
-        rimColor: 0xffccee,
+        color: outlineColor,
+        rimColor: outlineRimColor,
         opacity: 0.92,
         emissiveIntensity: 2.8,
         rimStrength: 3.4,

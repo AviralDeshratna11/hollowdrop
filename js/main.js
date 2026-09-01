@@ -9,12 +9,13 @@ import { InventoryInteractionController } from './inventoryInteraction.js?v=5.3'
 import { InventoryWheelController } from './inventoryWheel.js?v=5.3';
 import { BurdenSystem } from './burdenSystem.js?v=5.3';
 import { PlayerHealthState, DEBUG_HEALTH } from './playerHealth.js?v=5.3';
-import { PredatorController, DEBUG_PREDATOR_COMBAT } from './predatorController.js?v=5.3';
+import { PredatorController, DEBUG_PREDATOR_COMBAT, VENOM_RAT_BOSS_LOOT } from './predatorController.js?v=5.3';
 import { DeathRespawnManager } from './deathRespawnManager.js?v=5.3';
 import { MetabolismSystem, DEBUG_METABOLISM } from './metabolismSystem.js?v=5.3';
 import { MutationSystem, DEBUG_MUTATION, MUTATION_RECIPES } from './mutationSystem.js?v=5.3';
 import { PlayerFormController, MUTATION_CONFIG, PLAYER_FORMS, DEBUG_MUTATION_TIMER } from './playerFormController.js?v=5.3';
 import { createRatMesh } from './ratModel.js?v=5.3';
+import { createVenomRatBossMesh } from './predatorModel.js?v=5.3';
 import { createPlayerSlimeVisual } from './playerSlimeModel.js?v=5.3';
 import { PreyManager, DEBUG_PREY } from './preyManager.js?v=5.3';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js?v=5.3';
@@ -185,7 +186,9 @@ const amoeba = createPlayerSlimeVisual(PLAYER_RADIUS);
 const slimeMaterial = amoeba.bodyMaterial;
 slimeVisual.add(amoeba.group);
 
-const ratVisual = createRatMesh();
+// The player's own mutated form is the CUTE purple rat (per the reference art), distinct
+// from the boss's pink Venom Rat below - same mesh/gait/combat, only its look differs.
+const ratVisual = createRatMesh({ variant: 'cute' });
 const ratMaterial = ratVisual.userData.bodyMaterial;
 ratVisual.visible = false;
 player.add(ratVisual);
@@ -239,7 +242,9 @@ function populateWorldResources() {
     resourceManager.spawnResource('iron', new THREE.Vector3(x, getTerrainHeight(x, z), z));
   }
 
-  resourceManager.spawnResource('rat_dna', new THREE.Vector3(-10, getTerrainHeight(-10, 6), 6));
+  // Rat DNA is no longer spawned in the world - it is earned by defeating the Venom Rat
+  // boss (the repurposed predator, see VENOM_RAT_BOSS_LOOT). It stays in `excludeTypes`
+  // above so it never leaks back into the ambient scatter either.
 }
 populateWorldResources();
 
@@ -283,10 +288,17 @@ const burdenSystem = new BurdenSystem(inventoryManager, playerController, {
   onHeavyReached: () => uiManager.showHeavyHint(projectileSystem.getAmmoCount()),
 });
 
-// --- Predator (Cave Stalker) ---------------------------------------------------
+// --- Venom Rat intermediate boss (the repurposed Cave Stalker) -------------------
+// Same PredatorController AI/combat, re-skinned as the Venom Rat: it wears the pink Venom
+// Rat model, drops Rat DNA (the only source now), stays dead for the run once beaten, and
+// is buffed to boss-tier health.
 const predatorHomePosition = new THREE.Vector3(10, getTerrainHeight(10, 8), 8);
 const predatorController = new PredatorController(scene, predatorHomePosition, playerController, playerHealth, uiManager, resourceManager, {
   onDefeated: () => runStats.predatorsDefeated++,
+  meshFactory: createVenomRatBossMesh,
+  respawnEnabled: false, // an intermediate boss stays down until Play Again
+  loot: VENOM_RAT_BOSS_LOOT,
+  maxHealth: 120, // ~8 Venom Bites - reads as a real fight, not a normal enemy
 });
 
 // --- Mutation form (Venom Rat) --------------------------------------------------
@@ -715,8 +727,6 @@ const deathRespawnManager = new DeathRespawnManager({
   // PLAYER_SPAWN_POSITION above so resetGame()'s player-centred resource scatter
   // re-centres correctly.
   pickRespawnPosition: pickRandomRespawnPosition,
-  // Keeps death-dropped items out of solid geometry (see DeathRespawnManager._resolveDropPosition).
-  isPositionClear: (x, z, radius) => collisionSystem.isClear(x, z, radius),
   // Snaps the camera instantly on respawn instead of letting it slide across the
   // map to catch up - the fade covers the position jump, not a camera glide.
   onRespawnCamera: () => {

@@ -1,4 +1,4 @@
-import { RESOURCE_TYPES } from './resourceTypes.js';
+import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
 
 export const DEBUG_MUTATION = false;
 
