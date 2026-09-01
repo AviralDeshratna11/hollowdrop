@@ -1878,13 +1878,15 @@ html, body {
    Venom Rat form (PlayerCombatController.setAvailable). No fill background by request -
    the ::after cooldown sweep still works the same way, just over a transparent button
    instead of the old red gradient. */
-#bite-button {
+#bite-button,
+#poison-burst-button {
+  position: relative;
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  border: 2px solid var(--border-bite);
-  background: none;
-  color: var(--danger-btn);
+  border: 2px solid rgb(66 255 136 / 0.85);
+  background: rgb(10 24 18 / 0.7);
+  color: #42ff88;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1893,33 +1895,71 @@ html, body {
   opacity: 0;
   transform: scale(0.85);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  overflow: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, filter 0.2s ease;
+  overflow: visible;
+  box-shadow: 0 0 16px rgb(66 255 136 / 0.25), inset 0 0 12px rgb(66 255 136 / 0.15);
   --cd: 0;
 }
 
-#bite-button.bite-button--visible {
+#bite-button.bite-button--visible,
+#poison-burst-button.poison-burst-button--visible {
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
 }
 
-#bite-button::after {
-  content: '';
+#poison-burst-button .action-icon--poison {
+  width: 38px;
+  height: 38px;
+  filter: drop-shadow(0 0 4px rgb(66 255 136 / 0.6));
+  transition: transform 0.2s ease;
+}
+
+#poison-burst-button:not(.poison-burst-button--spent):hover .action-icon--poison {
+  transform: scale(1.1);
+}
+
+.poison-burst-badge {
   position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(rgb(var(--shadow-rgb) / 0.72) calc(var(--cd) * 360deg), transparent 0deg);
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #42ff88;
+  color: #05100c;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: 0 0 8px rgb(66 255 136 / 0.8);
   pointer-events: none;
+  transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
-#bite-button.bite-button--cooldown {
-  filter: saturate(0.55) brightness(0.82);
+#poison-burst-button.poison-burst-button--spent {
+  border-color: rgb(150 150 150 / 0.35);
+  color: rgb(180 180 180 / 0.4);
+  background: rgb(10 16 14 / 0.5);
+  box-shadow: none;
+  filter: saturate(0.2) brightness(0.7);
+  cursor: not-allowed;
 }
 
-#bite-button:active {
-  transform: scale(0.94);
-  background: rgb(var(--danger-hot-rgb) / 0.18);
+#poison-burst-button.poison-burst-button--spent .poison-burst-badge {
+  background: rgb(120 120 120 / 0.6);
+  color: #ffffff;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+#poison-burst-button:not(.poison-burst-button--spent):active {
+  transform: scale(0.92);
+  background: rgb(66 255 136 / 0.3);
+  box-shadow: 0 0 24px rgb(66 255 136 / 0.6);
 }
 
 /* Throw: same geometry and cooldown mechanics as #bite-button (radial conic sweep

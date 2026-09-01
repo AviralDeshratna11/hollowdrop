@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 // --- Shared Geometries (Optimized for Mobile/WebGL) --------------------------
 // Geometries are created once and shared across instances to minimize memory and draw overhead.
@@ -122,6 +123,36 @@ function makeStone() {
   pebble2.rotation.set(1.2, 0.1, 0.5);
 
   group.add(mainRock, medRock, slab, pebble1, pebble2);
+
+  // Foliage-Gated Occlusion Outline Highlights
+  attachOcclusionOutline(mainRock, {
+    color: 0x8a949e,
+    rimColor: 0xeef4f8,
+    opacity: 0.88,
+    emissiveIntensity: 2.2,
+    rimStrength: 3.0,
+    rimPower: 1.8,
+    innerAlpha: 0.18,
+  });
+  attachOcclusionOutline(medRock, {
+    color: 0x8a949e,
+    rimColor: 0xeef4f8,
+    opacity: 0.88,
+    emissiveIntensity: 2.2,
+    rimStrength: 3.0,
+    rimPower: 1.8,
+    innerAlpha: 0.18,
+  });
+  attachOcclusionOutline(slab, {
+    color: 0x8a949e,
+    rimColor: 0xeef4f8,
+    opacity: 0.85,
+    emissiveIntensity: 2.0,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.15,
+  });
+
   return group;
 }
 
@@ -223,6 +254,53 @@ function makeMushroom(color) {
   sprout.add(sproutStem, sproutCap);
   group.add(sprout);
 
+  // Foliage-Gated Occlusion Highlights
+  attachOcclusionOutline(cap, {
+    color,
+    rimColor: 0xf5e8ff,
+    opacity: 0.94,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.25,
+  });
+  attachOcclusionOutline(stem, {
+    color,
+    rimColor: 0xf5e8ff,
+    opacity: 0.88,
+    emissiveIntensity: 2.0,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.18,
+  });
+  attachOcclusionOutline(sideCap, {
+    color,
+    rimColor: 0xf5e8ff,
+    opacity: 0.92,
+    emissiveIntensity: 2.6,
+    rimStrength: 3.2,
+    rimPower: 1.8,
+    innerAlpha: 0.22,
+  });
+  attachOcclusionOutline(sideStem, {
+    color,
+    rimColor: 0xf5e8ff,
+    opacity: 0.85,
+    emissiveIntensity: 1.8,
+    rimStrength: 2.6,
+    rimPower: 1.8,
+    innerAlpha: 0.15,
+  });
+  attachOcclusionOutline(sproutCap, {
+    color,
+    rimColor: 0xf5e8ff,
+    opacity: 0.90,
+    emissiveIntensity: 2.4,
+    rimStrength: 3.0,
+    rimPower: 1.8,
+    innerAlpha: 0.2,
+  });
+
   group.userData.pulseMaterials = [capMaterial, gillsMaterial, spotMaterial];
   return group;
 }
@@ -305,6 +383,53 @@ function makeBlueMushroom(color) {
   sprout.add(sproutStem, sproutDome);
   group.add(sprout);
 
+  // Foliage-Gated Occlusion Highlights
+  attachOcclusionOutline(dome, {
+    color,
+    rimColor: 0xc8f6ff,
+    opacity: 0.95,
+    emissiveIntensity: 3.0,
+    rimStrength: 3.5,
+    rimPower: 1.8,
+    innerAlpha: 0.28,
+  });
+  attachOcclusionOutline(stem, {
+    color,
+    rimColor: 0xc8f6ff,
+    opacity: 0.88,
+    emissiveIntensity: 2.2,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.18,
+  });
+  attachOcclusionOutline(sideDome, {
+    color,
+    rimColor: 0xc8f6ff,
+    opacity: 0.92,
+    emissiveIntensity: 2.6,
+    rimStrength: 3.2,
+    rimPower: 1.8,
+    innerAlpha: 0.24,
+  });
+  attachOcclusionOutline(sideStem, {
+    color,
+    rimColor: 0xc8f6ff,
+    opacity: 0.85,
+    emissiveIntensity: 2.0,
+    rimStrength: 2.6,
+    rimPower: 1.8,
+    innerAlpha: 0.15,
+  });
+  attachOcclusionOutline(sproutDome, {
+    color,
+    rimColor: 0xc8f6ff,
+    opacity: 0.90,
+    emissiveIntensity: 2.4,
+    rimStrength: 3.0,
+    rimPower: 1.8,
+    innerAlpha: 0.2,
+  });
+
   group.userData.pulseMaterials = [capMaterial, gillsMaterial, stemMaterial];
   return group;
 }
@@ -355,6 +480,26 @@ function makeSpore(color) {
   mainNucleus.position.set(0, 0.13, 0);
   group.add(mainPod, mainNucleus);
 
+  // Foliage-Gated Occlusion Highlights for main pod & nucleus
+  attachOcclusionOutline(mainPod, {
+    color,
+    rimColor: 0xddfbff,
+    opacity: 0.94,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.28,
+  });
+  attachOcclusionOutline(mainNucleus, {
+    color: 0xffffff,
+    rimColor: color,
+    opacity: 0.95,
+    emissiveIntensity: 3.2,
+    rimStrength: 3.6,
+    rimPower: 1.6,
+    innerAlpha: 0.35,
+  });
+
   // Secondary side pods
   const podPositions = [
     [0.1, 0.09, 0.05, 0.75],
@@ -372,6 +517,16 @@ function makeSpore(color) {
     subNucleus.scale.setScalar(pScale * 0.7);
 
     group.add(subPod, subNucleus);
+
+    attachOcclusionOutline(subPod, {
+      color,
+      rimColor: 0xddfbff,
+      opacity: 0.90,
+      emissiveIntensity: 2.5,
+      rimStrength: 3.0,
+      rimPower: 1.8,
+      innerAlpha: 0.22,
+    });
   });
 
   group.userData.pulseMaterials = [membraneMat, nucleusMat];
@@ -417,6 +572,17 @@ function makeToxicSpore(color) {
   mainPod.scale.set(1.1, 1.2, 1.0);
   group.add(mainPod);
 
+  // Foliage-Gated Occlusion Highlight for main pod
+  attachOcclusionOutline(mainPod, {
+    color,
+    rimColor: 0xe6ff99,
+    opacity: 0.94,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.26,
+  });
+
   // Spikes protruding outward
   const spikeDirections = [
     [0, 0.24, 0, 0, 0, 0],
@@ -431,6 +597,16 @@ function makeToxicSpore(color) {
     spike.position.set(sx, sy, sz);
     spike.rotation.set(rx, ry, rz);
     group.add(spike);
+
+    attachOcclusionOutline(spike, {
+      color,
+      rimColor: 0xe6ff99,
+      opacity: 0.90,
+      emissiveIntensity: 2.4,
+      rimStrength: 3.0,
+      rimPower: 1.8,
+      innerAlpha: 0.2,
+    });
   });
 
   // Glowing toxic pustules
@@ -444,6 +620,16 @@ function makeToxicSpore(color) {
     const pustule = new THREE.Mesh(toxicPustuleGeom, pustuleMat);
     pustule.position.set(px, py, pz);
     group.add(pustule);
+
+    attachOcclusionOutline(pustule, {
+      color: 0xbbff55,
+      rimColor: 0xffffff,
+      opacity: 0.95,
+      emissiveIntensity: 3.0,
+      rimStrength: 3.2,
+      rimPower: 1.8,
+      innerAlpha: 0.3,
+    });
   });
 
   group.userData.pulseMaterials = [causticMat, pustuleMat];
@@ -486,6 +672,26 @@ function makeIron() {
 
   group.add(rock, subRock);
 
+  // Foliage-Gated Occlusion Highlights for rock base
+  attachOcclusionOutline(rock, {
+    color: 0x3a3d42,
+    rimColor: 0x8a9099,
+    opacity: 0.85,
+    emissiveIntensity: 1.8,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.15,
+  });
+  attachOcclusionOutline(subRock, {
+    color: 0x3a3d42,
+    rimColor: 0x8a9099,
+    opacity: 0.85,
+    emissiveIntensity: 1.8,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.15,
+  });
+
   // Embedded crystalline ore facets bursting out of the boulder
   const crystalPlacements = [
     { pos: [0.11, 0.21, 0.06], rot: [0.4, 0.3, 0.8], scale: 1.2 },
@@ -501,6 +707,16 @@ function makeIron() {
     crystal.rotation.set(...rot);
     crystal.scale.set(scale, scale * 1.3, scale);
     group.add(crystal);
+
+    attachOcclusionOutline(crystal, {
+      color: 0x6fe3ff,
+      rimColor: 0xffffff,
+      opacity: 0.96,
+      emissiveIntensity: 3.2,
+      rimStrength: 3.5,
+      rimPower: 1.8,
+      innerAlpha: 0.3,
+    });
   });
 
   group.userData.pulseMaterials = [crystalMaterial];
@@ -550,6 +766,65 @@ function makeDna(color, type = 'rat_dna') {
 
   group.add(bottomCap, topCap, sealRingBottom, sealRingTop, glass);
 
+  // Type-specific vivid occlusion glow palette
+  const outlineColors = {
+    rat_dna: { color: 0xff2d9e, rim: 0xffd1ea },
+    beetle_dna: { color: 0x5dffd6, rim: 0xe0fff8 },
+    predator_dna: { color: 0xff2a6d, rim: 0xffd6e2 },
+    apex_dna: { color: 0x9b35ff, rim: 0xecd8ff },
+    rival_dna: { color: 0xff5522, rim: 0xffd9cc },
+  };
+  const dnaConfig = outlineColors[type] || { color, rim: 0xffffff };
+
+  // Foliage-Gated Occlusion Highlights for vial casing
+  attachOcclusionOutline(glass, {
+    color: dnaConfig.color,
+    rimColor: dnaConfig.rim,
+    opacity: 0.92,
+    emissiveIntensity: 2.6,
+    rimStrength: 3.2,
+    rimPower: 1.8,
+    innerAlpha: 0.22,
+  });
+
+  attachOcclusionOutline(bottomCap, {
+    color: 0x3a3e45,
+    rimColor: dnaConfig.rim,
+    opacity: 0.88,
+    emissiveIntensity: 2.0,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.15,
+  });
+  attachOcclusionOutline(topCap, {
+    color: 0x3a3e45,
+    rimColor: dnaConfig.rim,
+    opacity: 0.88,
+    emissiveIntensity: 2.0,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.15,
+  });
+
+  attachOcclusionOutline(sealRingBottom, {
+    color: dnaConfig.color,
+    rimColor: 0xffffff,
+    opacity: 0.94,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.2,
+    rimPower: 1.8,
+    innerAlpha: 0.25,
+  });
+  attachOcclusionOutline(sealRingTop, {
+    color: dnaConfig.color,
+    rimColor: 0xffffff,
+    opacity: 0.94,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.2,
+    rimPower: 1.8,
+    innerAlpha: 0.25,
+  });
+
   // --- Internal Double-Helix DNA Spiral ---
   const helixGroup = new THREE.Group();
   helixGroup.position.y = 0.17;
@@ -596,6 +871,16 @@ function makeDna(color, type = 'rat_dna') {
       const strut = new THREE.Mesh(bioStrutGeom, darkMetalMaterial);
       strut.position.set(Math.cos(angle) * 0.085, 0.17, Math.sin(angle) * 0.085);
       group.add(strut);
+
+      attachOcclusionOutline(strut, {
+        color: dnaConfig.color,
+        rimColor: dnaConfig.rim,
+        opacity: 0.85,
+        emissiveIntensity: 2.0,
+        rimStrength: 2.6,
+        rimPower: 1.8,
+        innerAlpha: 0.15,
+      });
     }
   } else if (type === 'predator_dna') {
     // Spiked predator biohazard casing
@@ -606,6 +891,16 @@ function makeDna(color, type = 'rat_dna') {
       spike.rotation.set(0, 0, Math.PI);
       spike.scale.set(0.6, 0.7, 0.6);
       group.add(spike);
+
+      attachOcclusionOutline(spike, {
+        color: dnaConfig.color,
+        rimColor: dnaConfig.rim,
+        opacity: 0.88,
+        emissiveIntensity: 2.2,
+        rimStrength: 2.8,
+        rimPower: 1.8,
+        innerAlpha: 0.18,
+      });
     }
   } else if (type === 'apex_dna') {
     // Ornate apex orbit ring and gold/obsidian accents
@@ -614,6 +909,16 @@ function makeDna(color, type = 'rat_dna') {
     apexRing.rotation.x = Math.PI / 3;
     group.add(apexRing);
     group.userData.apexRing = apexRing;
+
+    attachOcclusionOutline(apexRing, {
+      color: dnaConfig.color,
+      rimColor: 0xffffff,
+      opacity: 0.95,
+      emissiveIntensity: 3.0,
+      rimStrength: 3.4,
+      rimPower: 1.8,
+      innerAlpha: 0.28,
+    });
   }
 
   group.userData.pulseMaterials = [helixMaterial, barMaterial];
@@ -673,6 +978,58 @@ function makeToxicGland(color) {
   duct2.rotation.set(-0.4, -0.6, -0.3);
 
   group.add(bladder, venomCore, neck, duct1, duct2);
+
+  // Foliage-Gated Occlusion Highlights for venom gland & ducts
+  attachOcclusionOutline(bladder, {
+    color,
+    rimColor: 0xf5d0ff,
+    opacity: 0.94,
+    emissiveIntensity: 2.8,
+    rimStrength: 3.4,
+    rimPower: 1.8,
+    innerAlpha: 0.28,
+  });
+
+  attachOcclusionOutline(venomCore, {
+    color: 0xe070ff,
+    rimColor: 0xffffff,
+    opacity: 0.95,
+    emissiveIntensity: 3.2,
+    rimStrength: 3.6,
+    rimPower: 1.8,
+    innerAlpha: 0.35,
+  });
+
+  attachOcclusionOutline(neck, {
+    color: 0x5a1e73,
+    rimColor: 0xf5d0ff,
+    opacity: 0.88,
+    emissiveIntensity: 2.2,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.18,
+  });
+
+  attachOcclusionOutline(duct1, {
+    color: 0x5a1e73,
+    rimColor: 0xf5d0ff,
+    opacity: 0.88,
+    emissiveIntensity: 2.2,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.18,
+  });
+
+  attachOcclusionOutline(duct2, {
+    color: 0x5a1e73,
+    rimColor: 0xf5d0ff,
+    opacity: 0.88,
+    emissiveIntensity: 2.2,
+    rimStrength: 2.8,
+    rimPower: 1.8,
+    innerAlpha: 0.18,
+  });
+
   group.userData.pulseMaterials = [membraneMat, coreMat];
   group.userData.bladder = bladder;
   return group;

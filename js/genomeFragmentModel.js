@@ -53,6 +53,25 @@ export function createGenomeFragmentMesh() {
   strandB.rotation.z = Math.PI / 2;
   group.add(strandA, strandB);
 
+  attachOcclusionOutline(strandA, {
+    color: 0x7fe3ff,
+    rimColor: 0xffffff,
+    opacity: 0.9,
+    emissiveIntensity: 2.6,
+    rimStrength: 3.0,
+    rimPower: 1.8,
+    innerAlpha: 0.2,
+  });
+  attachOcclusionOutline(strandB, {
+    color: 0x7fe3ff,
+    rimColor: 0xffffff,
+    opacity: 0.9,
+    emissiveIntensity: 2.6,
+    rimStrength: 3.0,
+    rimPower: 1.8,
+    innerAlpha: 0.2,
+  });
+
   // --- Concentric Outer Runic Ring ---
   const ringMaterial = new THREE.MeshStandardMaterial({
     color: 0xfff0cc,
@@ -87,6 +106,15 @@ export function createGenomeFragmentMesh() {
     const orbiter = new THREE.Mesh(particleGeometry, particleMaterial);
     group.add(orbiter);
     orbiters.push(orbiter);
+    attachOcclusionOutline(orbiter, {
+      color: 0xffd574,
+      rimColor: 0xffffff,
+      opacity: 0.9,
+      emissiveIntensity: 2.6,
+      rimStrength: 2.8,
+      rimPower: 1.8,
+      innerAlpha: 0.2,
+    });
   }
 
   group.userData.core = core;

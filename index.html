@@ -216,11 +216,19 @@
     <span class="throw-ammo" aria-hidden="true">0</span>
   </button>
 
-  <!-- Combat: only ever visible while Venom Rat (see PlayerCombatController.setAvailable). -->
-  <button id="bite-button" type="button" aria-label="Venom Bite">
-    <svg class="action-icon action-icon--bite" viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M8 33 L11 13 L17 25 L24 9 L31 25 L37 13 L40 33 C40 39 33 42 24 42 C15 42 8 39 8 33 Z" fill="currentColor" />
+  <!-- Poison Expel / Toxic Nova: visible while Venom Rat (1 charge per transformation) -->
+  <button id="poison-burst-button" type="button" aria-label="Poison Expel">
+    <svg class="action-icon action-icon--poison" viewBox="0 0 48 48" aria-hidden="true">
+      <!-- Expanding toxic shockwave rings -->
+      <circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4" opacity="0.6" />
+      <!-- Radial poison blast bursts -->
+      <path d="M24 13 L21 5 L27 5 Z M24 35 L21 43 L27 43 Z M13 24 L5 21 L5 27 Z M35 24 L43 21 L43 27 Z" fill="currentColor" />
+      <path d="M15 15 L8 10 L10 17 Z M33 15 L40 10 L38 17 Z M15 33 L8 38 L10 31 Z M33 33 L40 38 L38 31 Z" fill="currentColor" opacity="0.85" />
+      <!-- Central toxic core -->
+      <circle cx="24" cy="24" r="6.5" fill="currentColor" />
+      <circle cx="24" cy="24" r="3" fill="#0a1410" />
     </svg>
+    <span class="poison-burst-badge" aria-hidden="true">1</span>
   </button>
 </div>
 
