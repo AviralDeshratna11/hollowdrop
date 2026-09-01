@@ -276,15 +276,42 @@ html, body {
    phone once their text got long enough (e.g. "7.5 / 15" + "100 / 100"), which is
    exactly what happened. Stacking removes any possibility of horizontal collision
    regardless of screen width. */
+/* One card: portrait (left) + Health/Energy/Mass stacked (right) - see index.html's own
+   note on why this replaced three separate pill chips. */
 #vitals-ui {
   position: absolute;
   top: max(14px, env(safe-area-inset-top));
   left: 14px;
   display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px 6px 6px;
+  border-radius: 14px;
+  background: rgb(var(--surface-rgb) / 0.55);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  backdrop-filter: blur(var(--blur-hud));
+  /* Kept close to the old three-pill design's own footprint - the radar's own compact
+     mini-legend sits close by on narrow phones (a pre-existing proximity, not something
+     this redesign should make meaningfully worse). */
+  max-width: min(calc(100vw - 28px), 220px);
+}
+
+#vitals-portrait {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1.5px solid rgb(var(--accent-rgb) / 0.4);
+  background: rgb(var(--white-rgb) / 0.06);
+  object-fit: contain;
+  box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.2), inset 0 0 8px rgba(0, 0, 0, 0.4);
+}
+
+#vitals-bars {
+  display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  max-width: calc(100vw - 28px);
+  gap: 5px;
+  min-width: 0; /* lets .mass-label/.mass-bar/text sit in a fixed-width row without forcing the card wider */
 }
 
 #mass-ui,
@@ -292,58 +319,44 @@ html, body {
 #energy-ui {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 12px;
-  backdrop-filter: blur(var(--blur-hud));
-}
-
-#mass-ui {
-  background: rgb(var(--surface-rgb) / 0.55);
-  border: 1px solid rgb(var(--accent-rgb) / 0.25);
-}
-
-#health-ui {
-  background: var(--surface-health);
-  border: 1px solid rgb(var(--danger-soft-rgb) / 0.25);
-}
-
-#energy-ui {
-  background: var(--surface-energy);
-  border: 1px solid rgb(var(--warning-amber-rgb) / 0.25);
+  gap: 5px;
+  font-size: 11px;
 }
 
 .health-fill {
   background: linear-gradient(90deg, var(--danger), var(--warning-ember));
+  color: var(--warning-ember); /* tints this bar's own leading-edge glow dot - see .mass-fill::after */
 }
 
 .energy-fill {
   background: linear-gradient(90deg, var(--energy), var(--energy-warm));
+  color: var(--energy-warm);
 }
 
-/* Diegetic health mirrors onto the small HUD too: subtle at critical, a touch more urgent at severe. */
-#health-ui.health-ui--critical {
-  border-color: rgb(var(--danger-soft-rgb) / 0.5);
+/* Diegetic health/energy urgency now tints each bar's own outline (previously the
+   whole pill chip's border) - the three stats share one card, so a colored ring on
+   just the affected bar reads clearly without implying the other two stats are also
+   in trouble. */
+#health-ui.health-ui--critical .mass-bar {
+  box-shadow: 0 0 0 1px rgb(var(--danger-soft-rgb) / 0.6);
 }
 
-#health-ui.health-ui--severe {
-  border-color: rgb(var(--danger-flat-rgb) / 0.7);
+#health-ui.health-ui--severe .mass-bar {
+  box-shadow: 0 0 0 1px rgb(var(--danger-flat-rgb) / 0.8);
   animation: health-ui-pulse 1.1s ease-in-out infinite;
 }
 
-/* Same pattern for energy: low is a subtle border tint, critical/starving pulse. */
-#energy-ui.energy-ui--low {
-  border-color: rgb(var(--warning-amber-rgb) / 0.5);
+#energy-ui.energy-ui--low .mass-bar {
+  box-shadow: 0 0 0 1px rgb(var(--warning-amber-rgb) / 0.6);
 }
 
-#energy-ui.energy-ui--critical {
-  border-color: var(--border-energy-critical);
+#energy-ui.energy-ui--critical .mass-bar {
+  box-shadow: 0 0 0 1px var(--border-energy-critical);
   animation: health-ui-pulse 1.4s ease-in-out infinite;
 }
 
-#energy-ui.energy-ui--starving {
-  border-color: var(--border-starving);
+#energy-ui.energy-ui--starving .mass-bar {
+  box-shadow: 0 0 0 1px var(--border-starving);
   animation: health-ui-pulse 0.9s ease-in-out infinite;
 }
 
@@ -354,13 +367,17 @@ html, body {
 
 .mass-label {
   opacity: 0.8;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 9px;
+  width: 36px; /* fixed - "Energy" is the longest of the three and this keeps all three bars aligned */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .mass-bar {
-  width: 72px;
+  position: relative; /* anchors the fill's own leading-edge glow dot below */
+  width: 48px;
   height: 6px;
   border-radius: var(--radius-pill);
   background: rgb(var(--white-rgb) / 0.12);
@@ -368,32 +385,53 @@ html, body {
 }
 
 .mass-fill {
+  position: relative;
   height: 100%;
   width: 0%;
   background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  color: var(--accent); /* base bar's own glow-dot tint - health/energy override both background and color together */
   transition: width 0.25s ease;
+}
+
+/* Bright glow dot riding the fill's own leading edge (matches the reference HUD's own
+   energy-bar detail) - a child of the fill itself via ::after, so it travels for free
+   as width changes with zero extra JS. */
+.mass-fill::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 5px 1px currentColor;
 }
 
 .mass-fill--full {
   background: linear-gradient(90deg, var(--danger-warm), var(--danger));
+  color: var(--danger);
 }
 
 /* Burden urgency: 0-50% normal, 50-80% heavy, 80%+ overburdened (subtle pulse, not distracting) */
-#mass-ui.mass-ui--heavy {
-  border-color: var(--glow-extraction);
+#mass-ui.mass-ui--heavy .mass-bar {
+  box-shadow: 0 0 0 1px var(--glow-extraction);
 }
 
 #mass-ui.mass-ui--heavy .mass-fill {
   background: linear-gradient(90deg, var(--warning-dim), var(--warning-soft));
+  color: var(--warning-soft);
 }
 
-#mass-ui.mass-ui--overburdened {
-  border-color: var(--glow-warning-ember);
+#mass-ui.mass-ui--overburdened .mass-bar {
+  box-shadow: 0 0 0 1px var(--glow-warning-ember);
   animation: mass-ui-pulse 1.6s ease-in-out infinite;
 }
 
 #mass-ui.mass-ui--overburdened .mass-fill {
   background: linear-gradient(90deg, var(--danger-warm), var(--danger));
+  color: var(--danger);
 }
 
 @keyframes mass-ui-pulse {
@@ -665,75 +703,13 @@ html, body {
   gap: 4px;
 }
 
-/* Small always-on legend (unlike #radar-legend below, this one is NEVER expand-gated -
-   the reference keeps a legend permanently in view beside the dial). Icon + short label
-   rather than the reference's full row of decorative badges: only the three categories
-   a player actually needs to recognize at a glance while playing. */
-#radar-mini-legend {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 10px;
-  padding: 6px 9px;
-  border-radius: 10px;
-  background: var(--surface-panel);
-  border: 1px solid rgb(var(--accent-rgb) / 0.18);
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.radar-mini-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-/* A small badge (icon + colored glow ring), not a bare dot - JS (radarHUD.js) fills
-   each [data-radar-icon] with the SAME svg its matching blip uses, once at startup. */
-.radar-mini-legend-icon {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.radar-mini-legend-icon svg {
-  width: 68%;
-  height: 68%;
-}
-
-.radar-mini-legend-icon--enemy {
-  background: radial-gradient(circle at 34% 30%, rgba(255, 64, 88, 0.45), rgba(255, 64, 88, 0.1) 70%);
-  border: 1px solid rgba(255, 64, 88, 0.6);
-  box-shadow: 0 0 4px rgba(255, 64, 88, 0.5);
-  color: var(--radar-enemy);
-}
-
-.radar-mini-legend-icon--boss {
-  background: radial-gradient(circle at 34% 30%, rgba(176, 92, 255, 0.45), rgba(176, 92, 255, 0.1) 70%);
-  border: 1px solid rgba(176, 92, 255, 0.6);
-  box-shadow: 0 0 4px rgba(176, 92, 255, 0.5);
-  color: var(--radar-boss);
-}
-
-.radar-mini-legend-icon--dna {
-  background: radial-gradient(circle at 34% 30%, rgba(114, 255, 98, 0.45), rgba(114, 255, 98, 0.1) 70%);
-  border: 1px solid rgba(114, 255, 98, 0.6);
-  box-shadow: 0 0 4px rgba(114, 255, 98, 0.5);
-  color: var(--radar-dna);
-}
-
 /* Expanded: a centered full-screen overlay rather than growing in place toward the
    top-right corner, which would run the larger circle off the edge of a narrow phone
    screen. Deliberately does NOT pause the game (spec section 53) - it's a backdrop
-   tint, not a modal blocking gameplay state. */
+   tint, not a modal blocking gameplay state. #radar-legend below (expanded-only) is
+   the one and only legend now - the compact dial's own mini-legend was removed by
+   request (it crowded the vitals HUD on narrow phones), and this one already covers
+   the same categories with room to spell them out properly. */
 #species-radar.species-radar--expanded {
   inset: 0;
   flex-direction: column;
@@ -743,11 +719,6 @@ html, body {
   padding: 24px;
   padding-top: max(24px, env(safe-area-inset-top));
   gap: 16px;
-}
-
-/* The full legend takes over once expanded - the mini one would be redundant. */
-#species-radar.species-radar--expanded #radar-mini-legend {
-  display: none;
 }
 
 /* Compact-only decorative housing around the dial: a real (if simplified) vine/wood
