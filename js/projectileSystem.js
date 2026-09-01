@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
 import { createResourceMesh } from './resourceModels.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.3';
 
 export const DEBUG_PROJECTILE = false;
 
@@ -19,7 +20,7 @@ export const PROJECTILE_CONFIG = {
   // How far in front of the player the rock appears. Just outside PLAYER_RADIUS (0.6)
   // so it never spawns visually inside the body it was launched from.
   spawnOffset: 0.72,
-  spawnHeight: 0.55,
+  spawnHeight: 0.55, // ABOVE the terrain at that point, not an absolute world Y
   spinSpeed: 9,
   knockbackForce: 0.5,
   // Visual scale relative to the resource's own modelScale. Bigger than the inventory
@@ -282,7 +283,13 @@ export class ProjectileSystem {
     const target = this.getTarget();
     if (target && this._available) {
       this._reticle.visible = true;
-      this._reticle.position.set(target.mesh.position.x, 0.05, target.mesh.position.z);
+      // Lifted onto the terrain under the target - at a fixed low Y the ring vanished
+      // inside any raised ground, which is exactly where a boss fight tends to happen.
+      this._reticle.position.set(
+        target.mesh.position.x,
+        getTerrainHeight(target.mesh.position.x, target.mesh.position.z) + 0.08,
+        target.mesh.position.z
+      );
       const locked = target === this._lockedTarget;
       this._reticle.material.color.setHex(
         locked ? AUTO_AIM_CONFIG.reticleLockedColor : AUTO_AIM_CONFIG.reticleColor
@@ -385,7 +392,10 @@ export class ProjectileSystem {
     mesh.position
       .copy(this.playerController.mesh.position)
       .addScaledVector(tempForward, PROJECTILE_CONFIG.spawnOffset);
-    mesh.position.y = PROJECTILE_CONFIG.spawnHeight;
+    // Height is relative to the ground beneath, not absolute: the cavern floor has real
+    // elevation (see terrain.js), so a fixed world Y put rocks underground wherever the
+    // player was standing on high ground - which is most of the map.
+    mesh.position.y = getTerrainHeight(mesh.position.x, mesh.position.z) + PROJECTILE_CONFIG.spawnHeight;
     this.scene.add(mesh);
 
     this.projectiles.push({
@@ -424,6 +434,10 @@ export class ProjectileSystem {
       const step = PROJECTILE_CONFIG.speed * deltaTime;
 
       p.mesh.position.addScaledVector(p.velocity, deltaTime);
+      // Re-seat on the terrain every frame rather than flying a flat line, so a rock
+      // thrown across a rise stays visible over it instead of disappearing into it. The
+      // hit check below is XZ-only, so this is purely how the throw reads.
+      p.mesh.position.y = getTerrainHeight(p.mesh.position.x, p.mesh.position.z) + PROJECTILE_CONFIG.spawnHeight;
       p.mesh.rotateOnAxis(p.spinAxis, PROJECTILE_CONFIG.spinSpeed * deltaTime);
       p.travelled += step;
 
