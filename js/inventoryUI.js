@@ -260,6 +260,13 @@ export class InventoryUI {
     this.onClose?.();
   }
 
+  /** Re-renders the grid/detail if the panel is currently open - used when the inventory
+   *  changes underneath an open panel (e.g. a death drop empties it). No-op while closed,
+   *  since the grid is rebuilt from scratch on the next open() anyway. */
+  refresh() {
+    if (this.isOpen) this._render();
+  }
+
   /**
    * Event-driven refresh (spec sections 58-59) - the intended hook is
    * MutationSystem.onRecipeChecked, which already fires after every single

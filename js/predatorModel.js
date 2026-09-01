@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createEntityHealthBar } from './entityHealthBar.js?v=5.3';
 import { createSlimeCreature } from './slimeCreature.js?v=5.3';
+import { createRatMesh } from './ratModel.js?v=5.3';
 
 /**
  * Cave Stalker: a long, low, restless slime with a single narrow eye and six thin legs.
@@ -175,6 +176,56 @@ export function createPredatorMesh() {
   group.userData.legs = legs;
   group.userData.antennae = antennae;
   group.userData.slime = slime;
+
+  return group;
+}
+
+/**
+ * The Venom Rat intermediate boss's mesh: satisfies PredatorController's exact userData
+ * contract (body / bodyMaterial / eyeMaterial / legs / warningSprite / healthBar) but
+ * wraps the player's own Venom Rat visual (createRatMesh, default pink = the existing
+ * design) instead of the Cave Stalker slime. The Cave Stalker is being re-skinned into
+ * this boss, so its whole AI/combat/loot/health-bar stack is reused unchanged - only the
+ * visible body swaps. The rat brings its own procedural gait, so `legs` is empty and
+ * `eyeMaterial` is an inert stand-in (the rat has no separate eye to glow).
+ */
+export function createVenomRatBossMesh() {
+  const group = new THREE.Group();
+
+  const rat = createRatMesh(); // default 'venom' pink - the existing Venom Rat design
+
+  // PredatorController forces `body.position.y = 0.28 + bob` every frame. Offset the rat
+  // up within this pivot so it sits at roughly the same height above ground the player's
+  // own Venom Rat does (~0.6 centre). Eyeballed on the un-rigged FBX - tune if it
+  // floats/sinks.
+  const bodyPivot = new THREE.Group();
+  rat.position.y = 0.32;
+  bodyPivot.add(rat);
+  group.add(bodyPivot);
+
+  const warningSprite = createWarningSprite();
+  group.add(warningSprite);
+
+  const healthBar = createEntityHealthBar({ width: 0.8, fillWidth: 0.74, yOffset: 1.15 });
+  group.add(healthBar);
+
+  // Inert stand-in for the Cave Stalker's glowing eye material: PredatorController writes
+  // eyeMaterial.emissiveIntensity every frame (state glow + hit flash); the rat has no
+  // such eye, so absorb those writes into a material nothing renders.
+  const eyeMaterial = new THREE.MeshStandardMaterial();
+
+  group.userData.body = bodyPivot;
+  group.userData.bodyMaterial = rat.userData.bodyMaterial; // rat placeholder now; re-pointed on FBX load below
+  group.userData.eyeMaterial = eyeMaterial;
+  group.userData.warningSprite = warningSprite;
+  group.userData.healthBar = healthBar;
+  group.userData.legs = []; // rat brings its own gait; the controller's leg loop no-ops on []
+  group.userData.rat = rat;
+
+  // The rat swaps its placeholder material for the real FBX material once loaded - keep
+  // the boss's bodyMaterial (hit-flash target, re-read fresh each frame by the
+  // controller) pointing at the live one.
+  rat.userData.onReady = (material) => { group.userData.bodyMaterial = material; };
 
   return group;
 }

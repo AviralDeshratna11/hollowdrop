@@ -56,6 +56,14 @@ export const PREDATOR_LOOT = [
   { type: 'toxic_gland', count: 1 },
 ];
 
+// The Venom Rat intermediate boss's drop: Rat DNA only. It is now EARNED here, no longer
+// spawned in the world. Absorbing it permanently unlocks the venomRat gene (mutationSystem
+// unlockedGenes); the recipe's other materials (toxic_spore + mushroom) are still gathered
+// from the world. Dropped once per run (see _dropLoot's guard + the boss's stays-dead policy).
+export const VENOM_RAT_BOSS_LOOT = [
+  { type: 'rat_dna', count: 1 },
+];
+
 const DETECTION_RADIUS_SQ = PREDATOR_CONFIG.detectionRadius ** 2;
 const LOSE_RADIUS_SQ = PREDATOR_CONFIG.loseRadius ** 2;
 const ATTACK_RADIUS_SQ = PREDATOR_CONFIG.attackRadius ** 2;
@@ -121,10 +129,23 @@ function createDebugRing(radius, color) {
  * only - never touches movement input, inventory, or burden calculations directly.
  */
 export class PredatorController {
-  constructor(scene, homePosition, playerController, playerHealth, uiManager, resourceManager, { onDefeated } = {}) {
+  constructor(scene, homePosition, playerController, playerHealth, uiManager, resourceManager, {
+    onDefeated,
+    meshFactory = createPredatorMesh,
+    respawnEnabled = PREDATOR_RESPAWN_ENABLED,
+    loot = PREDATOR_LOOT,
+    maxHealth = PREDATOR_CONFIG.maxHealth,
+  } = {}) {
     this.scene = scene;
     this.onDefeated = onDefeated; // optional - fires once per _die(), e.g. for run-stats tracking
-    this.mesh = createPredatorMesh();
+    // Repurposing hooks: the single predator instance can be re-skinned into the Venom
+    // Rat intermediate boss by injecting a different mesh/loot/respawn policy/health,
+    // without touching its wander/chase/attack AI (see createVenomRatBossMesh /
+    // VENOM_RAT_BOSS_LOOT and main.js's construction).
+    this.respawnEnabled = respawnEnabled;
+    this.loot = loot;
+    this._lootDropped = false; // once-per-run reward guard (belt-and-suspenders)
+    this.mesh = meshFactory();
     this.mesh.position.copy(homePosition);
     scene.add(this.mesh);
 
@@ -151,7 +172,7 @@ export class PredatorController {
     this.attackLungeTarget = new THREE.Vector3();
 
     // --- Combat state ------------------------------------------------------
-    this.maxHealth = PREDATOR_CONFIG.maxHealth;
+    this.maxHealth = maxHealth;
     this.currentHealth = this.maxHealth;
     this._staggerTimer = 0; // >0 pauses AI state-progression/movement, but not knockback/flash/health-bar
     this._combatAggroTimer = 0; // >0 suppresses CHASE -> RETURN even past normal lose/max-chase distance
@@ -448,7 +469,7 @@ export class PredatorController {
     if (t >= 1 && this.mesh.visible) {
       this._dropLoot();
       this.mesh.visible = false;
-      if (PREDATOR_RESPAWN_ENABLED) this._respawnTimer = PREDATOR_RESPAWN_TIME;
+      if (this.respawnEnabled) this._respawnTimer = PREDATOR_RESPAWN_TIME;
     }
 
     if (this._respawnTimer !== null) {
@@ -467,6 +488,7 @@ export class PredatorController {
    *  flag surviving a respawn would otherwise silently corrupt the next encounter. */
   _respawn() {
     this._respawnTimer = null;
+    this._lootDropped = false; // a fresh life (or Play Again reset) can drop its reward again
     this.currentHealth = this.maxHealth;
     this.mesh.position.copy(this.homePosition);
     this.mesh.scale.setScalar(1);
@@ -497,11 +519,13 @@ export class PredatorController {
   }
 
   _dropLoot() {
+    if (this._lootDropped) return; // never grant the reward twice (e.g. a double death event)
+    this._lootDropped = true;
     const center = this.mesh.position;
-    const dropCount = PREDATOR_LOOT.reduce((sum, entry) => sum + entry.count, 0);
+    const dropCount = this.loot.reduce((sum, entry) => sum + entry.count, 0);
     let dropIndex = 0;
 
-    for (const { type, count } of PREDATOR_LOOT) {
+    for (const { type, count } of this.loot) {
       for (let i = 0; i < count; i++) {
         const angle = (dropIndex / dropCount) * Math.PI * 2;
         tempLootOffset.set(Math.cos(angle) * 0.4, 0, Math.sin(angle) * 0.4);
@@ -514,7 +538,7 @@ export class PredatorController {
 
     playLootDropSound();
     if (DEBUG_PREDATOR_COMBAT) {
-      for (const { type, count } of PREDATOR_LOOT) console.log(`Dropped ${count}x ${type}`);
+      for (const { type, count } of this.loot) console.log(`Dropped ${count}x ${type}`);
     }
   }
 

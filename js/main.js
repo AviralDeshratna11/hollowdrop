@@ -9,12 +9,13 @@ import { InventoryInteractionController } from './inventoryInteraction.js?v=5.3'
 import { InventoryWheelController } from './inventoryWheel.js?v=5.3';
 import { BurdenSystem } from './burdenSystem.js?v=5.3';
 import { PlayerHealthState, DEBUG_HEALTH } from './playerHealth.js?v=5.3';
-import { PredatorController, DEBUG_PREDATOR_COMBAT } from './predatorController.js?v=5.3';
+import { PredatorController, DEBUG_PREDATOR_COMBAT, VENOM_RAT_BOSS_LOOT } from './predatorController.js?v=5.3';
 import { DeathRespawnManager } from './deathRespawnManager.js?v=5.3';
 import { MetabolismSystem, DEBUG_METABOLISM } from './metabolismSystem.js?v=5.3';
 import { MutationSystem, DEBUG_MUTATION, MUTATION_RECIPES } from './mutationSystem.js?v=5.3';
 import { PlayerFormController, MUTATION_CONFIG, PLAYER_FORMS, DEBUG_MUTATION_TIMER } from './playerFormController.js?v=5.3';
 import { createRatMesh } from './ratModel.js?v=5.3';
+import { createVenomRatBossMesh } from './predatorModel.js?v=5.3';
 import { createPlayerSlimeVisual } from './playerSlimeModel.js?v=5.3';
 import { PreyManager, DEBUG_PREY } from './preyManager.js?v=5.3';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js?v=5.3';
@@ -198,7 +199,9 @@ const amoeba = createPlayerSlimeVisual(PLAYER_RADIUS);
 const slimeMaterial = amoeba.bodyMaterial;
 slimeVisual.add(amoeba.group);
 
-const ratVisual = createRatMesh();
+// The player's own mutated form is the CUTE purple rat (per the reference art), distinct
+// from the boss's pink Venom Rat below - same mesh/gait/combat, only its look differs.
+const ratVisual = createRatMesh({ variant: 'cute' });
 const ratMaterial = ratVisual.userData.bodyMaterial;
 ratVisual.visible = false;
 player.add(ratVisual);
@@ -252,7 +255,9 @@ function populateWorldResources() {
     resourceManager.spawnResource('iron', new THREE.Vector3(x, getTerrainHeight(x, z), z));
   }
 
-  resourceManager.spawnResource('rat_dna', new THREE.Vector3(-10, getTerrainHeight(-10, 6), 6));
+  // Rat DNA is no longer spawned in the world - it is earned by defeating the Venom Rat
+  // boss (the repurposed predator, see VENOM_RAT_BOSS_LOOT). It stays in `excludeTypes`
+  // above so it never leaks back into the ambient scatter either.
 }
 populateWorldResources();
 
@@ -296,10 +301,17 @@ const burdenSystem = new BurdenSystem(inventoryManager, playerController, {
   onHeavyReached: () => uiManager.showHeavyHint(projectileSystem.getAmmoCount()),
 });
 
-// --- Predator (Cave Stalker) ---------------------------------------------------
+// --- Venom Rat intermediate boss (the repurposed Cave Stalker) -------------------
+// Same PredatorController AI/combat, re-skinned as the Venom Rat: it wears the pink Venom
+// Rat model, drops Rat DNA (the only source now), stays dead for the run once beaten, and
+// is buffed to boss-tier health.
 const predatorHomePosition = new THREE.Vector3(10, getTerrainHeight(10, 8), 8);
 const predatorController = new PredatorController(scene, predatorHomePosition, playerController, playerHealth, uiManager, resourceManager, {
   onDefeated: () => runStats.predatorsDefeated++,
+  meshFactory: createVenomRatBossMesh,
+  respawnEnabled: false, // an intermediate boss stays down until Play Again
+  loot: VENOM_RAT_BOSS_LOOT,
+  maxHealth: 120, // ~8 Venom Bites - reads as a real fight, not a normal enemy
 });
 
 // --- Mutation form (Venom Rat) --------------------------------------------------
@@ -653,7 +665,62 @@ function updateCamera(deltaTime) {
   camera.position.add(screenShake.offset);
 }
 
-// --- Death / Respawn ----------------------------------------------------------
+// --- Random death-respawn selection --------------------------------------------
+// Death drops the whole inventory at the death spot and sends Hollowdrop somewhere else
+// entirely (Minecraft-style), so a death respawn picks a RANDOM valid location rather
+// than the fixed canonical spawn (which a new-run reset still uses). "Valid" = inside the
+// populated play area, clear of static geometry, out of the active boss arena and the
+// predator's territory, and not right on top of the freshly-dropped loot.
+const RESPAWN_CONFIG = {
+  minRadius: 5,  // from world origin - stays in the populated play area, not the empty far ground
+  maxRadius: 18,
+  attempts: 30,  // hard cap: the search can never run forever
+  clearance: PLAYER_RADIUS + 0.3,
+  minDistFromDeathSq: 6 * 6, // don't respawn sitting on the dropped inventory
+};
+// Danger zones a vulnerable fresh Slime must not respawn inside. Same { x, z, radius }
+// shape the collision / world-dressing exclusions already use.
+const RESPAWN_EXCLUSIONS = [
+  { x: apexArenaCenter.x, z: apexArenaCenter.z, radius: APEX_CONFIG.arenaRadius + 3 },
+  { x: predatorHomePosition.x, z: predatorHomePosition.z, radius: 6 },
+];
+
+function isRespawnCandidateAllowed(x, z, deathLocation) {
+  if (!collisionSystem.isClear(x, z, RESPAWN_CONFIG.clearance)) return false;
+  for (const zone of RESPAWN_EXCLUSIONS) {
+    const dx = x - zone.x;
+    const dz = z - zone.z;
+    if (dx * dx + dz * dz < zone.radius * zone.radius) return false;
+  }
+  if (deathLocation) {
+    const dx = x - deathLocation.x;
+    const dz = z - deathLocation.z;
+    if (dx * dx + dz * dz < RESPAWN_CONFIG.minDistFromDeathSq) return false;
+  }
+  return true;
+}
+
+/** Random valid respawn point for a death (see RESPAWN_CONFIG). Tries a bounded number of
+ *  candidates in an annulus around the origin, then falls back to the canonical spawn so
+ *  the search always terminates with a usable position - never an infinite loop. */
+function pickRandomRespawnPosition(deathLocation) {
+  for (let attempt = 0; attempt < RESPAWN_CONFIG.attempts; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = RESPAWN_CONFIG.minRadius + Math.random() * (RESPAWN_CONFIG.maxRadius - RESPAWN_CONFIG.minRadius);
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    if (isRespawnCandidateAllowed(x, z, deathLocation)) {
+      return new THREE.Vector3(x, PLAYER_RADIUS, z);
+    }
+  }
+  return PLAYER_SPAWN_POSITION.clone(); // bounded fallback - a valid, known-good spot
+}
+
+// Death/respawn: drops the FULL inventory into the world at the death spot (reusing the
+// wheel/expel resource system), plays the collapse animation, fades, saves the death
+// coordinates, and returns Hollowdrop to a RANDOM valid spawn point, always back as Slime.
+// PLAYER_SPAWN_POSITION itself is declared up with the player root, since the world
+// dressing needs it before this point to know where to leave clear.
 const deathRespawnManager = new DeathRespawnManager({
   player,
   playerController,
@@ -669,6 +736,12 @@ const deathRespawnManager = new DeathRespawnManager({
   genomeFragmentController,
   uiManager,
   respawnPosition: PLAYER_SPAWN_POSITION,
+  // Death respawns land at a random valid spot; a new-run reset still uses
+  // PLAYER_SPAWN_POSITION above so resetGame()'s player-centred resource scatter
+  // re-centres correctly.
+  pickRespawnPosition: pickRandomRespawnPosition,
+  // Snaps the camera instantly on respawn instead of letting it slide across the
+  // map to catch up - the fade covers the position jump, not a camera glide.
   onRespawnCamera: () => {
     camera.position.set(
       player.position.x + CAMERA_OFFSET.x * viewZoom,
@@ -680,6 +753,18 @@ const deathRespawnManager = new DeathRespawnManager({
   onPlayerDeath: () => runStats.deaths++,
 });
 
+// Radar reads the tracked death drop from here to show a recovery marker (RadarController
+// is built before DeathRespawnManager, so it's wired after construction like the rest of
+// main.js's cross-references).
+radarController.deathRespawnManager = deathRespawnManager;
+
+// Keep an open inventory panel honest after a death empties it (the grid is only rebuilt
+// on open, so without this a panel left open through a death would show stale item cells).
+deathRespawnManager.onInventoryDropped = () => {
+  if (inventoryUI.isOpen) inventoryUI.refresh();
+};
+
+// Resources shouldn't attract/absorb into a dying or not-yet-respawned player.
 const OFFSCREEN_POSITION = new THREE.Vector3(9999, 9999, 9999);
 
 if (DEBUG_HEALTH) {
@@ -916,6 +1001,9 @@ window.__hollowdrop = {
   memorySequenceController,
   runCompleteController,
   resetGame,
+  // Convenience read for a future radar/navigation system - the authoritative source is
+  // DeathRespawnManager.getLastDeathLocation().
+  getLastDeathLocation: () => deathRespawnManager.getLastDeathLocation(),
   projectItemToScreen: (item) => inventoryInteraction._worldPositionToScreen(item.visualMesh.getWorldPosition(new THREE.Vector3())),
 };
 
