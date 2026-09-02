@@ -17,7 +17,7 @@ export const VENOM_BITE_CONFIG = {
 
 export const POISON_EXPEL_CONFIG = {
   damage: 35,
-  radius: 4.2,
+  radius: 4.8,
   knockbackForce: 2.2,
 };
 

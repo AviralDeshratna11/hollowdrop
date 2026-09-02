@@ -1,38 +1,53 @@
 import * as THREE from 'three';
 import { createApexMesh } from './apexModel.js?v=5.3';
 import { getTerrainHeight } from './terrain.js?v=5.3';
+import {
+  playApexRoarSound,
+  playApexAttackSound,
+  playApexChargeSound,
+  playApexSlamSound,
+  playApexToxicSound,
+  playApexBurrowSound,
+  playApexEmergeSound,
+  playApexHitSound,
+  playApexDeathSound,
+  playBiteHitSound,
+} from './soundEffects.js?v=5.3';
 
 export const DEBUG_APEX = false;
 
 export const APEX_CONFIG = {
-  maxHealth: 30, // TEMP for testing: 2 Venom Bites (15 dmg each) kills it - real value is 180, restore before shipping
-  moveSpeed: 1.8,
-  phase2MoveSpeedMultiplier: 1.15,
-  phase2RecoveryMultiplier: 0.85,
+  maxHealth: 180, // Balanced multi-phase boss HP
+  moveSpeed: 1.9,
+  phase2MoveSpeedMultiplier: 1.22,
+  phase2RecoveryMultiplier: 0.8,
   phase2ToxicCooldownMultiplier: 0.7,
-  phase2Threshold: 0.6,
-  turnSmoothing: 5.0,
+  phase3MoveSpeedMultiplier: 1.38,
+  phase3RecoveryMultiplier: 0.65,
+  phase2Threshold: 0.60,
+  phase3Threshold: 0.30,
+  turnSmoothing: 5.5,
 
-  arenaRadius: 9,
-  disengageBuffer: 4, // extra distance past arenaRadius before it gives up and heads home
+  arenaRadius: 9.5,
+  disengageBuffer: 4,
 
-  introDuration: 1.0,
-  phaseTransitionDuration: 0.8,
-  deathDuration: 1.8,
-  deathStaggerFraction: 0.18, // fraction of deathDuration spent on the scripted stagger-back beat before collapsing
+  introDuration: 1.2,
+  phaseTransitionDuration: 0.9,
+  deathDuration: 2.0,
+  deathStaggerFraction: 0.2,
 
-  staggerDuration: 0.08, // far shorter than the normal Predator's - a boss must not be stun-lockable
+  staggerDuration: 0.06,
   hitFlashDuration: 0.15,
   hitRecoilDuration: 0.12,
 
-  // Attack range gating for chooseAttack() - not hard requirements, just weighting.
-  attackRangeCloseSq: 2.5 ** 2,
-  attackRangeFarSq: 5 ** 2,
-  maxRepeatAttacks: 2, // avoid picking the same attack more than this many times in a row
+  attackRangeCloseSq: 2.8 ** 2,
+  attackRangeFarSq: 5.5 ** 2,
+  maxRepeatAttacks: 2,
 
-  charge: { telegraph: 0.6, speed: 9.0, maxDistance: 8, damage: 20, hitRadius: 1.1, recovery: 0.85, cooldown: 3.0 },
-  slam: { telegraph: 0.5, active: 0.15, damage: 25, range: 1.8, recovery: 0.7, cooldown: 2.0 },
-  toxic: { telegraph: 0.8, damage: 15, radius: 2.5, recovery: 0.9, cooldown: 4.0 },
+  charge: { telegraph: 0.55, speed: 10.5, maxDistance: 9.5, damage: 22, hitRadius: 1.25, recovery: 0.7, cooldown: 2.8 },
+  slam: { telegraph: 0.5, active: 0.16, damage: 28, range: 2.3, recovery: 0.6, cooldown: 2.0 },
+  toxic: { telegraph: 0.75, damage: 18, radius: 3.2, recovery: 0.75, cooldown: 3.5 },
+  burrow: { telegraph: 0.5, travelSpeed: 7.5, maxDuration: 2.0, damage: 32, emergeRadius: 2.6, recovery: 0.75, cooldown: 5.0 },
 };
 
 export const APEX_LOOT = [{ type: 'apex_dna', count: 1 }];
@@ -47,12 +62,14 @@ const STATES = {
   SLAM: 'SLAM',
   TOXIC_TELEGRAPH: 'TOXIC_TELEGRAPH',
   TOXIC_BURST: 'TOXIC_BURST',
+  BURROW_TELEGRAPH: 'BURROW_TELEGRAPH',
+  BURROWED: 'BURROWED',
+  EMERGE_ATTACK: 'EMERGE_ATTACK',
   RECOVERY: 'RECOVERY',
   PHASE_TRANSITION: 'PHASE_TRANSITION',
   DEAD: 'DEAD',
 };
 
-// Not damageable, and combat should visually ignore it, outside these states.
 const DAMAGEABLE_STATES = new Set([
   STATES.COMBAT,
   STATES.CHARGE_TELEGRAPH,
@@ -61,6 +78,8 @@ const DAMAGEABLE_STATES = new Set([
   STATES.SLAM,
   STATES.TOXIC_TELEGRAPH,
   STATES.TOXIC_BURST,
+  STATES.BURROW_TELEGRAPH,
+  STATES.EMERGE_ATTACK,
   STATES.RECOVERY,
 ]);
 
@@ -69,7 +88,6 @@ const DISENGAGE_RADIUS_SQ = (APEX_CONFIG.arenaRadius + APEX_CONFIG.disengageBuff
 const CHARGE_HIT_RADIUS_SQ = APEX_CONFIG.charge.hitRadius ** 2;
 const CHARGE_DURATION = APEX_CONFIG.charge.maxDistance / APEX_CONFIG.charge.speed;
 
-// Reused scratch vectors - no per-frame allocation in the hot AI-update path.
 const tempDirection = new THREE.Vector3();
 const tempA = new THREE.Vector3();
 
@@ -88,23 +106,22 @@ function createGroundRing(radius, color) {
   return ring;
 }
 
-// Optional, currently silent - hooks so audio can be added later without touching AI logic.
-function playApexRoarSound() {}
-function playApexAttackSound() {}
-function playApexHitSound() {}
-function playApexDeathSound() {}
-function playPlayerHitSound() {}
-
 /**
- * Murkmaw - the first Apex Predator boss. Owns arena-biased movement, a three-attack
- * telegraph/active/recovery combat loop, two health-gated phases, and death/loot -
- * all through the SAME damageable-entity interface (getDamageableEntities/takeDamage)
- * PreyManager and PredatorController already implement, so PlayerCombatController
- * needs zero Apex-specific code (see main.js's damageableSources array). Reads player
- * position/health only - never touches movement input, inventory, or burden directly.
+ * Murkmaw — Overhauled Apex Boss Encounter.
  */
 export class ApexController {
-  constructor({ scene, arenaCenter, playerController, playerHealth, uiManager, resourceManager, genomeFragmentController, onDefeated }) {
+  constructor({
+    scene,
+    arenaCenter,
+    playerController,
+    playerHealth,
+    uiManager,
+    resourceManager,
+    genomeFragmentController,
+    combatVFX = null,
+    screenShake = null,
+    onDefeated,
+  }) {
     this.scene = scene;
     this.arenaCenter = arenaCenter.clone();
     this.playerController = playerController;
@@ -113,11 +130,13 @@ export class ApexController {
     this.uiManager = uiManager;
     this.resourceManager = resourceManager;
     this.genomeFragmentController = genomeFragmentController;
-    this.onDefeated = onDefeated; // optional - fires once per _die(), e.g. for run-stats tracking
+    this.combatVFX = combatVFX;
+    this.screenShake = screenShake;
+    this.onDefeated = onDefeated;
 
     this.mesh = createApexMesh();
     this.mesh.position.copy(this.arenaCenter);
-    this.mesh.scale.setScalar(0.55); // resting/dormant size, before it "rises" in the intro
+    this.mesh.scale.setScalar(0.55);
     scene.add(this.mesh);
 
     this.state = STATES.DORMANT;
@@ -134,11 +153,12 @@ export class ApexController {
     this._hitRecoilTimer = null;
     this._bodyBaseEmissiveIntensity = this.mesh.userData.bodyMaterial.emissiveIntensity;
     this._deathTime = null;
-    this._hudVisible = false; // tracks the boss HUD independently of "has this ever started" - see _updateBossHudVisibility
+    this._hudVisible = false;
 
     this._chargeCooldownTimer = 0;
     this._slamCooldownTimer = 0;
     this._toxicCooldownTimer = 0;
+    this._burrowCooldownTimer = 3.0; // small initial cooldown
     this._lastAttack = null;
     this._lastAttackStreak = 0;
     this._hasHitThisAttack = false;
@@ -147,17 +167,19 @@ export class ApexController {
     this._chargeStartPosition = new THREE.Vector3();
     this._chargeTraveled = 0;
     this._toxicCenter = new THREE.Vector3();
+    this._burrowTarget = new THREE.Vector3();
+    this._tremorTimer = 0;
 
-    // Gameplay telegraph visuals (not debug-only) - created once, toggled via opacity.
+    // Telegraph meshes
     this._chargeStreak = this._createChargeStreak();
-    this._slamRing = createGroundRing(APEX_CONFIG.slam.range, 0xff5c3d);
+    this._slamRing = createGroundRing(APEX_CONFIG.slam.range, 0xff3311);
     this._toxicRing = createGroundRing(APEX_CONFIG.toxic.radius, 0xb23fff);
     scene.add(this._chargeStreak, this._slamRing, this._toxicRing);
   }
 
   _createChargeStreak() {
-    const geometry = new THREE.PlaneGeometry(0.5, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0xff8a2d, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
+    const geometry = new THREE.PlaneGeometry(0.6, 1);
+    const material = new THREE.MeshBasicMaterial({ color: 0xff3311, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0.03;
@@ -171,29 +193,21 @@ export class ApexController {
     this.stateTime = 0;
   }
 
-  /** Called once by ApexEncounterManager when the player first crosses the trigger
-   *  radius. No-ops if already engaged or already dead - never restarts the intro. */
   startEncounter() {
     if (this.state !== STATES.DORMANT) return;
     this.setState(STATES.INTRO);
-    // HUD visibility itself is handled every frame by _updateBossHudVisibility() (it
-    // naturally shows on the very next frame, since the player is definitionally in
-    // range right after triggering) - this just seeds the bar's fill so it doesn't
-    // flash from 0 the instant it does appear.
     this.uiManager.updateBossHealth(this.currentHealth / this.maxHealth);
     playApexRoarSound();
+    this.screenShake?.add(0.4);
     if (DEBUG_APEX) console.log('Apex encounter started');
   }
 
-  // --- Combat interface ------------------------------------------------------
+  // --- Combat interface ---
 
   getDamageableEntities() {
     return DAMAGEABLE_STATES.has(this.state) ? [this] : [];
   }
 
-  /** Reusable damageable-entity interface: (amount, info) - the exact shape
-   *  PreyManager's entities and PredatorController implement too, so
-   *  PlayerCombatController never branches on which enemy this is. */
   takeDamage(amount, info = {}) {
     if (!DAMAGEABLE_STATES.has(this.state)) return false;
 
@@ -201,40 +215,47 @@ export class ApexController {
     this.uiManager.updateBossHealth(this.currentHealth / this.maxHealth);
     this._hitFlashTimer = 0;
     this._hitRecoilTimer = 0;
-    // Deliberately no knockback velocity (spec: "visual recoil only" - an Apex should
-    // read as far too heavy to be physically shoved by a single bite).
     this._staggerTimer = APEX_CONFIG.staggerDuration;
 
     this.resourceManager.particles.spawnBurst(this.mesh.position, 0x4dffb2, 6);
     playApexHitSound();
 
     if (DEBUG_APEX) {
-      console.log(`Venom Bite hit Murkmaw\nDamage: ${amount}`);
-      console.log(`Murkmaw HP:\n${this.currentHealth} / ${this.maxHealth}`);
+      console.log(`Hit Murkmaw: ${amount} dmg. HP: ${this.currentHealth}/${this.maxHealth}`);
     }
 
     if (this.currentHealth <= 0) {
       this._die();
     } else if (this.phase === 1 && this.currentHealth / this.maxHealth <= APEX_CONFIG.phase2Threshold) {
-      this._enterPhaseTransition();
+      this._enterPhaseTransition(2);
+    } else if (this.phase === 2 && this.currentHealth / this.maxHealth <= APEX_CONFIG.phase3Threshold) {
+      this._enterPhaseTransition(3);
     }
     return true;
   }
 
-  // --- Debug-only ------------------------------------------------------------
+  // --- Debug-only helpers ---
 
   debugForceAttack(type) {
     if (!DEBUG_APEX || this.state !== STATES.COMBAT) return;
     if (type === 'charge') this._beginCharge();
     else if (type === 'slam') this._beginSlam();
     else if (type === 'toxic') this._beginToxic();
+    else if (type === 'burrow') this._beginBurrow();
   }
 
   debugForcePhase2() {
-    if (!DEBUG_APEX || this.phase !== 1) return;
+    if (!DEBUG_APEX || this.phase >= 2) return;
     this.currentHealth = Math.min(this.currentHealth, this.maxHealth * APEX_CONFIG.phase2Threshold);
     this.uiManager.updateBossHealth(this.currentHealth / this.maxHealth);
-    this._enterPhaseTransition();
+    this._enterPhaseTransition(2);
+  }
+
+  debugForcePhase3() {
+    if (!DEBUG_APEX || this.phase >= 3) return;
+    this.currentHealth = Math.min(this.currentHealth, this.maxHealth * APEX_CONFIG.phase3Threshold);
+    this.uiManager.updateBossHealth(this.currentHealth / this.maxHealth);
+    this._enterPhaseTransition(3);
   }
 
   debugSetHealth(amount) {
@@ -244,7 +265,7 @@ export class ApexController {
     if (this.currentHealth <= 0) this._die();
   }
 
-  // --- Main update -------------------------------------------------------------
+  // --- Main update loop ---
 
   update(deltaTime) {
     if (this.state === STATES.DORMANT) return;
@@ -260,10 +281,8 @@ export class ApexController {
     if (this._chargeCooldownTimer > 0) this._chargeCooldownTimer = Math.max(0, this._chargeCooldownTimer - deltaTime);
     if (this._slamCooldownTimer > 0) this._slamCooldownTimer = Math.max(0, this._slamCooldownTimer - deltaTime);
     if (this._toxicCooldownTimer > 0) this._toxicCooldownTimer = Math.max(0, this._toxicCooldownTimer - deltaTime);
+    if (this._burrowCooldownTimer > 0) this._burrowCooldownTimer = Math.max(0, this._burrowCooldownTimer - deltaTime);
 
-    // Stagger pauses state-progression only (stateTime frozen, whichever state
-    // resumes exactly where it left off) - same pattern as PredatorController,
-    // just a much shorter window here.
     if (this._staggerTimer > 0) {
       this._staggerTimer = Math.max(0, this._staggerTimer - deltaTime);
       this._elapsed += deltaTime;
@@ -274,7 +293,7 @@ export class ApexController {
     this._elapsed += deltaTime;
     this.stateTime += deltaTime;
 
-    if (this.state !== STATES.DEAD && this.state !== STATES.DORMANT) {
+    if (this.state !== STATES.DEAD && this.state !== STATES.DORMANT && this.state !== STATES.BURROWED) {
       const targetY = getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
       const ySmooth = 1 - Math.exp(-12.0 * deltaTime);
       this.mesh.position.y += (targetY - this.mesh.position.y) * ySmooth;
@@ -305,6 +324,15 @@ export class ApexController {
       case STATES.TOXIC_BURST:
         this._updateToxicBurst(deltaTime);
         break;
+      case STATES.BURROW_TELEGRAPH:
+        this._updateBurrowTelegraph(deltaTime);
+        break;
+      case STATES.BURROWED:
+        this._updateBurrowed(deltaTime);
+        break;
+      case STATES.EMERGE_ATTACK:
+        this._updateEmergeAttack(deltaTime);
+        break;
       case STATES.RECOVERY:
         this._updateRecovery(deltaTime);
         break;
@@ -316,56 +344,61 @@ export class ApexController {
     this._applyIdleAnimation(deltaTime);
   }
 
-  // --- States ------------------------------------------------------------------
+  // --- States implementation ---
 
   _updateIntro(deltaTime) {
     const t = Math.min(this.stateTime / APEX_CONFIG.introDuration, 1);
     this.mesh.scale.setScalar(THREE.MathUtils.lerp(0.55, 1, t));
     this._faceToward(this.player.position, deltaTime, APEX_CONFIG.turnSmoothing * 0.5);
-    if (t >= 1) this.setState(STATES.COMBAT);
+    if (t >= 1) {
+      this.mesh.userData.setMandibleState?.(0.3);
+      this.setState(STATES.COMBAT);
+    }
   }
 
   _isPlayerInRange() {
     return horizontalDistanceSq(this.mesh.position, this.player.position) < DISENGAGE_RADIUS_SQ;
   }
 
-  /** The boss HUD should track "is the player actually near/engaged with the fight",
-   *  not just "has this encounter ever started" - otherwise it stays stuck on screen
-   *  after the player dies and respawns back at the map's spawn point, far from the
-   *  arena. Reuses the same in-range check the AI itself uses to decide whether to
-   *  chase or head home, so the two always agree. */
   _updateBossHudVisibility() {
     const shouldShow = this._isPlayerInRange() && !this.playerHealth.isDead;
     if (shouldShow === this._hudVisible) return;
     this._hudVisible = shouldShow;
-    if (shouldShow) this.uiManager.showBossHealth('Murkmaw — Apex');
-    else this.uiManager.hideBossHealth();
+    if (shouldShow) {
+      const title = this.phase === 3 ? 'MURKMAW — APEX FURY' : this.phase === 2 ? 'MURKMAW — ENRAGED APEX' : 'MURKMAW — APEX PREDATOR';
+      this.uiManager.showBossHealth(title);
+    } else {
+      this.uiManager.hideBossHealth();
+    }
   }
 
   _updateCombat(deltaTime) {
     if (this.playerHealth.isDead || !this._isPlayerInRange()) {
-      // Bias back toward the arena instead of chasing across the whole map - and
-      // never attack while the player is out of range or dead/respawning.
       this._moveToward(this.arenaCenter, this._getMoveSpeed(), deltaTime);
       return;
     }
 
     const attack = this._chooseAttack();
-    if (attack === 'charge') this._beginCharge();
+    if (attack === 'burrow') this._beginBurrow();
+    else if (attack === 'charge') this._beginCharge();
     else if (attack === 'slam') this._beginSlam();
     else if (attack === 'toxic') this._beginToxic();
-    else this._moveToward(this.player.position, this._getMoveSpeed(), deltaTime); // everything on cooldown - close the gap and wait
+    else this._moveToward(this.player.position, this._getMoveSpeed(), deltaTime);
   }
 
   _chooseAttack() {
     const distSq = horizontalDistanceSq(this.mesh.position, this.player.position);
     const weighted = [];
+
+    // Phase 3 gets Subterranean Burrow
+    if (this.phase === 3 && this._burrowCooldownTimer <= 0) {
+      weighted.push('burrow', 'burrow');
+    }
+
     if (this._chargeCooldownTimer <= 0 && distSq > APEX_CONFIG.attackRangeFarSq) weighted.push('charge', 'charge');
     if (this._slamCooldownTimer <= 0 && distSq < APEX_CONFIG.attackRangeCloseSq) weighted.push('slam', 'slam');
     if (this._toxicCooldownTimer <= 0 && distSq >= APEX_CONFIG.attackRangeCloseSq) weighted.push('toxic');
 
-    // Range gating produced nothing usable (e.g. mid-range with everything else on
-    // cooldown) - fall back to any off-cooldown attack so it never stalls doing nothing.
     const pool = weighted.length > 0 ? weighted : ['charge', 'slam', 'toxic'].filter((a) => this._cooldownFor(a) <= 0);
     if (pool.length === 0) return null;
 
@@ -377,6 +410,7 @@ export class ApexController {
   _cooldownFor(attack) {
     if (attack === 'charge') return this._chargeCooldownTimer;
     if (attack === 'slam') return this._slamCooldownTimer;
+    if (attack === 'burrow') return this._burrowCooldownTimer;
     return this._toxicCooldownTimer;
   }
 
@@ -385,23 +419,26 @@ export class ApexController {
     this._lastAttack = attack;
   }
 
-  // --- Charge --------------------------------------------------------------
+  // --- Charge Attack ---
 
   _beginCharge() {
     this._markAttackChosen('charge');
     this._hasHitThisAttack = false;
+    this.mesh.userData.setMandibleState?.(1.0); // Mandibles flare open
     this.setState(STATES.CHARGE_TELEGRAPH);
   }
 
   _updateChargeTelegraph(deltaTime) {
     this._faceToward(this.player.position, deltaTime, APEX_CONFIG.turnSmoothing * 1.5);
+    const t = Math.min(this.stateTime / APEX_CONFIG.charge.telegraph, 1);
+    this.mesh.userData.head.rotation.x = -0.2 * t; // crouch/rear back
+
     if (this.stateTime >= APEX_CONFIG.charge.telegraph) {
-      // Direction locks HERE, once, from the player's position at this exact moment -
-      // never re-homed during the charge itself (spec: this is what allows dodging).
       tempDirection.copy(this.player.position).sub(this.mesh.position);
       tempDirection.y = 0;
       if (tempDirection.lengthSq() > 1e-6) tempDirection.normalize();
       else tempDirection.set(0, 0, 1);
+
       this._chargeDirection.copy(tempDirection);
       this._chargeStartPosition.copy(this.mesh.position);
       this._chargeTraveled = 0;
@@ -409,9 +446,10 @@ export class ApexController {
       this._chargeStreak.position.set(this.mesh.position.x, getTerrainHeight(this.mesh.position.x, this.mesh.position.z) + 0.04, this.mesh.position.z);
       this._chargeStreak.rotation.z = Math.atan2(tempDirection.x, tempDirection.z);
       this._chargeStreak.scale.set(1, APEX_CONFIG.charge.maxDistance, 1);
-      this._chargeStreak.material.opacity = 0.35;
+      this._chargeStreak.material.opacity = 0.45;
 
-      playApexAttackSound();
+      playApexChargeSound();
+      this.screenShake?.add(0.3);
       this.setState(STATES.CHARGE);
     }
   }
@@ -420,32 +458,40 @@ export class ApexController {
     const travel = APEX_CONFIG.charge.speed * deltaTime;
     this.mesh.position.addScaledVector(this._chargeDirection, travel);
     this._chargeTraveled += travel;
-    this._chargeStreak.material.opacity = Math.max(0.35 * (1 - this.stateTime / CHARGE_DURATION), 0);
+    this._chargeStreak.material.opacity = Math.max(0.45 * (1 - this.stateTime / CHARGE_DURATION), 0);
 
     if (!this._hasHitThisAttack && horizontalDistanceSq(this.mesh.position, this.player.position) < CHARGE_HIT_RADIUS_SQ) {
       this._hasHitThisAttack = true;
       this._hitPlayer(APEX_CONFIG.charge.damage, 'charge');
+      this.screenShake?.add(0.45);
     }
 
     if (this._chargeTraveled >= APEX_CONFIG.charge.maxDistance || this.stateTime >= CHARGE_DURATION) {
       this._chargeStreak.material.opacity = 0;
+      this.combatVFX?.spawnApexChargeFurrow(this._chargeStartPosition, this.mesh.position, this._chargeDirection);
+      this.mesh.userData.setMandibleState?.(0.2);
       this._beginRecovery(APEX_CONFIG.charge.recovery);
       this._chargeCooldownTimer = APEX_CONFIG.charge.cooldown;
     }
   }
 
-  // --- Slam ------------------------------------------------------------------
+  // --- Seismic Ground Slam Attack ---
 
   _beginSlam() {
     this._markAttackChosen('slam');
     this._hasHitThisAttack = false;
+    this.mesh.userData.setMandibleState?.(0.9);
     this.setState(STATES.SLAM_TELEGRAPH);
   }
 
   _updateSlamTelegraph(deltaTime) {
     this._faceToward(this.player.position, deltaTime, APEX_CONFIG.turnSmoothing * 1.5);
+    const t = Math.min(this.stateTime / APEX_CONFIG.slam.telegraph, 1);
     this._slamRing.position.set(this.mesh.position.x, getTerrainHeight(this.mesh.position.x, this.mesh.position.z) + 0.04, this.mesh.position.z);
-    this._slamRing.material.opacity = 0.5 * Math.min(this.stateTime / APEX_CONFIG.slam.telegraph, 1);
+    this._slamRing.material.opacity = 0.6 * t;
+
+    // Rears head up high
+    this.mesh.userData.head.rotation.x = -0.55 * t;
 
     if (this.stateTime >= APEX_CONFIG.slam.telegraph) {
       playApexAttackSound();
@@ -454,41 +500,47 @@ export class ApexController {
   }
 
   _updateSlam(deltaTime) {
-    this._slamRing.material.opacity = Math.max(0.5 * (1 - this.stateTime / APEX_CONFIG.slam.active), 0);
+    const t = Math.min(this.stateTime / APEX_CONFIG.slam.active, 1);
+    this.mesh.userData.head.rotation.x = THREE.MathUtils.lerp(-0.55, 0.35, t); // slams down violently
 
-    if (!this._hasHitThisAttack && horizontalDistanceSq(this.mesh.position, this.player.position) < APEX_CONFIG.slam.range ** 2) {
-      // Roughly-in-front check, same forgiving convention Venom Bite already uses -
-      // this is a frontal slam, not an all-around AoE.
-      tempA.copy(this.player.position).sub(this.mesh.position);
-      tempA.y = 0;
-      const facingForward = tempA.lengthSq() < 1e-6 || tempA.normalize().dot(this._getForward()) > 0.1;
-      if (facingForward) {
-        this._hasHitThisAttack = true;
-        this._hitPlayer(APEX_CONFIG.slam.damage, 'slam');
+    if (!this._hasHitThisAttack) {
+      this._hasHitThisAttack = true;
+      playApexSlamSound();
+      this.screenShake?.add(0.55);
+      this.combatVFX?.spawnApexSlamCrater(this.mesh.position, APEX_CONFIG.slam.range);
+
+      if (horizontalDistanceSq(this.mesh.position, this.player.position) < APEX_CONFIG.slam.range ** 2) {
+        tempA.copy(this.player.position).sub(this.mesh.position);
+        tempA.y = 0;
+        const facingForward = tempA.lengthSq() < 1e-6 || tempA.normalize().dot(this._getForward()) > 0.05;
+        if (facingForward) {
+          this._hitPlayer(APEX_CONFIG.slam.damage, 'slam');
+        }
       }
     }
 
     if (this.stateTime >= APEX_CONFIG.slam.active) {
       this._slamRing.material.opacity = 0;
+      this.mesh.userData.setMandibleState?.(0.2);
+      this.mesh.userData.head.rotation.x = 0;
       this._beginRecovery(APEX_CONFIG.slam.recovery);
       this._slamCooldownTimer = APEX_CONFIG.slam.cooldown;
     }
   }
 
-  // --- Toxic Burst -----------------------------------------------------------
+  // --- Toxic Miasma Nova Attack ---
 
   _beginToxic() {
     this._markAttackChosen('toxic');
     this._hasHitThisAttack = false;
-    this._toxicCenter.copy(this.mesh.position); // AoE centers on the boss, frozen at telegraph start
+    this._toxicCenter.copy(this.mesh.position);
     this.setState(STATES.TOXIC_TELEGRAPH);
   }
 
   _updateToxicTelegraph(deltaTime) {
     const t = Math.min(this.stateTime / APEX_CONFIG.toxic.telegraph, 1);
     this._toxicRing.position.set(this._toxicCenter.x, getTerrainHeight(this._toxicCenter.x, this._toxicCenter.z) + 0.04, this._toxicCenter.z);
-    // Pulses rather than a flat fade-in, to read clearly as "danger incoming".
-    this._toxicRing.material.opacity = 0.15 + t * 0.35 + Math.sin(this.stateTime * 10) * 0.08;
+    this._toxicRing.material.opacity = 0.2 + t * 0.45 + Math.sin(this.stateTime * 14) * 0.12;
 
     if (this.stateTime >= APEX_CONFIG.toxic.telegraph) {
       playApexAttackSound();
@@ -499,20 +551,96 @@ export class ApexController {
   _updateToxicBurst(deltaTime) {
     if (!this._hasHitThisAttack) {
       this._hasHitThisAttack = true;
+      playApexToxicSound();
+      this.screenShake?.add(0.35);
+      this.combatVFX?.spawnApexToxicNova(this._toxicCenter, APEX_CONFIG.toxic.radius);
+
       if (horizontalDistanceSq(this._toxicCenter, this.player.position) < APEX_CONFIG.toxic.radius ** 2) {
         this._hitPlayer(APEX_CONFIG.toxic.damage, 'toxic_burst');
       }
-      this.resourceManager.particles.spawnBurst(this._toxicCenter, 0xb23fff, 10);
-      this._toxicRing.material.opacity = 0; // no persistent hazard - the ring clears the instant it resolves
+      this._toxicRing.material.opacity = 0;
     }
 
-    if (this.stateTime >= 0.15) {
+    if (this.stateTime >= 0.18) {
       this._beginRecovery(APEX_CONFIG.toxic.recovery);
-      this._toxicCooldownTimer = this.phase === 2 ? APEX_CONFIG.toxic.cooldown * APEX_CONFIG.phase2ToxicCooldownMultiplier : APEX_CONFIG.toxic.cooldown;
+      this._toxicCooldownTimer = this.phase >= 2 ? APEX_CONFIG.toxic.cooldown * APEX_CONFIG.phase2ToxicCooldownMultiplier : APEX_CONFIG.toxic.cooldown;
     }
   }
 
-  // --- Recovery / phase transition --------------------------------------------
+  // --- Subterranean Burrow & Eruption (Phase 3 Exclusive) ---
+
+  _beginBurrow() {
+    this._markAttackChosen('burrow');
+    this._hasHitThisAttack = false;
+    this._burrowTarget.copy(this.player.position);
+    this._tremorTimer = 0;
+    playApexBurrowSound();
+    this.setState(STATES.BURROW_TELEGRAPH);
+  }
+
+  _updateBurrowTelegraph(deltaTime) {
+    const t = Math.min(this.stateTime / APEX_CONFIG.burrow.telegraph, 1);
+    // Sinks down into terrain
+    this.mesh.scale.setScalar(THREE.MathUtils.lerp(1, 0.1, t));
+    this.mesh.position.y -= deltaTime * 3.0;
+
+    if (this.stateTime >= APEX_CONFIG.burrow.telegraph) {
+      this.mesh.visible = false;
+      this.setState(STATES.BURROWED);
+    }
+  }
+
+  _updateBurrowed(deltaTime) {
+    this._tremorTimer += deltaTime;
+    // Rapidly stalks toward player underground
+    this._burrowTarget.copy(this.player.position);
+    tempDirection.copy(this._burrowTarget).sub(this.mesh.position);
+    tempDirection.y = 0;
+    const distSq = tempDirection.lengthSq();
+
+    if (distSq > 0.3) {
+      tempDirection.normalize();
+      this.mesh.position.addScaledVector(tempDirection, APEX_CONFIG.burrow.travelSpeed * deltaTime);
+    }
+
+    // Spawn tracking surface tremor puff every 0.14s
+    if (this._tremorTimer >= 0.14) {
+      this._tremorTimer = 0;
+      this.combatVFX?.spawnApexTremor(this.mesh.position);
+      this.screenShake?.add(0.08);
+    }
+
+    if (distSq < 1.2 || this.stateTime >= APEX_CONFIG.burrow.maxDuration) {
+      this.mesh.visible = true;
+      this.mesh.scale.setScalar(0.4);
+      this.mesh.userData.setMandibleState?.(1.0);
+      playApexEmergeSound();
+      this.screenShake?.add(0.65);
+      this.combatVFX?.spawnApexSubterraneanEruption(this.mesh.position);
+      this.setState(STATES.EMERGE_ATTACK);
+    }
+  }
+
+  _updateEmergeAttack(deltaTime) {
+    const t = Math.min(this.stateTime / 0.35, 1);
+    this.mesh.scale.setScalar(THREE.MathUtils.lerp(0.4, 1.15, t));
+
+    if (!this._hasHitThisAttack) {
+      this._hasHitThisAttack = true;
+      if (horizontalDistanceSq(this.mesh.position, this.player.position) < APEX_CONFIG.burrow.emergeRadius ** 2) {
+        this._hitPlayer(APEX_CONFIG.burrow.damage, 'subterranean_eruption');
+      }
+    }
+
+    if (this.stateTime >= 0.35) {
+      this.mesh.scale.setScalar(1.0);
+      this.mesh.userData.setMandibleState?.(0.2);
+      this._beginRecovery(APEX_CONFIG.burrow.recovery);
+      this._burrowCooldownTimer = APEX_CONFIG.burrow.cooldown;
+    }
+  }
+
+  // --- Recovery / Phase transitions ---
 
   _beginRecovery(duration) {
     this._recoveryDuration = duration * this._getRecoveryMultiplier();
@@ -520,66 +648,71 @@ export class ApexController {
   }
 
   _updateRecovery(deltaTime) {
-    // The deliberate Bite opening - no movement/attack pressure while it holds still.
     if (this.stateTime >= this._recoveryDuration) this.setState(STATES.COMBAT);
   }
 
-  _enterPhaseTransition() {
-    this.phase = 2;
-    // Cancel whatever attack was mid-flight, the same way reversion cancels a Bite -
-    // safely, without letting a stale telegraph/active-hit-window persist.
+  _enterPhaseTransition(newPhase) {
+    this.phase = newPhase;
     this._chargeStreak.material.opacity = 0;
     this._slamRing.material.opacity = 0;
     this._toxicRing.material.opacity = 0;
     this.setState(STATES.PHASE_TRANSITION);
-    this.resourceManager.particles.spawnBurst(this.mesh.position, 0x4dffb2, 10);
-    if (DEBUG_APEX) console.log('Murkmaw entering Phase 2');
+
+    this.mesh.userData.setEnragedPhase?.(newPhase);
+    this.resourceManager.particles.spawnBurst(this.mesh.position, newPhase === 3 ? 0xff4400 : 0xd92638, 16);
+    playApexRoarSound();
+    this.screenShake?.add(0.5);
+
+    this._updateBossHudVisibility();
+    if (DEBUG_APEX) console.log(`Murkmaw entering Phase ${newPhase}`);
   }
 
   _updatePhaseTransition(deltaTime) {
     const t = Math.min(this.stateTime / APEX_CONFIG.phaseTransitionDuration, 1);
-    const { coreGlandMaterial } = this.mesh.userData;
-    coreGlandMaterial.emissiveIntensity = THREE.MathUtils.lerp(1.2, 2.6, t);
-    this.mesh.userData.coreGland.scale.setScalar(THREE.MathUtils.lerp(1, 1.6, t));
-    if (t >= 1) this.setState(STATES.COMBAT);
+    this.mesh.scale.setScalar(1.0 + Math.sin(t * Math.PI) * 0.18);
+    this.mesh.userData.setMandibleState?.(Math.sin(t * Math.PI * 4) * 0.5 + 0.5);
+
+    if (t >= 1) {
+      this.mesh.scale.setScalar(1.0);
+      this.mesh.userData.setMandibleState?.(0.2);
+      this.setState(STATES.COMBAT);
+    }
   }
 
-  // --- Death -------------------------------------------------------------------
+  // --- Death sequence ---
 
   _die() {
-    if (this.state === STATES.DEAD) return; // never process death twice
+    if (this.state === STATES.DEAD) return;
     this.setState(STATES.DEAD);
     this._deathTime = 0;
     this._chargeStreak.material.opacity = 0;
     this._slamRing.material.opacity = 0;
     this._toxicRing.material.opacity = 0;
 
-    this.resourceManager.particles.spawnBurst(this.mesh.position, 0x4dffb2, 12);
+    this.resourceManager.particles.spawnBurst(this.mesh.position, 0xff2200, 18);
+    this.screenShake?.add(0.55);
     playApexDeathSound();
     this.onDefeated?.();
-    if (DEBUG_APEX) console.log('Murkmaw died');
+    if (DEBUG_APEX) console.log('Murkmaw defeated');
   }
 
   _updateDeath(deltaTime) {
     this._deathTime += deltaTime;
     const t = Math.min(this._deathTime / APEX_CONFIG.deathDuration, 1);
-    const { eyeMaterial, glandMaterial, coreGlandMaterial } = this.mesh.userData;
+    const { eyeMaterial, glandMaterial, coreGlandMaterial, pustuleMaterial } = this.mesh.userData;
 
     const staggerFraction = APEX_CONFIG.deathStaggerFraction;
     if (t < staggerFraction) {
-      // A scripted stagger-back beat (not knockback physics) before it collapses.
       const st = t / staggerFraction;
-      this.mesh.rotation.z = Math.sin(st * Math.PI * 3) * 0.06 * (1 - st);
+      this.mesh.rotation.z = Math.sin(st * Math.PI * 3) * 0.08 * (1 - st);
       eyeMaterial.emissiveIntensity = THREE.MathUtils.lerp(0.8, 0.1, st);
-      glandMaterial.emissiveIntensity = THREE.MathUtils.lerp(1.0, 2.0, st) * (0.7 + Math.sin(st * 30) * 0.3);
     } else {
       const ct = (t - staggerFraction) / (1 - staggerFraction);
       const collapseT = ct * ct;
       this.mesh.scale.setScalar(Math.max(1 - collapseT, 0.001));
       this.mesh.position.y = Math.max(this.arenaCenter.y - collapseT * 0.3, this.arenaCenter.y - 0.3);
       eyeMaterial.emissiveIntensity = THREE.MathUtils.lerp(0.1, 0, collapseT);
-      glandMaterial.emissiveIntensity = THREE.MathUtils.lerp(2.0, 0, collapseT);
-      coreGlandMaterial.emissiveIntensity = THREE.MathUtils.lerp(2.6, 0, collapseT);
+      if (pustuleMaterial) pustuleMaterial.emissiveIntensity = THREE.MathUtils.lerp(2.0, 0, collapseT);
     }
 
     if (t >= 1 && this.mesh.visible) {
@@ -600,20 +733,17 @@ export class ApexController {
         this.resourceManager.spawnResource(type, new THREE.Vector3(dropX, getTerrainHeight(dropX, dropZ), dropZ));
       }
     }
-    if (DEBUG_APEX) for (const { type, count } of APEX_LOOT) console.log(`Dropped ${count}x ${type}`);
   }
 
-  /** Full reset for a brand-new run (Play Again) - back to DORMANT at full health,
-   *  phase 1, arena position, with every telegraph/hit-flash/recoil visual cleared. */
   reset() {
-    this.state = STATES.DORMANT; // direct assignment - no "X -> DORMANT" log for a reset
+    this.state = STATES.DORMANT;
     this.stateTime = 0;
     this.facingAngle = 0;
     this.phase = 1;
     this.currentHealth = this.maxHealth;
 
     this.mesh.position.copy(this.arenaCenter);
-    this.mesh.scale.setScalar(0.55); // resting/dormant size, matches the constructor
+    this.mesh.scale.setScalar(0.55);
     this.mesh.rotation.set(0, 0, 0);
     this.mesh.visible = true;
 
@@ -624,21 +754,19 @@ export class ApexController {
     this._chargeCooldownTimer = 0;
     this._slamCooldownTimer = 0;
     this._toxicCooldownTimer = 0;
+    this._burrowCooldownTimer = 3.0;
     this._lastAttack = null;
     this._lastAttackStreak = 0;
     this._hasHitThisAttack = false;
 
-    // Materials animated during PHASE_TRANSITION/death need their original baseline
-    // restored explicitly - unlike bodyMaterial (hit-flash already restores it via
-    // _bodyBaseEmissiveIntensity), nothing else ever resets these mid-game. Values
-    // match apexModel.js's own initial construction.
-    const { eyeMaterial, glandMaterial, coreGlandMaterial, coreGland, head, bodyMaterial } = this.mesh.userData;
+    const { eyeMaterial, head, bodyMaterial } = this.mesh.userData;
     bodyMaterial.emissiveIntensity = this._bodyBaseEmissiveIntensity;
+    bodyMaterial.color.setHex(0xa855f7);
+    bodyMaterial.emissive.setHex(0x4c1d95);
     eyeMaterial.emissiveIntensity = 0.8;
-    glandMaterial.emissiveIntensity = 1.0;
-    coreGlandMaterial.emissiveIntensity = 1.2;
-    coreGland.scale.setScalar(1);
     head.rotation.x = 0;
+    this.mesh.userData.setMandibleState?.(0.2);
+    this.mesh.userData.resetChain?.();
 
     this._chargeStreak.material.opacity = 0;
     this._slamRing.material.opacity = 0;
@@ -648,14 +776,18 @@ export class ApexController {
     this.uiManager.hideBossHealth();
   }
 
-  // --- Shared helpers --------------------------------------------------------
+  // --- Shared helpers ---
 
   _getMoveSpeed() {
-    return this.phase === 2 ? APEX_CONFIG.moveSpeed * APEX_CONFIG.phase2MoveSpeedMultiplier : APEX_CONFIG.moveSpeed;
+    if (this.phase === 3) return APEX_CONFIG.moveSpeed * APEX_CONFIG.phase3MoveSpeedMultiplier;
+    if (this.phase === 2) return APEX_CONFIG.moveSpeed * APEX_CONFIG.phase2MoveSpeedMultiplier;
+    return APEX_CONFIG.moveSpeed;
   }
 
   _getRecoveryMultiplier() {
-    return this.phase === 2 ? APEX_CONFIG.phase2RecoveryMultiplier : 1;
+    if (this.phase === 3) return APEX_CONFIG.phase3RecoveryMultiplier;
+    if (this.phase === 2) return APEX_CONFIG.phase2RecoveryMultiplier;
+    return 1;
   }
 
   _getForward(target = tempA) {
@@ -665,7 +797,7 @@ export class ApexController {
   _hitPlayer(amount, attackType) {
     const hit = this.playerHealth.takeDamage(amount, this);
     if (hit) {
-      playPlayerHitSound();
+      playBiteHitSound();
       if (DEBUG_APEX) console.log(`Player hit by Murkmaw (${attackType})! Health: ${this.playerHealth.currentHealth}`);
     }
   }
@@ -680,7 +812,6 @@ export class ApexController {
     this._faceToward(target, deltaTime, APEX_CONFIG.turnSmoothing);
   }
 
-  /** Smoothly yaws the model to face `target`. Model faces -Z at rotation.y = 0. */
   _faceToward(target, deltaTime, turnRate) {
     tempDirection.copy(target).sub(this.mesh.position);
     tempDirection.y = 0;
@@ -717,23 +848,17 @@ export class ApexController {
         this._hitRecoilTimer = null;
         head.rotation.x = 0;
       } else {
-        head.rotation.x = -0.12 * (1 - t); // a tiny head-jerk, no actual displacement
+        head.rotation.x = -0.12 * (1 - t);
       }
     }
   }
 
   _applyIdleAnimation(deltaTime) {
-    const { body, legs } = this.mesh.userData;
+    const { body } = this.mesh.userData;
+    if (!body) return;
     const isActive = this.state !== STATES.COMBAT || horizontalDistanceSq(this.mesh.position, this.player.position) < APEX_CONFIG.attackRangeFarSq;
-
     const bobSpeed = isActive ? 5 : 2;
     const bobAmount = isActive ? 0.04 : 0.015;
     body.position.y = 0.62 + Math.sin(this._elapsed * bobSpeed) * bobAmount;
-
-    const legSwingAmount = isActive ? 0.18 : 0.08;
-    const legSwing = Math.sin(this._elapsed * bobSpeed * 1.2) * legSwingAmount;
-    for (let i = 0; i < legs.length; i++) {
-      legs[i].rotation.x = 0.1 + legSwing * (i % 2 === 0 ? 1 : -1);
-    }
   }
 }

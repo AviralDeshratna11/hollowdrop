@@ -43,6 +43,7 @@ import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
 import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
+import { BoundaryEnvironment } from './boundaryEnvironment.js?v=5.3';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -499,6 +500,13 @@ for (const rock of apexEncounterManager.dressingRocks ?? []) {
   collisionSystem.addStatic(rock.x, rock.z, rockColliderRadius(rock.scale));
 }
 
+// Subterranean Boundary Enclosure & Abyssal Mist System
+const boundaryEnvironment = new BoundaryEnvironment(scene, { groundSize: GROUND_SIZE });
+
+for (const c of boundaryEnvironment.getColliders()) {
+  collisionSystem.addStatic(c.x, c.z, c.radius);
+}
+
 onTerrainElevationReady(() => {
   applyTerrainElevation(groundGeometry);
 
@@ -513,6 +521,7 @@ onTerrainElevationReady(() => {
   resourceManager.realignToTerrain();
   stoneClusterManager.realignToTerrain();
   realignDressingToTerrain();
+  boundaryEnvironment.realignToTerrain();
 });
 
 const tempColliderPos = new THREE.Vector3();
@@ -561,6 +570,8 @@ playerFormController.playerCombatController = playerCombatController;
 const screenShake = new ScreenShake();
 const damageNumbers = new DamageNumberController(camera, canvas);
 const combatVFX = new CombatVFXSystem(scene);
+apexController.combatVFX = combatVFX;
+apexController.screenShake = screenShake;
 
 const HITSTOP_TIME_SCALE = 0.08;
 let hitstopRemaining = 0;
@@ -855,6 +866,7 @@ if (DEBUG_APEX) {
     if (e.key === '1') apexController.debugForceAttack('charge');
     if (e.key === '2') apexController.debugForceAttack('slam');
     if (e.key === '3') apexController.debugForceAttack('toxic');
+    if (e.key === '4') apexController.debugForceAttack('burrow');
     if (e.key === 'p' || e.key === 'P') apexController.debugForcePhase2();
     if (e.key === 'k' || e.key === 'K') {
       apexController.takeDamage(30, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
@@ -1076,12 +1088,14 @@ function applyWorldBoundary() {
     if (v.x > 0) {
       v.x = 0;
       playerController.applyImpulse(boundaryImpulseScratch.set(-BOUNDARY_BOUNCE_IMPULSE, 0, 0));
+      boundaryEnvironment.onBoundaryHit(player.position.x, player.position.z, { x: 1, z: 0 });
     }
   } else if (player.position.x < -WORLD_BOUNDARY_HALF) {
     player.position.x = -WORLD_BOUNDARY_HALF;
     if (v.x < 0) {
       v.x = 0;
       playerController.applyImpulse(boundaryImpulseScratch.set(BOUNDARY_BOUNCE_IMPULSE, 0, 0));
+      boundaryEnvironment.onBoundaryHit(player.position.x, player.position.z, { x: -1, z: 0 });
     }
   }
 
@@ -1090,12 +1104,14 @@ function applyWorldBoundary() {
     if (v.z > 0) {
       v.z = 0;
       playerController.applyImpulse(boundaryImpulseScratch.set(0, 0, -BOUNDARY_BOUNCE_IMPULSE));
+      boundaryEnvironment.onBoundaryHit(player.position.x, player.position.z, { x: 0, z: 1 });
     }
   } else if (player.position.z < -WORLD_BOUNDARY_HALF) {
     player.position.z = -WORLD_BOUNDARY_HALF;
     if (v.z < 0) {
       v.z = 0;
       playerController.applyImpulse(boundaryImpulseScratch.set(0, 0, BOUNDARY_BOUNCE_IMPULSE));
+      boundaryEnvironment.onBoundaryHit(player.position.x, player.position.z, { x: 0, z: -1 });
     }
   }
 }
@@ -1182,6 +1198,7 @@ function animate() {
   screenShake.update(realDeltaTime);
   damageNumbers.update(realDeltaTime);
   combatVFX.update(realDeltaTime);
+  boundaryEnvironment.update(realDeltaTime);
 
   radarController.update(realDeltaTime);
   radarHUD.update(realDeltaTime);
