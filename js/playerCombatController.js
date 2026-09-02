@@ -1,105 +1,172 @@
 import * as THREE from 'three';
+import { playBiteSound, playBiteHitSound, playPoisonExpelSound } from './soundEffects.js?v=5.3';
 
 export const DEBUG_COMBAT = false;
 
 export const VENOM_BITE_CONFIG = {
   damage: 15,
-  range: 1.25,
+  range: 1.35,
   cooldown: 0.6,
-  windup: 0.1,
+  windup: 0.09,
   activeTime: 0.12,
-  recovery: 0.2,
+  recovery: 0.18,
   lungeDistance: 0.35,
   knockbackForce: 0.8,
-  // How far off-center a target can be and still get hit (1 = dead ahead, 0 =
-  // perpendicular) - forgiving on purpose, this is a mobile game, not an aim-trainer.
   facingDotThreshold: 0.25,
 };
 
+export const POISON_EXPEL_CONFIG = {
+  damage: 35,
+  radius: 4.2,
+  knockbackForce: 2.2,
+};
+
 const RANGE_SQ = VENOM_BITE_CONFIG.range * VENOM_BITE_CONFIG.range;
+const POISON_RADIUS_SQ = POISON_EXPEL_CONFIG.radius * POISON_EXPEL_CONFIG.radius;
 
 const ATTACK_STATES = { READY: 'READY', WINDUP: 'WINDUP', ACTIVE: 'ACTIVE', RECOVERY: 'RECOVERY' };
 
-// Reused scratch vectors - no per-frame allocation in the hit-check hot path.
+// Reused scratch vectors - no per-frame allocation in hot hit-check paths.
 const tempForward = new THREE.Vector3();
 const tempToTarget = new THREE.Vector3();
 const tempAttackCenter = new THREE.Vector3();
+const tempPlayerPos = new THREE.Vector3();
+const tempHitPos = new THREE.Vector3();
 
-// Optional, currently silent - hooks so audio/haptics can be added later without
-// touching combat logic.
-function playBiteSound() {}
-function playBiteHitSound() {}
-function triggerCombatHaptic() {}
+function triggerCombatHaptic() {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate(25);
+    } catch (_) {}
+  }
+}
 
 /**
- * Owns Venom Bite: a small READY -> WINDUP -> ACTIVE -> RECOVERY state machine,
- * the forward-cone hit check, and the cooldown. Deliberately knows nothing about
- * UI beyond calling UIManager's bite-button methods, nothing about the Rat's visual
- * (PlayerFormController._updateRatIdle reads getBitePose() and blends it in, so
- * there's exactly one writer of ratVisual's transform), and nothing about any
- * specific enemy type - it only ever calls entity.takeDamage(amount, info), the same
- * interface PreyManager's entities and PredatorController both implement, gathered
- * each hit-check from `damageableSources` (each exposing getDamageableEntities()).
- * Extending combat to a new enemy means registering another source here, never
- * branching on entity.type inside this class.
+ * PlayerCombatController:
+ * - Automatically triggers rhythmic proximity bite attacks on repeat when facing an enemy within range.
+ * - Manages the manual once-per-transformation Poison Expel (Toxic Burst) ability.
+ * - Handles animation blending, cooldowns, damage distribution, hitstop, and UI integration.
  */
 export class PlayerCombatController {
   constructor({ playerController, damageableSources, uiManager }) {
     this.playerController = playerController;
     this.damageableSources = damageableSources;
-    // Optional feedback hooks, assigned post-construction in main.js. Declared here
-    // so the shape of this class is visible without reading performHitCheck().
+    this.uiManager = uiManager;
+
+    // Feedback hooks
     this.onHit = null;             // (entity, damage) - once per target per attack
     this.onAttackConnected = null; // () - once per attack that hit anything
-    this.uiManager = uiManager;
+    this.onBiteHit = null;         // (entity, hitPos, forwardDir) - for 3D fangs & splatter VFX
+    this.onPoisonExpel = null;     // (centerPos, radius, hitCount) - for 360-deg toxic shockwave & spray VFX
 
     this.attackState = ATTACK_STATES.READY;
     this._stateTime = 0;
     this._cooldownTimer = 0;
     this._hitTargetsThisAttack = new Set();
-    this._available = false; // driven every frame by setAvailable() - see main.js
+    this._available = false;
+
+    // Once-per-transformation Poison Expel charge
+    this.poisonExpelAvailable = false;
   }
 
   canAttack() {
     return this._available && this.attackState === ATTACK_STATES.READY && this._cooldownTimer <= 0;
   }
 
-  /** Called every frame by main.js with whether combat should currently be possible
-   *  (alive, Venom Rat, not mid-transformation/reversion). Cancels any in-progress
-   *  bite the instant this flips false - a single authority for "can I fight right
-   *  now", rather than threading cancellation calls through every system that could
-   *  end the Rat form (reversion, death, respawn all naturally funnel through here). */
-  setAvailable(available) {
-    if (available === this._available) return;
-    this._available = available;
-    if (available) {
-      this.uiManager.showBiteButton(() => this.tryBite());
-    } else {
-      this.cancelAttack();
-      this.uiManager.hideBiteButton();
+  canUsePoisonExpel() {
+    return this._available && this.poisonExpelAvailable;
+  }
+
+  /**
+   * Resets the Poison Expel charge (called when mutating into Venom Rat).
+   */
+  resetPoisonExpelCharge() {
+    this.poisonExpelAvailable = true;
+    if (this._available && this.uiManager) {
+      this.uiManager.updatePoisonBurstState(true);
     }
   }
 
-  /** Player-facing entry point (button tap or debug key). Ignored outright while on
-   *  cooldown/mid-attack/unavailable - never queues, never stacks presses. */
-  tryBite() {
-    if (!this.canAttack()) return false;
-    this.beginBite();
+  /**
+   * Called every frame with whether combat is possible (alive, Venom Rat, not mutating/reverting).
+   */
+  setAvailable(available) {
+    if (available === this._available) return;
+    this._available = available;
+
+    if (available) {
+      this.uiManager.showPoisonBurstButton(() => this.tryPoisonExpel());
+      this.uiManager.updatePoisonBurstState(this.poisonExpelAvailable);
+    } else {
+      this.cancelAttack();
+      this.uiManager.hidePoisonBurstButton();
+    }
+  }
+
+  /**
+   * Manual trigger for Poison Expel (tapped via UI button or Space key).
+   * Can only be used once per transformation.
+   */
+  tryPoisonExpel() {
+    if (!this.canUsePoisonExpel()) return false;
+
+    this.poisonExpelAvailable = false;
+    this.uiManager.updatePoisonBurstState(false);
+
+    tempPlayerPos.copy(this.playerController.mesh.position);
+    playPoisonExpelSound();
+    triggerCombatHaptic();
+
+    let hitCount = 0;
+
+    for (const source of this.damageableSources) {
+      for (const entity of source.getDamageableEntities()) {
+        tempToTarget.copy(entity.mesh.position).sub(tempPlayerPos);
+        tempToTarget.y = 0;
+        const distSq = tempToTarget.lengthSq();
+        if (distSq > POISON_RADIUS_SQ) continue;
+
+        // Calculate radial outward knockback
+        if (distSq > 1e-6) tempToTarget.normalize();
+        else tempToTarget.set(0, 0, 1);
+
+        entity.takeDamage(POISON_EXPEL_CONFIG.damage, {
+          sourceEntity: this.playerController,
+          sourceType: 'player',
+          attackType: 'poison_expel',
+          knockbackForce: POISON_EXPEL_CONFIG.knockbackForce,
+        });
+
+        this.onHit?.(entity, POISON_EXPEL_CONFIG.damage);
+        hitCount++;
+      }
+    }
+
+    this.onPoisonExpel?.(tempPlayerPos, POISON_EXPEL_CONFIG.radius, hitCount);
+
+    if (DEBUG_COMBAT) {
+      console.log(`Poison Expel triggered! Hit ${hitCount} enemies.`);
+    }
+
     return true;
   }
 
+  /**
+   * Initiates the bite attack sequence.
+   */
   beginBite() {
+    if (this.attackState !== ATTACK_STATES.READY) return;
     this.attackState = ATTACK_STATES.WINDUP;
     this._stateTime = 0;
     this._cooldownTimer = VENOM_BITE_CONFIG.cooldown;
     this._hitTargetsThisAttack.clear();
     playBiteSound();
-    if (DEBUG_COMBAT) console.log('Bite started');
+    if (DEBUG_COMBAT) console.log('Auto-Bite started');
   }
 
-  /** Aborts a bite in progress (reversion/death mid-attack) - clears state without
-   *  performing a hit check. Cooldown is deliberately left running: an interrupted
-   *  attack shouldn't be refunded. */
+  /**
+   * Aborts in-progress bite.
+   */
   cancelAttack() {
     this.attackState = ATTACK_STATES.READY;
     this._stateTime = 0;
@@ -111,9 +178,23 @@ export class PlayerCombatController {
     this._stateTime = 0;
   }
 
+  /**
+   * Main combat update loop:
+   * - Ticks cooldown timer.
+   * - Checks proximity & facing angle to automatically trigger rhythmic bite on repeat.
+   * - Advances attack state machine (WINDUP -> ACTIVE -> RECOVERY -> READY).
+   */
   update(deltaTime) {
-    if (this._cooldownTimer > 0) this._cooldownTimer = Math.max(0, this._cooldownTimer - deltaTime);
-    if (this._available) this.uiManager.updateBiteCooldown(this._cooldownTimer, VENOM_BITE_CONFIG.cooldown, this.canAttack());
+    if (this._cooldownTimer > 0) {
+      this._cooldownTimer = Math.max(0, this._cooldownTimer - deltaTime);
+    }
+
+    // Auto-Bite check when ready: if the rat is facing an enemy within bite range, trigger bite
+    if (this.canAttack()) {
+      if (this._checkAutoBiteTarget()) {
+        this.beginBite();
+      }
+    }
 
     if (this.attackState === ATTACK_STATES.READY) return;
     this._stateTime += deltaTime;
@@ -122,7 +203,7 @@ export class PlayerCombatController {
       if (this._stateTime >= VENOM_BITE_CONFIG.windup) {
         this.attackState = ATTACK_STATES.ACTIVE;
         this._stateTime = 0;
-        this.performHitCheck(); // hit window opens the instant ACTIVE begins
+        this.performHitCheck();
       }
       return;
     }
@@ -140,12 +221,33 @@ export class PlayerCombatController {
     }
   }
 
-  /** Short forward cone from a point slightly ahead of the player, along whichever
-   *  way PlayerController currently has the Rat facing (never auto-aimed at a
-   *  target) - a hit needs to be both close enough AND roughly in front. Each
-   *  target can only be hit once per attack via _hitTargetsThisAttack (keyed by
-   *  the entity object itself, so it works uniformly whether the entity came from
-   *  a manager-owned array or a singleton like PredatorController). */
+  /**
+   * Scans damageable entities within the forward cone of the rat's mouth to detect if an auto-bite should trigger.
+   */
+  _checkAutoBiteTarget() {
+    this.playerController.getForwardDirection(tempForward);
+    tempAttackCenter.copy(this.playerController.mesh.position).addScaledVector(tempForward, VENOM_BITE_CONFIG.lungeDistance);
+
+    for (const source of this.damageableSources) {
+      for (const entity of source.getDamageableEntities()) {
+        tempToTarget.copy(entity.mesh.position).sub(tempAttackCenter);
+        tempToTarget.y = 0;
+        const distSq = tempToTarget.lengthSq();
+        if (distSq > RANGE_SQ) continue;
+
+        if (distSq > 1e-6) {
+          tempToTarget.normalize();
+          if (tempForward.dot(tempToTarget) < VENOM_BITE_CONFIG.facingDotThreshold) continue;
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Performs the forward cone hit check during the ACTIVE attack window.
+   */
   performHitCheck() {
     this.playerController.getForwardDirection(tempForward);
     tempAttackCenter.copy(this.playerController.mesh.position).addScaledVector(tempForward, VENOM_BITE_CONFIG.lungeDistance);
@@ -172,11 +274,10 @@ export class PlayerCombatController {
           attackType: 'venom_bite',
           knockbackForce: VENOM_BITE_CONFIG.knockbackForce,
         });
-        // Per-target feedback hook (optional, assigned in main.js like this project's
-        // other post-construction wiring). Fires once per entity per attack - the
-        // _hitTargetsThisAttack guard above already prevents repeats - so a damage
-        // number can't double up on a single target from one bite.
+
+        tempHitPos.copy(entity.mesh.position);
         this.onHit?.(entity, VENOM_BITE_CONFIG.damage);
+        this.onBiteHit?.(entity, tempHitPos, tempForward);
         hitAny = true;
       }
     }
@@ -184,29 +285,31 @@ export class PlayerCombatController {
     if (hitAny) {
       playBiteHitSound();
       triggerCombatHaptic();
-      // Aggregate hook: fires once per connecting attack no matter how many targets
-      // were caught, so impact feedback (hitstop, shake) doesn't multiply when a
-      // single bite happens to clip two beetles at once.
       this.onAttackConnected?.();
     }
-    // Miss: cooldown/animation still ran, nothing refunded (spec section 24) - simply nothing more to do here.
   }
 
-  /** Pure, read-only pose for PlayerFormController's _updateRatIdle to blend on top
-   *  of its own idle animation - null while READY (no bite in progress). Keeps
-   *  ratVisual.position/scale writes to exactly one owner. */
+  /**
+   * Pure, read-only pose for PlayerFormController._updateRatIdle to blend on top of idle animations.
+   */
   getBitePose() {
     if (this.attackState === ATTACK_STATES.WINDUP) {
       const t = this._stateTime / VENOM_BITE_CONFIG.windup;
-      return { lungeOffset: 0, crouchScale: THREE.MathUtils.lerp(1, 0.9, t) };
+      return { lungeOffset: 0, crouchScale: THREE.MathUtils.lerp(1, 0.88, t) };
     }
     if (this.attackState === ATTACK_STATES.ACTIVE) {
       const t = this._stateTime / VENOM_BITE_CONFIG.activeTime;
-      return { lungeOffset: VENOM_BITE_CONFIG.lungeDistance * Math.sin(t * Math.PI), crouchScale: THREE.MathUtils.lerp(0.9, 1.05, t) };
+      return {
+        lungeOffset: VENOM_BITE_CONFIG.lungeDistance * Math.sin(t * Math.PI),
+        crouchScale: THREE.MathUtils.lerp(0.88, 1.08, t),
+      };
     }
     if (this.attackState === ATTACK_STATES.RECOVERY) {
       const t = this._stateTime / VENOM_BITE_CONFIG.recovery;
-      return { lungeOffset: VENOM_BITE_CONFIG.lungeDistance * (1 - t) * 0.3, crouchScale: THREE.MathUtils.lerp(1.05, 1, t) };
+      return {
+        lungeOffset: VENOM_BITE_CONFIG.lungeDistance * (1 - t) * 0.3,
+        crouchScale: THREE.MathUtils.lerp(1.08, 1, t),
+      };
     }
     return null;
   }

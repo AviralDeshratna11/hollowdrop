@@ -19,6 +19,7 @@ import { createVenomRatBossMesh } from './predatorModel.js?v=5.3';
 import { createPlayerSlimeVisual } from './playerSlimeModel.js?v=5.3';
 import { PreyManager, DEBUG_PREY } from './preyManager.js?v=5.3';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js?v=5.3';
+import { CombatVFXSystem } from './combatVFX.js?v=5.3';
 import { ProjectileSystem } from './projectileSystem.js?v=5.3';
 import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js?v=5.3';
 import { ApexEncounterManager } from './apexEncounterManager.js?v=5.3';
@@ -556,9 +557,10 @@ const playerCombatController = new PlayerCombatController({
 });
 playerFormController.playerCombatController = playerCombatController;
 
-// --- Game feel: shake / hitstop / damage numbers --------------------------------
+// --- Game feel: combat VFX / shake / hitstop / damage numbers ------------------
 const screenShake = new ScreenShake();
 const damageNumbers = new DamageNumberController(camera, canvas);
+const combatVFX = new CombatVFXSystem(scene);
 
 const HITSTOP_TIME_SCALE = 0.08;
 let hitstopRemaining = 0;
@@ -572,6 +574,18 @@ playerCombatController.onAttackConnected = () => {
 };
 playerCombatController.onHit = (entity, damage) => {
   damageNumbers.spawn(entity.mesh.position, damage, 'player');
+};
+playerCombatController.onBiteHit = (entity, hitPos, forwardDir) => {
+  combatVFX.spawnBiteEffect(hitPos, forwardDir);
+};
+playerCombatController.onPoisonExpel = (centerPos, radius, hitCount) => {
+  combatVFX.spawnPoisonExpelEffect(centerPos, radius);
+  screenShake.add(0.42);
+  triggerHitstop(0.08);
+  const venomMat = ratVisual.userData?.venomMaterial;
+  if (venomMat) {
+    venomMat.emissiveIntensity = 3.5;
+  }
 };
 
 // --- Thrown rocks ---------------------------------------------------------------
@@ -810,17 +824,20 @@ if (DEBUG_MUTATION_TIMER) {
   });
 }
 
-if (DEBUG_COMBAT || DEBUG_PREY) {
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space') {
+window.addEventListener('keydown', (e) => {
+  if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.code === 'Space' || e.key === 'q' || e.key === 'Q') {
+    if (playerFormController.currentForm === PLAYER_FORMS.VENOM_RAT) {
       e.preventDefault();
-      playerCombatController.tryBite();
+      playerCombatController.tryPoisonExpel();
     }
+  }
+  if (DEBUG_COMBAT || DEBUG_PREY) {
     if (e.key === 'p' || e.key === 'P') {
       preyManager.spawnGlowBeetle(player.position.clone().add(new THREE.Vector3(2, 0, 2)));
     }
-  });
-}
+  }
+});
 
 if (DEBUG_PREDATOR_COMBAT) {
   window.addEventListener('keydown', (e) => {
@@ -906,6 +923,7 @@ function resetGame() {
 
   resourceManager.clearAll();
   resourceManager.particles.clear();
+  combatVFX.clear();
   populateWorldResources();
 
   stoneClusterManager.clearAll();
@@ -1163,6 +1181,7 @@ function animate() {
 
   screenShake.update(realDeltaTime);
   damageNumbers.update(realDeltaTime);
+  combatVFX.update(realDeltaTime);
 
   radarController.update(realDeltaTime);
   radarHUD.update(realDeltaTime);

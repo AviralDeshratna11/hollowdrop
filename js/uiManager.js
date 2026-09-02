@@ -56,7 +56,9 @@ export class UIManager {
     this.mutationTimerFill = document.getElementById('mutation-timer-fill');
     this.mutationTimerText = document.getElementById('mutation-timer-text');
 
-    this.biteButton = document.getElementById('bite-button');
+    this.poisonBurstButton = document.getElementById('poison-burst-button') || document.getElementById('bite-button');
+    this.poisonBurstBadge = this.poisonBurstButton?.querySelector('.poison-burst-badge');
+    this.biteButton = this.poisonBurstButton;
     this.throwButton = document.getElementById('throw-button');
     this.throwAmmoEl = this.throwButton?.querySelector('.throw-ammo');
 
@@ -85,34 +87,42 @@ export class UIManager {
     this.runCompletePlayAgainButton = document.getElementById('run-complete-play-again');
   }
 
-  /** Shows the BITE button. `onBite` is (re)bound each call so callers don't need to
-   *  manage their own listener lifecycle - mirrors showMutationReady()'s pattern. */
-  showBiteButton(onBite) {
-    if (!this.biteButton) return;
-    this.biteButton.classList.add('bite-button--visible');
-    this.biteButton.onclick = (e) => {
+  /** Shows the POISON BURST (Toxic Nova) button for the Venom Rat form. */
+  showPoisonBurstButton(onTrigger) {
+    if (!this.poisonBurstButton) return;
+    this.poisonBurstButton.classList.add('poison-burst-button--visible', 'bite-button--visible');
+    this.poisonBurstButton.onclick = (e) => {
       e.preventDefault();
-      e.stopPropagation(); // never let a tap here fall through to movement/inventory gestures
-      onBite();
+      e.stopPropagation();
+      onTrigger();
     };
   }
 
-  hideBiteButton() {
-    if (!this.biteButton) return;
-    this.biteButton.classList.remove('bite-button--visible', 'bite-button--cooldown');
-    this.biteButton.onclick = null;
+  hidePoisonBurstButton() {
+    if (!this.poisonBurstButton) return;
+    this.poisonBurstButton.classList.remove('poison-burst-button--visible', 'bite-button--visible', 'poison-burst-button--spent');
+    this.poisonBurstButton.onclick = null;
   }
 
-  /** Called every frame while combat is available - dims the button and sweeps a
-   *  radial cooldown overlay (the --cd custom property drives a conic-gradient in
-   *  CSS: 1 = just used, 0 = ready) so the player never has to guess whether Bite
-   *  will actually respond to a tap. */
-  updateBiteCooldown(cooldownRemaining, cooldownTotal, ready) {
-    if (!this.biteButton) return;
-    const ratio = cooldownTotal > 0 ? Math.max(cooldownRemaining, 0) / cooldownTotal : 0;
-    this.biteButton.style.setProperty('--cd', ratio);
-    this.biteButton.classList.toggle('bite-button--cooldown', !ready);
+  /** Updates the visual ready / spent state and badge of the Poison Burst button. */
+  updatePoisonBurstState(available) {
+    if (!this.poisonBurstButton) return;
+    this.poisonBurstButton.classList.toggle('poison-burst-button--spent', !available);
+    if (this.poisonBurstBadge) {
+      this.poisonBurstBadge.textContent = available ? '1' : '0';
+    }
   }
+
+  /** Backward compatibility aliases for bite button */
+  showBiteButton(onBite) {
+    this.showPoisonBurstButton(onBite);
+  }
+
+  hideBiteButton() {
+    this.hidePoisonBurstButton();
+  }
+
+  updateBiteCooldown(_cooldownRemaining, _cooldownTotal, _ready) {}
 
   /** Shows the THROW button. Same (re)bind-on-call contract as showBiteButton, so
    *  ProjectileSystem can call it from setAvailable() without tracking listeners. */

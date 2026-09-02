@@ -54,12 +54,13 @@ export const MUTATION_CONFIG = {
 const ZERO_VECTOR = new THREE.Vector3(0, 0, 0);
 const UP_VECTOR = new THREE.Vector3(0, 1, 0);
 
-// Optional hooks, currently silent - lets audio be added later without touching this logic.
-function playMutationStartSound() {}
-function playMutationCompleteSound() {}
-function playMutationLowSound() {}
-function playMutationCriticalSound() {}
-function playMutationExpireSound() {}
+import {
+  playMutationStartSound,
+  playMutationCompleteSound,
+  playMutationLowSound,
+  playMutationCriticalSound,
+  playMutationExpireSound,
+} from './soundEffects.js?v=5.3';
 
 function easeOutBack(t) {
   const c1 = 1.70158;
@@ -169,9 +170,13 @@ export class PlayerFormController {
     return Math.min(Math.max(this.mutationTimeRemaining / this.mutationDuration, 0), 1);
   }
 
-  /** Placeholder for Venom Rat's future "Venom Bite" - no combat implemented yet. */
+  /** Triggers the Venom Rat's special Poison Expel ability if available. */
   usePrimaryAbility() {
+    if (this.currentForm === PLAYER_FORMS.VENOM_RAT) {
+      return this.playerCombatController?.tryPoisonExpel() ?? false;
+    }
     if (DEBUG_MUTATION) console.log('usePrimaryAbility() (placeholder, no-op)');
+    return false;
   }
 
   /** Re-validates the recipe (never trust the button was visible a moment ago - the
@@ -387,6 +392,7 @@ export class PlayerFormController {
         this._phase = null;
         this.uiManager.showRevertReady(() => this.revertToSlime());
         this._startMutationTimer(); // movement is already unlocked by this point (state left MUTATING)
+        this.playerCombatController?.resetPoisonExpelCharge();
         playMutationCompleteSound();
         // The single moment a transformation is actually complete - not the MUTATE press,
         // which can still be interrupted. Fires once per form per run; the recipe is

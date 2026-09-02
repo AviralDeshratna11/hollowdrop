@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getTerrainHeight } from './terrain.js?v=5.3';
 import { makeRng } from './worldDressing.js?v=5.3';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 /**
  * Stone Cluster System
@@ -102,6 +103,16 @@ export class StoneClusterManager {
       const geom = stoneGeometries[i % stoneGeometries.length];
       const mat = stoneMaterials[Math.floor(this.rng() * stoneMaterials.length)].clone();
       const mesh = new THREE.Mesh(geom, mat);
+
+      attachOcclusionOutline(mesh, {
+        color: 0x8a949e,
+        rimColor: 0xeef4f8,
+        opacity: 0.88,
+        emissiveIntensity: 2.2,
+        rimStrength: 3.0,
+        rimPower: 1.8,
+        innerAlpha: 0.18,
+      });
 
       const angle = (i / stoneCount) * Math.PI * 2 + (this.rng() - 0.5) * 0.5;
       const dist = (i === 0 ? 0.05 : 0.18 + this.rng() * cfg.spread);
@@ -209,9 +220,11 @@ export class StoneClusterManager {
   clearAll() {
     for (const cluster of this.clusters) {
       this.scene.remove(cluster.group);
-      for (const mesh of cluster.stoneMeshes) {
-        if (mesh.material) mesh.material.dispose();
-      }
+      cluster.group.traverse((child) => {
+        if (!child.material) return;
+        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+        else child.material.dispose();
+      });
     }
     this.clusters = [];
   }
@@ -252,9 +265,13 @@ export class StoneClusterManager {
     const stoneWorldPos = new THREE.Vector3();
     stoneMesh.getWorldPosition(stoneWorldPos);
 
-    // Remove mesh from cluster group
+    // Remove mesh from cluster group and dispose all child materials
     cluster.group.remove(stoneMesh);
-    stoneMesh.material.dispose();
+    stoneMesh.traverse((child) => {
+      if (!child.material) return;
+      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+      else child.material.dispose();
+    });
 
     // Spawn absorption feedback & add to inventory
     this.resourceManager.particles.spawnBurst(stoneWorldPos, 0x8a8a8a);
