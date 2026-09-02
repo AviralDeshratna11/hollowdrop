@@ -40,8 +40,17 @@ import { RadarHUD } from './radarHUD.js?v=5.3';
 import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady } from './terrain.js?v=5.3';
 import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
+import { assetLoadingManager } from './loadingManager.js?v=5.3';
+import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
 
 const canvas = document.getElementById('game-canvas');
+
+// Constructed before any of this file's own Loaders (groundTexture below) or the
+// player/rat FBX loads they kick off (playerSlimeModel.js/ratModel.js, further down)
+// so its assetLoadingManager.onProgress/onLoad/onError are attached before any of
+// those synchronous loader.load()/loadAsync() calls happen - onLoad only fires once,
+// when the queue first empties, so this ordering has to hold.
+const loadingScreenController = new LoadingScreenController();
 
 // --- Scene / Camera / Renderer -------------------------------------------
 const DEBUG_CAMERA = false;
@@ -166,7 +175,7 @@ const GROUND_SIZE = 90;
 const GROUND_SEGMENTS = 320;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
 
-const groundTexture = new THREE.TextureLoader().load('assets/textures/cave_ground_new.png', (tex) => {
+const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_new.png', (tex) => {
   initTextureElevation(tex.image);
 });
 groundTexture.wrapS = THREE.MirroredRepeatWrapping;
@@ -1000,6 +1009,7 @@ window.__hollowdrop = {
   gameFlowController,
   memorySequenceController,
   runCompleteController,
+  loadingScreenController,
   resetGame,
   // Convenience read for a future radar/navigation system - the authoritative source is
   // DeathRespawnManager.getLastDeathLocation().

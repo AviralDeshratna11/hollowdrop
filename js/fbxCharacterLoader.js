@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/FBXLoader.js';
+import { assetLoadingManager } from './loadingManager.js?v=5.3';
 
 /**
  * Shared loader for the two Meshy AI character exports (Plague Sludge Rat, Jellybean
@@ -17,8 +18,10 @@ import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/j
  * how a procedural body centered at its own origin already behaves.
  */
 
-const fbxLoader = new FBXLoader();
-const textureLoader = new THREE.TextureLoader();
+// Shared manager so the loading screen (loadingScreenController.js) sees real
+// progress across these fetches too, not just the ground texture.
+const fbxLoader = new FBXLoader(assetLoadingManager);
+const textureLoader = new THREE.TextureLoader(assetLoadingManager);
 const textureCache = new Map();
 
 function loadTexture(url) {

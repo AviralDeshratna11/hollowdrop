@@ -9,6 +9,19 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="theme-color" content="#0a1410" />
 <link rel="stylesheet" href="style.css" />
+<!-- Unbounded: display font for #title-screen's own heading only (.title-name in
+     style.css) - every other typeface in the game is self-hosted from fonts/ (see the
+     @font-face rules at the top of style.css), but this one comes from Google Fonts instead of
+     joining them there. That's a deliberate exception, not an oversight: the game
+     already depends on jsdelivr for the entire Three.js engine and FBXLoader's import
+     chain below, so one more CDN font is a small addition next to that, and
+     font-display: swap (part of Google's stylesheet) means a slow/failed fetch just
+     shows the fallback in --font-ui/system-ui until/if it arrives - never a broken or
+     blank title, unlike the raster-background approach the inventory panel's own
+     comments describe trying and dropping for exactly that failure mode. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700&display=swap" rel="stylesheet" />
 <!-- Must precede the modulepreload hints below: a module preload that itself resolves
      a bare specifier (FBXLoader.js does `import * as THREE from 'three'`) needs the
      importmap already registered in the document, or the browser can't resolve "three"
@@ -386,15 +399,57 @@
   </div>
 </div>
 
-<!-- Title screen: shown once on first load (see GameFlowController). The Three.js
-     world keeps rendering behind it (idle Hollowdrop at spawn) rather than a
-     separate scene, per spec section 56. -->
-<div id="title-screen">
+<!-- Title screen: the ONE screen shown from first paint until the player taps Begin -
+     it doubles as the loading screen (see #title-loading below), rather than a separate
+     overlay stacked on top of this one. Two stacked, differently-driven overlays (a
+     loading screen that hides to reveal a title screen underneath) is what used to
+     cause a visible handoff pop/glitch between them; one continuous element with two
+     sub-states inside it cannot glitch that way, because there is no handoff.
+
+     `title-screen--visible` is in the static markup itself (not added by JS, see
+     GameFlowController/uiManager.showTitleScreen - it still adds the same class, which
+     is harmless/idempotent) - so this screen is already in its final visible, opaque
+     state from the very first paint, before any of the ~60 JS modules or the Three.js
+     CDN chain even finish loading. Nothing pops in.
+
+     Deliberately fully OPAQUE (see #title-screen's background in style.css - no alpha
+     anywhere in it) rather than the translucent-over-the-live-world look this screen
+     used to have: the world/HUD must not be even faintly visible before Begin is
+     tapped. Every HUD element (#ui-layer, #action-stack, #species-radar, etc.) already
+     sits at a lower z-index than this screen's 50, so full opacity alone is what hides
+     them completely - no extra JS/state wiring needed for that. -->
+<div id="title-screen" class="title-screen--visible">
   <div class="title-content">
     <h1 class="title-name">HOLLOWDROP</h1>
     <p class="title-subtitle">The Living Colony</p>
     <p class="title-tagline">Absorb. Adapt. Survive.</p>
-    <button id="title-begin-button" type="button">TAP TO BEGIN</button>
+
+    <!-- Visible by default (hidden is only ever set by LoadingScreenController, and
+         only AFTER the ring has visibly filled to 100% - see that file's completion
+         sequence). The ring's stroke-dasharray/dashoffset are hardcoded here to its
+         own circumference (2*pi*52 = 326.73) so it already reads as an EMPTY ring on
+         first paint, before that controller's constructor ever runs - without this,
+         the circle would render fully drawn (no dasharray = solid stroke) for however
+         long the module graph takes to load, then visibly snap to empty the instant
+         JS attached. Keep this dasharray in sync with the r= beside it if either
+         changes (the controller reads r= itself, so only these two must agree). -->
+    <div id="title-loading">
+      <div class="title-loading-ring-wrap">
+        <svg viewBox="0 0 120 120">
+          <circle class="title-loading-ring-track" cx="60" cy="60" r="52" fill="none" stroke-width="3.5" />
+          <circle id="title-loading-ring-progress" class="title-loading-ring-progress" cx="60" cy="60" r="52" fill="none" stroke-width="3.5"
+            stroke-dasharray="326.73" stroke-dashoffset="326.73" />
+        </svg>
+        <!-- The slime membrane, sitting inside the ring - a pure CSS shape whose
+             border-radius morphs on a loop, echoing slimeCreature.js's own deforming
+             membrane. Its colors come from the same cycling --loading-* properties as
+             everything else on this screen. -->
+        <div class="title-loading-blob"></div>
+      </div>
+      <p id="title-loading-status" class="title-loading-status">Calibrating membrane…</p>
+    </div>
+
+    <button id="title-begin-button" type="button" hidden>TAP TO BEGIN</button>
   </div>
 </div>
 

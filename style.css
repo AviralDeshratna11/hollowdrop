@@ -58,6 +58,18 @@
   --warning-amber-rgb: 255 200 90;
   --shadow-rgb: 5 5 8;
 
+  /* #loading-screen only (see LoadingScreenController) - defaulted to Cave Mint, the
+     same values as --accent-rgb/--bg/--text above, purely so the very first paint
+     (before that controller's first requestAnimationFrame callback runs) already
+     matches the game's real palette instead of flashing unstyled. Every value after
+     that first frame is overwritten every tick by that controller's own color-cycle. */
+  --loading-accent-rgb: 124 255 178;
+  --loading-accent-bright-rgb: 157 255 207;
+  --loading-accent-dim-rgb: 108 242 164;
+  --loading-bg-rgb: 10 20 16;
+  --loading-bg-deep-rgb: 5 16 12;
+  --loading-text-rgb: 234 255 242;
+
   /* Core */
   --bg: #0a1410;
   --bg-deep: #05100c;
@@ -1248,9 +1260,17 @@ html, body {
    Title / Memory Reveal / Run Complete
    ========================================================================== */
 
-/* Title screen: shown once on first load (GameFlowController). The Three.js world
-   keeps rendering behind it (idle Hollowdrop at spawn, see main.js) rather than a
-   separate scene - this is just a translucent gradient sitting on top of it. */
+/* Title screen: the ONE screen shown from first paint until the player taps Begin -
+   see the long comment on #title-screen's own markup in index.html for why it now
+   ALSO carries the loading UI directly (#title-loading below) instead of a separate
+   overlay stacked on top of it, and why it's fully opaque rather than translucent
+   over the live world.
+
+   Namespaced --loading-*-rgb custom properties (defaulted on :root, updated every
+   tick by LoadingScreenController while loading, then left frozen at whatever they
+   last were once it stops - see that file) drive this whole screen's colors, rather
+   than reusing the game's own --accent-rgb/--bg/--text/etc: those are shared by
+   in-game HUD elements this screen must never bleed color changes into. */
 #title-screen {
   position: fixed;
   inset: 0;
@@ -1258,7 +1278,13 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 50% 40%, var(--surface-title-glow), var(--surface-title) 75%);
+  overflow: hidden;
+  /* Fully opaque: both explicit stops below carry no alpha, and the box's own
+     inset box-shadow (glow) blends against THIS background - already opaque by the
+     time it's applied - not against whatever sits behind the element, so it can't
+     reintroduce see-through the way a translucent gradient stop would. */
+  background: radial-gradient(circle at 50% 40%, rgb(var(--loading-bg-rgb)), rgb(var(--loading-bg-deep-rgb)) 100%);
+  box-shadow: inset 0 0 min(30vw, 220px) rgb(var(--loading-accent-rgb) / 0.22);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;
@@ -1269,6 +1295,9 @@ html, body {
   padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
+/* In the static markup itself (see index.html) so this is already the visible,
+   opaque state from the very first paint - GameFlowController/uiManager.showTitleScreen
+   still adds this same class on init, which is harmless (classList.add is idempotent). */
 #title-screen.title-screen--visible {
   opacity: 1;
   pointer-events: auto;
@@ -1282,37 +1311,131 @@ html, body {
 }
 
 .title-name {
-  font-family: var(--font-display);
-  font-size: clamp(32px, 10vw, 48px);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--accent-bright);
-  text-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.55);
+  /* Unbounded, not the game's usual --font-display (Syne) - loaded via the Google
+     Fonts link in index.html's <head>, scoped to just this one heading. */
+  font-family: 'Unbounded', var(--font-display);
+  font-size: clamp(30px, 8vw, 46px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(var(--loading-accent-bright-rgb));
+  text-shadow: 0 0 20px rgb(var(--loading-accent-rgb) / 0.55);
   margin: 0;
+  line-height: 1.1;
 }
 
 .title-subtitle {
   font-size: 14px;
   letter-spacing: 0.14em;
-  opacity: 0.75;
-  margin: 0 0 18px;
+  color: rgb(var(--loading-text-rgb) / 0.75);
+  margin: 10px 0 0;
 }
 
 .title-tagline {
   font-size: 13px;
   font-style: italic;
-  opacity: 0.55;
-  margin: 0 0 34px;
+  color: rgb(var(--loading-text-rgb) / 0.55);
+  margin: 6px 0 30px;
+}
+
+/* Shown until LoadingScreenController hides it - which it only does once the ring has
+   visibly reached 100%, after which #title-begin-button takes its place (see that
+   file's completion sequence). */
+#title-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 30px;
+}
+
+/* REQUIRED, not redundant: the browser's own `[hidden] { display: none }` rule is an
+   attribute selector, which loses to the ID selector above, so `el.hidden = true`
+   alone would leave this block on screen (it did exactly that - the ring sat there
+   frozen beside the revealed Begin button). Any ID-selector rule that sets `display`
+   needs its own [hidden] companion like this one. */
+#title-loading[hidden] {
+  display: none;
+}
+
+.title-loading-ring-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.title-loading-ring-wrap svg {
+  position: absolute;
+  inset: 0;
+  /* Starts the fill at 12 o'clock instead of SVG's default 3 o'clock. */
+  transform: rotate(-90deg);
+}
+
+.title-loading-ring-track {
+  stroke: rgb(var(--loading-text-rgb) / 0.12);
+}
+
+.title-loading-ring-progress {
+  stroke: rgb(var(--loading-accent-bright-rgb));
+  stroke-linecap: round;
+  /* The controller only writes this 10x/sec (see its TICK_MS note on why it is not
+     driven per animation frame). Transitioning between those writes is what makes the
+     fill read as continuous motion rather than ten visible steps a second - the
+     browser interpolates the in-between values for free. Slightly longer than one
+     tick so each write picks up mid-transition and never lands on a stall.
+     stroke-dasharray stays fixed (set once, here and in the matching index.html
+     attribute) since the ring's radius never changes at runtime. */
+  transition: stroke-dashoffset 0.22s linear;
+}
+
+/* Slime membrane inside the ring. The border-radius morph is the whole point of the
+   shape, but note it is deliberately the ONLY animation here: an earlier version also
+   carried an SVG drop-shadow filter and ran at ~2x this size, continuously, for the
+   entire time the screen sat idle waiting for a tap. This one is small, uses a
+   box-shadow for its glow (cheaper than a filter, and it follows the morphing shape),
+   and stops existing entirely the moment #title-loading is hidden. */
+.title-loading-blob {
+  position: absolute;
+  inset: 24px;
+  border-radius: 42% 58% 63% 37% / 45% 41% 59% 55%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgb(var(--loading-accent-rgb) / 0.9),
+    rgb(var(--loading-accent-dim-rgb) / 0.35) 60%,
+    transparent 100%
+  );
+  box-shadow: 0 0 22px rgb(var(--loading-accent-rgb) / 0.45);
+  animation: title-loading-blob-morph 5.5s ease-in-out infinite;
+}
+
+@keyframes title-loading-blob-morph {
+  0%, 100% { border-radius: 42% 58% 63% 37% / 45% 41% 59% 55%; }
+  33% { border-radius: 58% 42% 40% 60% / 55% 62% 38% 45%; }
+  66% { border-radius: 48% 52% 55% 45% / 40% 55% 45% 60%; }
+}
+
+.title-loading-status {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgb(var(--loading-text-rgb) / 0.55);
+  height: 16px;
+  text-transform: uppercase;
+  margin: 0;
 }
 
 #title-begin-button {
   min-width: 220px;
   min-height: 52px;
   padding: 14px 32px;
-  border: 1px solid rgb(var(--accent-rgb) / 0.5);
+  /* The cycling --loading-* tokens, not the game's own static --accent-*: the cycle
+     freezes wherever it happened to be when loading finished (the controller stops
+     ticking then - see its note on not burning CPU while this screen sits idle), so a
+     button painted in the fixed mint identity would clash with whatever color the rest
+     of the screen settled on - mint text on a pink screen. */
+  border: 1px solid rgb(var(--loading-accent-rgb) / 0.5);
   border-radius: var(--radius-pill);
   background: var(--surface-button);
-  color: var(--accent-bright);
+  color: rgb(var(--loading-accent-bright-rgb));
   font-family: inherit;
   font-weight: 700;
   font-size: 14px;
@@ -1323,11 +1446,13 @@ html, body {
 }
 
 #title-begin-button:active {
-  background: rgb(var(--accent-rgb) / 0.3);
+  background: rgb(var(--loading-accent-rgb) / 0.3);
 }
 
 /* Shown briefly while GameFlowController waits on the player model to finish loading
-   after a tap (see uiManager.setTitleLoading) - reads as "still working", not broken. */
+   after a tap (see uiManager.setTitleLoading) - reads as "still working", not broken.
+   Unrelated to #title-loading above (that one is settled well before this button is
+   even shown) - this is a separate, later wait on the player's own FBX model. */
 #title-begin-button:disabled {
   opacity: 0.6;
   cursor: default;
