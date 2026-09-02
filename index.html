@@ -91,6 +91,8 @@
      a separate element from #screen-fade since that one is driven per-frame by death/respawn
      and this one is a single CSS animation triggered by a class toggle. -->
 <div id="genome-flash"></div>
+<!-- Ambient pulsing red hue vignette on energy exhaustion/starvation (UIManager.setStarvationState) -->
+<div id="starvation-overlay" aria-hidden="true"></div>
 
 <!-- Floating movement joystick - purely visual, driven by InputController. It appears
      at the exact point a drag begins and its knob tracks the (clamped) swipe vector, so

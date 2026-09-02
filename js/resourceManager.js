@@ -2,7 +2,31 @@ import * as THREE from 'three';
 import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
 import { createResourceMesh } from './resourceModels.js?v=5.3';
 import { AbsorbParticles } from './absorbParticles.js?v=5.3';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight, isPointInLake, LAKE_CONFIG } from './terrain.js?v=5.3';
+
+/**
+ * Distinguishes heavy sinking resources (stone, iron, glands) from light buoyant ones (spores, mushrooms, DNA).
+ */
+export function isBuoyantResource(type) {
+  if (type === 'stone' || type === 'iron' || type === 'toxic_gland') {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Calculates resting Y elevation: floating on water surface if buoyant, or sunken to lake floor if heavy.
+ */
+export function getResourceRestHeight(type, x, z) {
+  const groundY = getTerrainHeight(x, z);
+  if (isPointInLake(x, z)) {
+    const waterSurfaceY = LAKE_CONFIG.waterLevel;
+    if (isBuoyantResource(type) && waterSurfaceY > groundY) {
+      return waterSurfaceY + 0.05;
+    }
+  }
+  return groundY;
+}
 
 export const ATTRACTION_RADIUS = 1.5;
 export const ABSORB_RADIUS = 0.7;
@@ -75,8 +99,8 @@ export class ResourceManager {
     const config = RESOURCE_TYPES[type];
     if (!config) throw new Error(`Unknown resource type: ${type}`);
 
-    const groundY = getTerrainHeight(position.x, position.z);
-    const spawnY = (position.y !== undefined && !isNaN(position.y) && position.y !== 0) ? position.y : groundY;
+    const restY = getResourceRestHeight(type, position.x, position.z);
+    const spawnY = (position.y !== undefined && !isNaN(position.y) && position.y !== 0) ? position.y : restY;
 
     const mesh = createResourceMesh(type, config.color);
     mesh.scale.setScalar(config.modelScale);
@@ -94,7 +118,7 @@ export class ResourceManager {
       mesh,
       state: 'idle', // idle | attracting | absorbing | rejected
       phase: Math.random() * Math.PI * 2,
-      baseY: groundY,
+      baseY: restY,
       baseScale: config.modelScale,
       stateTime: 0,
       rejectVelocity: new THREE.Vector3(),
@@ -126,7 +150,7 @@ export class ResourceManager {
       worldDirection.z * speed
     );
     resource.isPhysicsActive = true;
-    resource.baseY = getTerrainHeight(spawnPosition.x, spawnPosition.z);
+    resource.baseY = getResourceRestHeight(type, spawnPosition.x, spawnPosition.z);
     resource.collectible = false;
     resource.collectibleAt = performance.now() + EXPEL_PHYSICS.recollectDelay;
     resource.hasLeftAttractionRadius = false;
@@ -149,7 +173,7 @@ export class ResourceManager {
         } while (x * x + z * z < minRadius * minRadius);
         const worldX = centerPosition.x + x;
         const worldZ = centerPosition.z + z;
-        const worldY = getTerrainHeight(worldX, worldZ);
+        const worldY = getResourceRestHeight(type, worldX, worldZ);
         spawnPos.set(worldX, worldY, worldZ);
         this.spawnResource(type, spawnPos);
       }
@@ -185,13 +209,13 @@ export class ResourceManager {
    */
   realignToTerrain() {
     for (const resource of this.resources) {
-      const groundY = getTerrainHeight(resource.mesh.position.x, resource.mesh.position.z);
-      resource.baseY = groundY;
+      const restY = getResourceRestHeight(resource.type, resource.mesh.position.x, resource.mesh.position.z);
+      resource.baseY = restY;
       if (!resource.isPhysicsActive && resource.state === 'idle') {
         if (resource.type.endsWith('_dna')) {
-          resource.mesh.position.y = groundY + 0.12;
+          resource.mesh.position.y = restY + 0.12;
         } else {
-          resource.mesh.position.y = groundY;
+          resource.mesh.position.y = restY;
         }
       }
     }
@@ -245,7 +269,7 @@ export class ResourceManager {
     v.y -= GRAVITY * deltaTime;
     resource.mesh.position.addScaledVector(v, deltaTime);
 
-    const restHeight = getTerrainHeight(resource.mesh.position.x, resource.mesh.position.z);
+    const restHeight = getResourceRestHeight(resource.type, resource.mesh.position.x, resource.mesh.position.z);
     resource.baseY = restHeight;
     if (resource.mesh.position.y <= restHeight) {
       resource.mesh.position.y = restHeight;
@@ -338,12 +362,12 @@ export class ResourceManager {
     resource.mesh.position.addScaledVector(resource.rejectVelocity, deltaTime);
     resource.rejectVelocity.multiplyScalar(Math.max(0, 1 - 4 * deltaTime));
 
-    const groundY = getTerrainHeight(resource.mesh.position.x, resource.mesh.position.z);
-    resource.baseY = groundY;
+    const restY = getResourceRestHeight(resource.type, resource.mesh.position.x, resource.mesh.position.z);
+    resource.baseY = restY;
     if (resource.type.endsWith('_dna')) {
-      resource.mesh.position.y = groundY + 0.12;
+      resource.mesh.position.y = restY + 0.12;
     } else {
-      resource.mesh.position.y = groundY;
+      resource.mesh.position.y = restY;
     }
 
     if (resource.stateTime > REJECT_COOLDOWN) {
@@ -356,11 +380,14 @@ export class ResourceManager {
     const { mesh, type, phase, baseY, baseScale } = resource;
     mesh.scale.setScalar(baseScale);
 
+    const isFloating = isPointInLake(mesh.position.x, mesh.position.z) && isBuoyantResource(type) && (baseY > getTerrainHeight(mesh.position.x, mesh.position.z));
+    const waterBob = isFloating ? Math.sin(this._elapsed * 3.2 + phase) * 0.045 : 0;
+
     switch (type) {
       case 'spore':
       case 'toxic_spore': {
         // Grounded organic pod with rhythmic breathing
-        mesh.position.y = baseY;
+        mesh.position.y = baseY + waterBob;
         const breathe = 1 + Math.sin(this._elapsed * 2.2 + phase) * 0.04;
         mesh.scale.set(baseScale * breathe, baseScale * (2 - breathe), baseScale * breathe);
         if (mesh.userData.pulseMaterials) {
@@ -371,7 +398,7 @@ export class ResourceManager {
       }
       case 'mushroom': {
         // Grounded fungal colony
-        mesh.position.y = baseY;
+        mesh.position.y = baseY + waterBob;
         const breathe = 1 + Math.sin(this._elapsed * 1.8 + phase) * 0.035;
         mesh.scale.set(baseScale * breathe, baseScale * (1 + (breathe - 1) * 0.5), baseScale * breathe);
         if (mesh.userData.pulseMaterials) {
@@ -382,7 +409,7 @@ export class ResourceManager {
       }
       case 'blue_mushroom': {
         // Grounded Azure Glowcap cluster
-        mesh.position.y = baseY;
+        mesh.position.y = baseY + waterBob;
         const breathe = 1 + Math.sin(this._elapsed * 2.2 + phase) * 0.04;
         mesh.scale.set(baseScale * breathe, baseScale * (1 + (breathe - 1) * 0.6), baseScale * breathe);
         if (mesh.userData.pulseMaterials) {
@@ -399,7 +426,7 @@ export class ResourceManager {
         }
         break;
       case 'toxic_gland': {
-        // Grounded organic gland with pulsing peristalsis
+        // Grounded organic gland with pulsing peristalsis (dense, sinks to floor)
         mesh.position.y = baseY;
         const pulseT = this._elapsed * 2.6 + phase;
         const squish = Math.sin(pulseT) * 0.06;
@@ -416,7 +443,7 @@ export class ResourceManager {
       case 'apex_dna':
       case 'rival_dna': {
         // Levitating bio-containment vial with internal rotating DNA helix
-        mesh.position.y = baseY + 0.12 + Math.sin(this._elapsed * 1.5 + phase) * 0.035;
+        mesh.position.y = baseY + 0.12 + Math.sin(this._elapsed * 1.5 + phase) * 0.035 + waterBob;
         mesh.rotation.y = this._elapsed * 0.5 + phase;
 
         // Spin internal double-helix
@@ -436,7 +463,7 @@ export class ResourceManager {
       case 'stone':
       default:
         mesh.position.y = baseY;
-        break; // solid on ground
+        break;
     }
   }
 }

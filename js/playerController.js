@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight, isPointInLake, LAKE_CONFIG } from './terrain.js?v=5.3';
 
 // --- Tunable movement architecture ---------------------------------------
 export const PLAYER_MAX_SPEED = 6.0;      // world units / second at full swipe
@@ -348,14 +348,28 @@ export class PlayerController {
     this.mesh.position.x += this.currentVelocity.x * deltaTime;
     this.mesh.position.z += this.currentVelocity.z * deltaTime;
 
+    const px = this.mesh.position.x;
+    const pz = this.mesh.position.z;
     const baseRadius = this._baseScale ? this._baseScale.y * 0.6 : 0.6;
-    const targetY = getTerrainHeight(this.mesh.position.x, this.mesh.position.z) + baseRadius;
+    const groundY = getTerrainHeight(px, pz);
+    let targetY = groundY + baseRadius;
+
+    if (isPointInLake(px, pz)) {
+      const waterDepth = LAKE_CONFIG.waterLevel - groundY;
+      if (waterDepth > 0.05) {
+        // Light Slime (load < 0.35) has natural buoyancy and floats on the water surface (~50% submerged).
+        // Heavy Slime (load >= 0.35) loses buoyancy and sinks down to the lakebed floor.
+        const buoyancy = Math.max(0, 1.0 - (this._load / 0.35));
+        const floatY = LAKE_CONFIG.waterLevel + baseRadius * 0.32;
+        const submergedY = groundY + baseRadius;
+        targetY = THREE.MathUtils.lerp(submergedY, Math.max(submergedY, floatY), buoyancy);
+      }
+    }
+
     const ySmooth = 1 - Math.exp(-12.0 * deltaTime);
     this.mesh.position.y += (targetY - this.mesh.position.y) * ySmooth;
 
     // Compute terrain slope from 4 neighbors to tilt the slime onto the surface.
-    const px = this.mesh.position.x;
-    const pz = this.mesh.position.z;
     const slopeStep = 0.8;
     const hRight = getTerrainHeight(px + slopeStep, pz);
     const hLeft  = getTerrainHeight(px - slopeStep, pz);
@@ -365,8 +379,19 @@ export class PlayerController {
     const slopeX = (hBack - hFwd) / (2 * slopeStep); // tilt around X axis
     const slopeZ = (hRight - hLeft) / (2 * slopeStep); // tilt around Z axis
     const MAX_SLOPE_TILT = 0.5; // max ~28 degrees
-    this._slopeTiltX = Math.max(-MAX_SLOPE_TILT, Math.min(MAX_SLOPE_TILT, slopeX));
-    this._slopeTiltZ = Math.max(-MAX_SLOPE_TILT, Math.min(MAX_SLOPE_TILT, -slopeZ));
+    let tiltX = Math.max(-MAX_SLOPE_TILT, Math.min(MAX_SLOPE_TILT, slopeX));
+    let tiltZ = Math.max(-MAX_SLOPE_TILT, Math.min(MAX_SLOPE_TILT, -slopeZ));
+
+    // When floating buoyantly in water, dampen deep ground tilt
+    if (isPointInLake(px, pz) && (LAKE_CONFIG.waterLevel - groundY) > 0.25) {
+      const waterFactor = Math.min(1.0, (LAKE_CONFIG.waterLevel - groundY - 0.25) * 2.5);
+      const buoyancy = Math.max(0, 1.0 - (this._load / 0.35));
+      tiltX *= (1.0 - waterFactor * buoyancy * 0.85);
+      tiltZ *= (1.0 - waterFactor * buoyancy * 0.85);
+    }
+
+    this._slopeTiltX = tiltX;
+    this._slopeTiltZ = tiltZ;
 
     this._applyMovementFeel(deltaTime);
     this._applyHitFlash(deltaTime);

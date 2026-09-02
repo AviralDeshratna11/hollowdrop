@@ -38,12 +38,13 @@ import { ScreenShake } from './screenShake.js?v=5.3';
 import { DamageNumberController } from './damageNumbers.js?v=5.3';
 import { RadarController } from './radarController.js?v=5.3';
 import { RadarHUD } from './radarHUD.js?v=5.3';
-import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady } from './terrain.js?v=5.3';
+import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady, LAKE_CONFIG } from './terrain.js?v=5.3';
 import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
 import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
 import { BoundaryEnvironment } from './boundaryEnvironment.js?v=5.3';
+import { LakeBiome } from './lakeBiome.js?v=5.3';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -266,6 +267,11 @@ function populateWorldResources() {
     resourceManager.spawnResource('iron', new THREE.Vector3(x, getTerrainHeight(x, z), z));
   }
 
+  // Azure Glowcaps along the crystal shallows and shoreline of the enlarged Abyssal Lake
+  for (const [x, z] of [[-4.5, 11.0], [8.5, 11.5], [17.0, 20.5], [-8.0, 26.0], [12.5, 30.5]]) {
+    resourceManager.spawnResource('blue_mushroom', new THREE.Vector3(x, getTerrainHeight(x, z), z));
+  }
+
   // Rat DNA is no longer spawned in the world - it is earned by defeating the Venom Rat
   // boss (the repurposed predator, see VENOM_RAT_BOSS_LOOT). It stays in `excludeTypes`
   // above so it never leaks back into the ambient scatter either.
@@ -473,6 +479,7 @@ const mapExclusions = [
   { x: apexArenaCenter.x, z: apexArenaCenter.z, radius: APEX_CONFIG.arenaRadius + 3 },
   { x: tree1Trunk.x, z: tree1Trunk.z, radius: 1.8 },
   { x: tree2Trunk.x, z: tree2Trunk.z, radius: 1.8 },
+  { x: LAKE_CONFIG.center.x, z: LAKE_CONFIG.center.z, radius: 17.0 },
 ];
 
 const worldDressingResult = scatterWorldDressing(scene, {
@@ -489,6 +496,15 @@ const stoneClusterManager = new StoneClusterManager(
   collisionSystem
 );
 stoneClusterManager.populateWorldClusters({ exclusions: mapExclusions });
+
+// Bioluminescent Abyssal Lake & Hydrodynamics System
+const lakeBiome = new LakeBiome(scene, {
+  playerController,
+  burdenSystem,
+  metabolismSystem,
+  uiManager,
+  collisionSystem,
+});
 
 collisionSystem.addStatic(tree1Trunk.x, tree1Trunk.z, tree1.userData.baseColliderRadius);
 collisionSystem.addStatic(tree2Trunk.x, tree2Trunk.z, tree2.userData.baseColliderRadius);
@@ -522,6 +538,7 @@ onTerrainElevationReady(() => {
   stoneClusterManager.realignToTerrain();
   realignDressingToTerrain();
   boundaryEnvironment.realignToTerrain();
+  lakeBiome.realignToTerrain();
 });
 
 const tempColliderPos = new THREE.Vector3();
@@ -626,7 +643,22 @@ projectileSystem.onFired = () => {
 };
 
 // Damage taken
-playerHealth.onDamaged = (amount) => {
+let starvationShakeAccumulator = 0;
+playerHealth.onDamaged = (amount, source) => {
+  const isStarvation = source?.type === 'starvation' || (typeof source === 'string' && source === 'starvation');
+  if (isStarvation) {
+    // Starvation: very minimal subtle tremor pulse (~0.04 trauma) once every 1.0s to indicate physical weakness without shaking the camera violently
+    const dt = source?.deltaTime || 0.016;
+    starvationShakeAccumulator += dt;
+    if (starvationShakeAccumulator >= 1.0) {
+      starvationShakeAccumulator = 0;
+      screenShake.add(0.04);
+    }
+    return;
+  }
+
+  // Combat / predator damage
+  starvationShakeAccumulator = 0;
   screenShake.add(THREE.MathUtils.clamp(0.25 + (amount / playerHealth.maxHealth) * 0.9, 0, 1));
   damageNumbers.spawn(player.position, amount, 'incoming');
   amoeba.triggerSquint();
@@ -958,6 +990,7 @@ function resetGame() {
   hitstopRemaining = 0;
   damageNumbers.clear();
   projectileSystem.reset();
+  lakeBiome.reset();
 
   uiManager.dismissTransientUI();
   objectiveIndicator.update();
@@ -1011,6 +1044,7 @@ window.__hollowdrop = {
   camera,
   resourceManager,
   stoneClusterManager,
+  lakeBiome,
   inventoryManager,
   burdenSystem,
   playerController,
@@ -1146,8 +1180,10 @@ function animate() {
   radarHUD.setVisible(isPlayingState);
 
   burdenSystem.update();
-  playerController.movementSpeedMultiplier = playerFormController.getSpeedMultiplier() * burdenSystem.speedMultiplier;
-  playerController.accelerationMultiplier = playerFormController.getAccelerationMultiplier() * burdenSystem.accelerationMultiplier;
+  const lakeSpeedMult = lakeBiome ? lakeBiome.getSpeedMultiplier(player.position) : 1.0;
+  const lakeAccelMult = lakeBiome ? lakeBiome.getAccelerationMultiplier(player.position) : 1.0;
+  playerController.movementSpeedMultiplier = playerFormController.getSpeedMultiplier() * burdenSystem.speedMultiplier * lakeSpeedMult;
+  playerController.accelerationMultiplier = playerFormController.getAccelerationMultiplier() * burdenSystem.accelerationMultiplier * lakeAccelMult;
   playerController.squashStretchMultiplier = playerFormController.currentForm === PLAYER_FORMS.SLIME ? 1.2 : 1.0;
 
   playerHealth.update(deltaTime);
@@ -1199,6 +1235,7 @@ function animate() {
   damageNumbers.update(realDeltaTime);
   combatVFX.update(realDeltaTime);
   boundaryEnvironment.update(realDeltaTime);
+  lakeBiome.update(deltaTime, player.position, playerController);
 
   radarController.update(realDeltaTime);
   radarHUD.update(realDeltaTime);

@@ -74,6 +74,8 @@ export class MetabolismSystem {
   // across a respawn within the same session.
   reset(ratio = METABOLISM_CONFIG.respawnEnergyRatio) {
     this.currentEnergy = this.maxEnergy * ratio;
+    this._wasStarving = false;
+    this.uiManager.setStarvationState?.(false);
     this._afterEnergyChange();
     if (DEBUG_METABOLISM) console.log('Energy restored');
   }
@@ -82,14 +84,27 @@ export class MetabolismSystem {
     // Dead (mid-death-animation through respawn) or explicitly disabled: no drain,
     // no starvation ticking. playerHealth.isDead already spans the whole death/fade/
     // respawn window (until reset() runs), so this alone covers "gameplay inactive".
-    if (!this.enabled || this.playerHealth.isDead) return;
+    if (!this.enabled || this.playerHealth.isDead) {
+      if (this._wasStarving) {
+        this._wasStarving = false;
+        this.uiManager.setStarvationState?.(false);
+      }
+      return;
+    }
 
     this.drainEnergy(METABOLISM_CONFIG.baseDrainPerSecond * this.metabolismMultiplier * deltaTime);
     this.playerController.setEnergyVisual(this.getEnergyRatio());
 
-    if (this.state === STATES.STARVING) {
+    const isStarving = this.state === STATES.STARVING;
+    if (isStarving !== this._wasStarving) {
+      this._wasStarving = isStarving;
+      this.uiManager.setStarvationState?.(isStarving);
+    }
+
+    if (isStarving) {
       this.playerHealth.takeEnvironmentalDamage(METABOLISM_CONFIG.starvationDamagePerSecond * deltaTime, {
         type: 'starvation',
+        deltaTime,
       });
     }
   }
@@ -115,8 +130,12 @@ export class MetabolismSystem {
     }
 
     if (this.state === STATES.STARVING) {
+      this._wasStarving = true;
+      this.uiManager.setStarvationState?.(true);
       playStarvationSound();
     } else if (previous === STATES.STARVING) {
+      this._wasStarving = false;
+      this.uiManager.setStarvationState?.(false);
       if (DEBUG_METABOLISM) console.log('Starvation ended');
     }
 

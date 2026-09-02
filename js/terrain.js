@@ -246,18 +246,77 @@ function sampleTextureHeight(worldX, worldZ) {
 // much smaller map.
 const BOUNDARY_SLOPE_START = (GROUND_SIZE / 2) * 0.8;
 
+export const LAKE_CONFIG = {
+  center: { x: 3.5, z: 20.5 },
+  rx: 17.5,
+  rz: 14.5,
+  waterLevel: -0.35,
+  maxDepth: 2.2,
+};
+
+/**
+ * Normalized 0..1 factor of how deep inside the lake basin a coordinate is (1 = center, 0 = shore/outside).
+ */
+export function getLakeBasinFactor(x, z) {
+  const dx = (x - LAKE_CONFIG.center.x) / LAKE_CONFIG.rx;
+  const dz = (z - LAKE_CONFIG.center.z) / LAKE_CONFIG.rz;
+  const distSq = dx * dx + dz * dz;
+  if (distSq >= 1.0) return 0;
+  const radialDist = Math.sqrt(distSq);
+  const t = 1.0 - radialDist;
+  return t * t * (3 - 2 * t);
+}
+
+export function isPointInLake(x, z) {
+  const dx = (x - LAKE_CONFIG.center.x) / LAKE_CONFIG.rx;
+  const dz = (z - LAKE_CONFIG.center.z) / LAKE_CONFIG.rz;
+  return (dx * dx + dz * dz) < 1.0;
+}
+
+export function getWaterDepth(x, z) {
+  if (!isPointInLake(x, z)) return 0;
+  const groundY = getTerrainHeight(x, z);
+  return Math.max(0, LAKE_CONFIG.waterLevel - groundY);
+}
+
 export function getTerrainHeight(x, z) {
   const distFromOrigin = Math.sqrt(x * x + z * z);
   const boundarySlope = distFromOrigin > BOUNDARY_SLOPE_START ? Math.min((distFromOrigin - BOUNDARY_SLOPE_START) * 0.06, 2.0) : 0;
 
   // 1. Texture-driven 3D relief: uplift rocks, downlift pools and crevices
-  const textureElevation = sampleTextureHeight(x, z);
+  const rawTextureElevation = sampleTextureHeight(x, z);
 
   // 2. Continuous subterranean macro undulation across the 200m cavern
   const macroRoll1 = Math.sin(x * 0.045 + 0.5) * Math.cos(z * 0.04 - 0.3) * 0.8;
   const macroRoll2 = Math.cos(x * 0.08 - 0.9) * Math.sin(z * 0.075 + 1.1) * 0.45;
 
-  return textureElevation + macroRoll1 + macroRoll2 + boundarySlope;
+  // 3. Smooth sunken Abyssal Lake basin with bank drop & sediment smoothing
+  const dx = (x - LAKE_CONFIG.center.x) / LAKE_CONFIG.rx;
+  const dz = (z - LAKE_CONFIG.center.z) / LAKE_CONFIG.rz;
+  const distSq = dx * dx + dz * dz;
+
+  let textureElevation = rawTextureElevation;
+  let lakeDip = 0;
+
+  if (distSq < 1.0) {
+    const radialDist = Math.sqrt(distSq);
+    const t = 1.0 - radialDist; // 0 at shore, 1 at center
+
+    // Smooth bank drop over the outer 20% to step cleanly below waterLevel
+    const bankT = Math.min(1.0, t * 5.0);
+    const smoothBank = bankT * bankT * (3.0 - 2.0 * bankT);
+    const bankDrop = smoothBank * 0.65;
+
+    // Smooth bowl deepening toward the center
+    const centerDip = Math.pow(t, 1.3) * (LAKE_CONFIG.maxDepth - 0.65);
+    lakeDip = bankDrop + centerDip;
+
+    // Smooth dry-cavern rock mounds inside the lake into sedimented lakebed
+    const rockSmoothing = Math.max(0.12, 1.0 - smoothBank * 0.88);
+    textureElevation = rawTextureElevation * rockSmoothing;
+  }
+
+  return textureElevation + macroRoll1 + macroRoll2 + boundarySlope - lakeDip;
 }
 
 /**

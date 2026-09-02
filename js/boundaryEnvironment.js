@@ -261,11 +261,85 @@ function createMushroomStalkTexture() {
 }
 
 /**
- * Creates 100% watertight, high-poly sculpted mushroom cap geometries with ZERO center hole.
- * Starts strictly at x=0 (apex) and loops back to x=0 (closed underside).
+ * Applies exact planar radial UV mapping to mushroom cap LatheGeometry.
+ * Center apex vertex maps strictly to (0.5, 0.5), and UVs radiate outward
+ * conformally along the dome's arc length to the outer rim.
+ */
+function applyRadialUVsToMushroomCap(geom, points, rimIndex) {
+  const arcLens = [0];
+  for (let i = 1; i <= rimIndex; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    arcLens.push(arcLens[i - 1] + Math.sqrt(dx * dx + dy * dy));
+  }
+  const totalArc = arcLens[rimIndex];
+
+  const tFactors = [];
+  for (let i = 0; i < points.length; i++) {
+    if (i <= rimIndex) {
+      tFactors.push(arcLens[i] / totalArc);
+    } else {
+      const underFrac = (i - rimIndex) / (points.length - 1 - rimIndex);
+      tFactors.push(1.0 - underFrac * 0.16);
+    }
+  }
+
+  const pos = geom.attributes.position;
+  const uvs = geom.attributes.uv;
+  const count = pos.count;
+  const pCount = points.length;
+
+  for (let v = 0; v < count; v++) {
+    const pIdx = v % pCount;
+    const t = tFactors[pIdx];
+    const x = pos.getX(v);
+    const z = pos.getZ(v);
+    const angle = Math.atan2(z, x);
+
+    const u = 0.5 + Math.cos(angle) * (t * 0.47);
+    const vCoord = 0.5 + Math.sin(angle) * (t * 0.47);
+
+    uvs.setXY(v, u, vCoord);
+  }
+  uvs.needsUpdate = true;
+}
+
+/**
+ * Applies exact radial UV mapping to mushroom gills LatheGeometry.
+ * Aligns radial lamellae fins from inner stalk junction to outer rim.
+ */
+function applyRadialUVsToMushroomGills(geom, points) {
+  const maxR = points[points.length - 1].x;
+  const tFactors = points.map(p => p.x / maxR);
+
+  const pos = geom.attributes.position;
+  const uvs = geom.attributes.uv;
+  const count = pos.count;
+  const pCount = points.length;
+
+  for (let v = 0; v < count; v++) {
+    const pIdx = v % pCount;
+    const t = tFactors[pIdx];
+    const x = pos.getX(v);
+    const z = pos.getZ(v);
+    const angle = Math.atan2(z, x);
+
+    const u = 0.5 + Math.cos(angle) * (t * 0.47);
+    const vCoord = 0.5 + Math.sin(angle) * (t * 0.47);
+
+    uvs.setXY(v, u, vCoord);
+  }
+  uvs.needsUpdate = true;
+}
+
+/**
+ * Creates 100% watertight, high-poly sculpted mushroom cap geometries with ZERO center hole
+ * and exact radial UV texture mapping.
  */
 function createWatertightCapGeometry(variant = 0) {
   const points = [];
+  let rimIndex = 7;
+
   if (variant === 0) {
     // Broad Umbrella / Saucer Cap (Smooth dome, curved lip, closed underside)
     points.push(new THREE.Vector2(0.0, 1.30));      // Apex strictly at center (0, y)
@@ -275,13 +349,14 @@ function createWatertightCapGeometry(variant = 0) {
     points.push(new THREE.Vector2(1.40, 0.80));
     points.push(new THREE.Vector2(1.80, 0.40));
     points.push(new THREE.Vector2(2.05, 0.05));
-    points.push(new THREE.Vector2(2.10, -0.10));     // Outer rounded rim
+    points.push(new THREE.Vector2(2.10, -0.10));     // Outer rounded rim (rimIndex = 7)
     points.push(new THREE.Vector2(1.95, -0.22));     // Underlip
     points.push(new THREE.Vector2(1.65, -0.10));     // Underside outer
     points.push(new THREE.Vector2(1.15, 0.15));      // Underside mid
     points.push(new THREE.Vector2(0.55, 0.35));      // Underside inner
     points.push(new THREE.Vector2(0.18, 0.45));      // Stalk junction
     points.push(new THREE.Vector2(0.0, 0.48));       // Closed center underside (no hole!)
+    rimIndex = 7;
   } else if (variant === 1) {
     // Tall Alien Bell Dome
     points.push(new THREE.Vector2(0.0, 1.90));
@@ -290,12 +365,13 @@ function createWatertightCapGeometry(variant = 0) {
     points.push(new THREE.Vector2(0.85, 1.40));
     points.push(new THREE.Vector2(1.18, 0.95));
     points.push(new THREE.Vector2(1.42, 0.40));
-    points.push(new THREE.Vector2(1.50, -0.05));
+    points.push(new THREE.Vector2(1.50, -0.05));     // Outer rim (rimIndex = 6)
     points.push(new THREE.Vector2(1.40, -0.22));
     points.push(new THREE.Vector2(1.15, -0.05));
     points.push(new THREE.Vector2(0.75, 0.25));
     points.push(new THREE.Vector2(0.25, 0.48));
     points.push(new THREE.Vector2(0.0, 0.52));
+    rimIndex = 6;
   } else {
     // Flared Pagoda / Shelf Cap
     points.push(new THREE.Vector2(0.0, 1.50));
@@ -305,21 +381,23 @@ function createWatertightCapGeometry(variant = 0) {
     points.push(new THREE.Vector2(1.42, 0.88));
     points.push(new THREE.Vector2(1.85, 0.60));
     points.push(new THREE.Vector2(2.18, 0.12));
-    points.push(new THREE.Vector2(2.22, -0.08));
+    points.push(new THREE.Vector2(2.22, -0.08));     // Outer rim (rimIndex = 7)
     points.push(new THREE.Vector2(2.00, -0.22));
     points.push(new THREE.Vector2(1.55, 0.05));
     points.push(new THREE.Vector2(0.95, 0.32));
     points.push(new THREE.Vector2(0.28, 0.50));
     points.push(new THREE.Vector2(0.0, 0.54));
+    rimIndex = 7;
   }
 
   const geom = new THREE.LatheGeometry(points, 28);
+  applyRadialUVsToMushroomCap(geom, points, rimIndex);
   geom.computeVertexNormals();
   return geom;
 }
 
 /**
- * Creates glowing underside gill disk matching cap profiles.
+ * Creates glowing underside gill disk matching cap profiles with radial UV mapping.
  */
 function createWatertightGillGeometry(variant = 0) {
   const points = [];
@@ -342,6 +420,7 @@ function createWatertightGillGeometry(variant = 0) {
   }
 
   const geom = new THREE.LatheGeometry(points, 28);
+  applyRadialUVsToMushroomGills(geom, points);
   geom.computeVertexNormals();
   return geom;
 }

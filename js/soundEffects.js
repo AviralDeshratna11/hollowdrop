@@ -631,3 +631,143 @@ export function playApexDeathSound() {
   nGain.connect(ctx.destination);
   noise.start(t);
 }
+
+/**
+ * Rich, bubbly water splash sound (when entering water or landing heavily).
+ */
+export function playWaterSplashSound(intensity = 1.0) {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const clampedIntensity = Math.min(Math.max(intensity, 0.2), 2.0);
+
+  // 1. Wet plop bubble oscillator
+  const osc = ctx.createOscillator();
+  const oscGain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(280 + clampedIntensity * 80, t);
+  osc.frequency.exponentialRampToValueAtTime(120, t + 0.18);
+
+  oscGain.gain.setValueAtTime(0.4 * clampedIntensity, t);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+  osc.connect(oscGain);
+  oscGain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + 0.2);
+
+  // 2. Liquid spray / splash noise
+  const noise = ctx.createBufferSource();
+  noise.buffer = createNoiseBuffer(ctx, 0.25);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(1400, t);
+  filter.frequency.exponentialRampToValueAtTime(320, t + 0.22);
+  filter.Q.setValueAtTime(2.2, t);
+
+  const nGain = ctx.createGain();
+  nGain.gain.setValueAtTime(0.45 * clampedIntensity, t);
+  nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+
+  noise.connect(filter);
+  filter.connect(nGain);
+  nGain.connect(ctx.destination);
+  noise.start(t);
+}
+
+let lastWadeSoundTime = 0;
+/**
+ * Subtle liquid slosh sound while moving through water (throttled).
+ */
+export function playWaterWadeSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = performance.now();
+  if (now - lastWadeSoundTime < 240) return; // limit cadence
+  lastWadeSoundTime = now;
+
+  const t = ctx.currentTime;
+  const noise = ctx.createBufferSource();
+  noise.buffer = createNoiseBuffer(ctx, 0.12);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(600 + Math.random() * 200, t);
+  filter.frequency.exponentialRampToValueAtTime(180, t + 0.11);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.18, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  noise.start(t);
+}
+
+/**
+ * Springy organic bounce sound when launching off a lilypad.
+ */
+export function playLilypadBounceSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  // Springy sine sweep
+  const osc = ctx.createOscillator();
+  const oscGain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(160, t);
+  osc.frequency.exponentialRampToValueAtTime(360, t + 0.09);
+  osc.frequency.exponentialRampToValueAtTime(210, t + 0.28);
+
+  oscGain.gain.setValueAtTime(0.5, t);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+  osc.connect(oscGain);
+  oscGain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + 0.3);
+
+  // Leaf rustle / whoosh
+  const noise = ctx.createBufferSource();
+  noise.buffer = createNoiseBuffer(ctx, 0.2);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(900, t);
+  filter.frequency.exponentialRampToValueAtTime(450, t + 0.18);
+  filter.Q.setValueAtTime(1.8, t);
+
+  const nGain = ctx.createGain();
+  nGain.gain.setValueAtTime(0.28, t);
+  nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+  noise.connect(filter);
+  filter.connect(nGain);
+  nGain.connect(ctx.destination);
+  noise.start(t);
+}
+
+/**
+ * Crisp, cute pop sound when collecting an oxygen vitality bubble.
+ */
+export function playBubblePopSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  const osc = ctx.createOscillator();
+  const oscGain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(800 + Math.random() * 200, t);
+  osc.frequency.exponentialRampToValueAtTime(1600 + Math.random() * 300, t + 0.04);
+
+  oscGain.gain.setValueAtTime(0.35, t);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+  osc.connect(oscGain);
+  oscGain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + 0.06);
+}
+

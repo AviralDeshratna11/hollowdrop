@@ -35,6 +35,7 @@ export class UIManager {
     this.energyText = document.getElementById('energy-text');
     this.notification = document.getElementById('pickup-notification');
     this.screenFade = document.getElementById('screen-fade');
+    this.starvationOverlay = document.getElementById('starvation-overlay');
     this._notificationTimeout = null;
     this.infoCard = document.getElementById('info-card');
     this.infoCardKicker = document.getElementById('info-card-kicker');
@@ -513,7 +514,21 @@ export class UIManager {
     this.hideBossHealth();
     this.hideRivalEscapeChannel();
     this.hideObjectiveIndicator();
+    this.setStarvationState(false);
     setMusicState('gameplay');
+  }
+
+  /** Controls ambient pulsing red hue vignette on energy exhaustion */
+  setStarvationState(isStarving) {
+    if (!this.starvationOverlay) {
+      this.starvationOverlay = document.getElementById('starvation-overlay');
+    }
+    if (!this.starvationOverlay) return;
+    if (isStarving) {
+      this.starvationOverlay.classList.add('is-active');
+    } else {
+      this.starvationOverlay.classList.remove('is-active');
+    }
   }
 
   /** Dev-only recipe checklist (DEBUG_MUTATION). Pass null to hide it. */
@@ -593,6 +608,10 @@ export class UIManager {
 
   showPickupNotification(name) {
     this._showNotification(`+ ${name}`, 'notification--pickup', NOTIFICATION_VISIBLE_MS);
+  }
+
+  showToast(text, variant = 'notification--hint', duration = 1200) {
+    this._showNotification(text, variant, duration);
   }
 
   showInventoryFull() {

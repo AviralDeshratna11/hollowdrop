@@ -218,49 +218,48 @@ html, body {
   word-break: break-word;
 }
 
-/* Floating movement joystick (see index.html + inputController.js). Sits above the
-   canvas but below the HUD (#ui-layer is z-index 10) and never intercepts input - it
-   only visualises the swipe that InputController is already reading. The ring's radius
-   (half of width/height) is kept equal to InputController's maxDistance, so the knob
-   reaches the ring edge exactly when movement input hits full magnitude. */
+/* Floating movement joystick (see index.html + inputController.js).
+   Hidden as requested so swipe movement remains uncluttered and unobstructed. */
 #move-joystick {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 180px;
-  height: 180px;
-  margin-left: -90px; /* centre the ring on the (left, top) touch point */
-  margin-top: -90px;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 9;
-  opacity: 0;
-  transition: opacity 0.14s ease-out;
-  border: 2px solid rgb(var(--accent-rgb) / 0.35);
-  background: radial-gradient(circle,
-    rgb(var(--accent-rgb) / 0.12),
-    rgb(var(--accent-rgb) / 0.04) 68%,
-    transparent 72%);
-}
-
-#move-joystick.is-active {
-  opacity: 1;
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
 }
 
 #move-joystick-knob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 74px;
-  height: 74px;
-  margin-left: -37px;
-  margin-top: -37px;
-  border-radius: 50%;
-  background: rgb(var(--accent-rgb) / 0.28);
-  border: 2px solid rgb(var(--accent-rgb) / 0.65);
-  box-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.4);
-  /* transform is written every pointermove by InputController; no CSS transition so the
-     knob stays locked to the finger with zero lag. */
+  display: none !important;
+}
+
+/* Starvation red hue vignette: activates when energy hits 0 and slime takes starvation damage */
+#starvation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease-out;
+  background: radial-gradient(ellipse at center,
+    rgba(255, 30, 30, 0.08) 25%,
+    rgba(220, 15, 15, 0.35) 68%,
+    rgba(160, 0, 0, 0.65) 100%),
+    rgba(255, 0, 0, 0.05);
+}
+
+#starvation-overlay.is-active {
+  opacity: 1;
+  animation: starvation-heartbeat 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes starvation-heartbeat {
+  0% {
+    opacity: 0.55;
+    filter: brightness(0.95) saturate(1.1);
+  }
+  100% {
+    opacity: 0.95;
+    filter: brightness(0.85) saturate(1.35);
+  }
 }
 
 /* Death/respawn transition - opacity driven per-frame by DeathRespawnManager, not CSS. */

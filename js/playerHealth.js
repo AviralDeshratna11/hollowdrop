@@ -121,6 +121,7 @@ export class PlayerHealthState {
   _die() {
     if (this.isDead) return; // never trigger the death sequence twice
     this.isDead = true;
+    this.uiManager?.setStarvationState?.(false);
     if (DEBUG_HEALTH) console.log('Player died');
     this.onDeath?.();
   }
@@ -131,6 +132,7 @@ export class PlayerHealthState {
     this.isDead = false;
     this._invulnTimer = 0;
     this._wasCritical = false;
+    this.uiManager?.setStarvationState?.(false);
     this.uiManager.updateHealthUI(this.currentHealth, this.maxHealth);
     if (DEBUG_HEALTH) console.log('Health restored');
     this.onRespawn?.();
