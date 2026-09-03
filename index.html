@@ -46,6 +46,13 @@
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/fflate.module.js" />
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSCurve.js" />
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSUtils.js" />
+<!-- Same reasoning, second loader: gltfCharacterLoader.js (the player's rigged Venom Rat,
+     models/rat_walk.glb) pulls GLTFLoader, which itself imports BufferGeometryUtils. Both
+     hops preloaded here so they resolve in parallel with the FBX chain above instead of
+     queueing behind main.js's own module graph. Still below the importmap, for the same
+     bare-"three"-specifier reason spelled out there. -->
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js" />
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js" />
 <script>
   // Force unregister stale service workers and clear browser cache storage on reload
   if ('serviceWorker' in navigator) {

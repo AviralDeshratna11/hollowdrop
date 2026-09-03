@@ -143,6 +143,39 @@ void main() {
 }
 `;
 
+// Same silhouette as the static shader, but the vertex is pushed through the skeleton
+// first. Needed because attachOcclusionOutline builds a SECOND mesh sharing the target's
+// geometry: on a rigged character that copy has no skinning of its own, so with the
+// static shader it would hang in bind pose while the real body walked out from under it.
+// three prepends `#define USE_SKINNING` (and the skinIndex/skinWeight attributes) for any
+// object whose .isSkinnedMesh is true, so these chunks light up automatically - the
+// outline just has to be a real SkinnedMesh bound to the same Skeleton, which
+// attachOcclusionOutline now does.
+const OCCLUSION_VERTEX_SHADER_SKINNED = /* glsl */ `
+uniform float uExpandOffset;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+#include <common>
+#include <skinning_pars_vertex>
+
+void main() {
+  vec3 objectNormal = normal;
+  vec3 transformed = position;
+
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  #include <skinning_vertex>
+
+  vec3 skinnedNormal = normalize(objectNormal);
+  vec3 finalPos = transformed + skinnedNormal * uExpandOffset;
+  vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+  vViewPosition = -mvPosition.xyz;
+  vNormal = normalMatrix * skinnedNormal;
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
 const OCCLUSION_FRAGMENT_SHADER = /* glsl */ `
 uniform vec3 uColor;
 uniform vec3 uRimColor;
@@ -196,6 +229,8 @@ void main() {
  * @param {number} [options.innerAlpha=0.22] - Translucent inner volume fill alpha
  * @param {number} [options.expandOffset=0.015] - Outward normal expansion for outer boundary ring
  * @param {boolean} [options.hasDisplacement=false] - Whether geometry uses vertex displacement
+ * @param {boolean} [options.skinned=false] - Whether the mesh this material draws on is a
+ *   SkinnedMesh (selects the skinning vertex shader; mutually exclusive with hasDisplacement)
  * @param {object} [options.uniforms] - Existing uniforms object to share
  * @returns {THREE.ShaderMaterial}
  */
@@ -203,6 +238,7 @@ export function createOcclusionMaterial(options = {}) {
   const baseColor = new THREE.Color(options.color ?? 0x8dffc4);
   const rimColor = new THREE.Color(options.rimColor ?? 0xffffff);
   const hasDisplacement = !!options.hasDisplacement;
+  const isSkinned = !hasDisplacement && !!options.skinned;
 
   const defaultUniforms = {
     uColor: { value: baseColor },
@@ -241,7 +277,9 @@ export function createOcclusionMaterial(options = {}) {
 
   const mat = new THREE.ShaderMaterial({
     uniforms,
-    vertexShader: hasDisplacement ? OCCLUSION_VERTEX_SHADER_DISPLACED : OCCLUSION_VERTEX_SHADER_STATIC,
+    vertexShader: hasDisplacement
+      ? OCCLUSION_VERTEX_SHADER_DISPLACED
+      : (isSkinned ? OCCLUSION_VERTEX_SHADER_SKINNED : OCCLUSION_VERTEX_SHADER_STATIC),
     fragmentShader: OCCLUSION_FRAGMENT_SHADER,
     transparent: true,
     depthWrite: false,
@@ -309,12 +347,27 @@ export function attachOcclusionOutline(target, options = {}) {
   });
 
   for (const childMesh of meshes) {
-    const mat = createOcclusionMaterial(options);
+    // A rigged character needs a SkinnedMesh copy bound to the SAME Skeleton, not a
+    // plain Mesh over the same geometry - the latter renders the bind pose forever
+    // while the body it is supposed to outline animates away from it. Added as a child
+    // with an identity local transform, so its matrixWorld (and therefore the
+    // bindMatrixInverse that AttachedBindMode recomputes from it each frame) stays
+    // identical to the mesh it shadows.
+    const skinned = childMesh.isSkinnedMesh === true && !!childMesh.skeleton;
+    const mat = createOcclusionMaterial({ ...options, skinned });
     materials.push(mat);
-    const outlineMesh = new THREE.Mesh(childMesh.geometry, mat);
+    let outlineMesh;
+    if (skinned) {
+      outlineMesh = new THREE.SkinnedMesh(childMesh.geometry, mat);
+      outlineMesh.bindMode = childMesh.bindMode;
+      childMesh.add(outlineMesh);
+      outlineMesh.bind(childMesh.skeleton, childMesh.bindMatrix);
+    } else {
+      outlineMesh = new THREE.Mesh(childMesh.geometry, mat);
+      childMesh.add(outlineMesh);
+    }
     outlineMesh.renderOrder = 9999;
     outlineMesh.frustumCulled = false;
-    childMesh.add(outlineMesh);
     createdOutlines.push({ parent: childMesh, outline: outlineMesh, mat });
   }
 
