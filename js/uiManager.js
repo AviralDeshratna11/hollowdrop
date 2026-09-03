@@ -83,6 +83,11 @@ export class UIManager {
     this.memoryTextEl = document.getElementById('memory-text');
     this.memoryContinueButton = document.getElementById('memory-continue-button');
 
+    this.tutorialCoach = document.getElementById('tutorial-coach');
+    this.tutorialCoachText = document.getElementById('tutorial-coach-text');
+    this.tutorialCoachSkip = document.getElementById('tutorial-coach-skip');
+    this._tutorialSkipHandler = null;
+
     this.runCompleteOverlay = document.getElementById('run-complete-overlay');
     this.runCompleteStatsEl = document.getElementById('run-complete-stats');
     this.runCompletePlayAgainButton = document.getElementById('run-complete-play-again');
@@ -514,6 +519,9 @@ export class UIManager {
     this.hideBossHealth();
     this.hideRivalEscapeChannel();
     this.hideObjectiveIndicator();
+    // TutorialController re-shows this on its next tick if its step is still live, so
+    // this is a clean wipe rather than a way to cancel a lesson.
+    this.hideCoach();
     this.setStarvationState(false);
     setMusicState('gameplay');
   }
@@ -608,6 +616,56 @@ export class UIManager {
 
   showPickupNotification(name) {
     this._showNotification(`+ ${name}`, 'notification--pickup', NOTIFICATION_VISIBLE_MS);
+  }
+
+  // --- Tutorial coach ----------------------------------------------------------
+  // Deliberately NOT part of the notification queue below. That queue is capped and
+  // discards its oldest entries, so a teaching line can be destroyed before it is ever
+  // shown - see _showNotification's own comment. The coach owns its own element and
+  // stays up until TutorialController says the step is done.
+
+  /** @param {string} text
+   *  @param {{ tone?: 'info'|'warn', onSkip?: (() => void)|null }} [options] */
+  showCoach(text, { tone = 'info', onSkip = null } = {}) {
+    if (!this.tutorialCoach || !this.tutorialCoachText) return;
+    this.tutorialCoachText.textContent = text;
+    this.tutorialCoach.classList.toggle('coach--warn', tone === 'warn');
+    this.tutorialCoach.hidden = false;
+    // Next frame, so the entry transition actually runs on the first show rather than
+    // the element appearing already at its final opacity.
+    requestAnimationFrame(() => this.tutorialCoach?.classList.add('coach--visible'));
+
+    if (this.tutorialCoachSkip) {
+      // Rebind every time: which step offers Skip can change, and a stale listener
+      // would keep firing an older step's handler.
+      if (this._tutorialSkipHandler) {
+        this.tutorialCoachSkip.removeEventListener('click', this._tutorialSkipHandler);
+        this._tutorialSkipHandler = null;
+      }
+      this.tutorialCoachSkip.hidden = !onSkip;
+      if (onSkip) {
+        this._tutorialSkipHandler = (e) => { e.stopPropagation(); onSkip(); };
+        this.tutorialCoachSkip.addEventListener('click', this._tutorialSkipHandler);
+      }
+    }
+  }
+
+  hideCoach() {
+    if (!this.tutorialCoach) return;
+    this.tutorialCoach.classList.remove('coach--visible');
+    this.tutorialCoach.hidden = true;
+    if (this.tutorialCoachSkip && this._tutorialSkipHandler) {
+      this.tutorialCoachSkip.removeEventListener('click', this._tutorialSkipHandler);
+      this._tutorialSkipHandler = null;
+      this.tutorialCoachSkip.hidden = true;
+    }
+  }
+
+  /** Toggles the attention ring on a HUD button. Selector rather than an element so
+   *  TutorialController never needs a DOM reference of its own. */
+  setTutorialPulse(selector, on) {
+    if (!selector) return;
+    document.querySelector(selector)?.classList.toggle('tutorial-pulse', !!on);
   }
 
   showToast(text, variant = 'notification--hint', duration = 1200) {

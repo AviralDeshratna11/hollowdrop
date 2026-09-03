@@ -195,6 +195,19 @@
      to its own `bottom` offset - so changing any button's height silently broke the
      others' alignment. They're a flex column now: DOM order IS stack order (top to
      bottom), and spacing comes from one `gap`. -->
+<!-- Tutorial coach: the in-game tutorial's one persistent message (see
+     tutorialController.js). Deliberately NOT routed through #pickup-notification -
+     that queue is capped and discards its oldest entries, which silently destroys
+     one-time teaching. Sits left of #action-stack (see style.css) and is
+     pointer-events:none apart from Skip, so it can never eat a movement swipe. -->
+<div id="tutorial-coach" aria-live="polite" hidden>
+  <div id="tutorial-coach-inner">
+    <span id="tutorial-coach-dot" aria-hidden="true"></span>
+    <span id="tutorial-coach-text"></span>
+    <button id="tutorial-coach-skip" type="button" hidden>Skip</button>
+  </div>
+</div>
+
 <div id="action-stack">
   <button id="inventory-toggle" aria-label="Open inventory">
     <svg class="action-icon action-icon--bag" viewBox="0 0 48 48" aria-hidden="true">
