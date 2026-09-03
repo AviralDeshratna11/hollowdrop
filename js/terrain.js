@@ -9,7 +9,7 @@
  * - Downlifts dark subterranean crevices, fissures, and shadows (-1.2m to -2.2m).
  * - Elevates purple fungal crater rims (+1.8m to +2.4m).
  * - Leaves cobblestone trails and pathways at neutral baseline with organic stone micro-variation.
- * - Samples texture coordinates matching main.js's own ground texture UV mapping exactly (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture setup).
+ * - Samples texture coordinates using exact MirroredRepeatWrapping (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture setup).
  * - Uses bilinear filtering and spatial smoothing for seamless, climbable, tactile 3D terrain.
  */
 
@@ -18,7 +18,7 @@
 // the SAME texture at the SAME UV mapping the visible mesh uses, so any mismatch here
 // puts the 3D bumps in the wrong place relative to what the texture actually shows.
 export const GROUND_SIZE = 90;
-export const TEXTURE_REPEAT = 1; // single untiled copy - see main.js's own comment
+export const TEXTURE_REPEAT = 3;
 
 const HEIGHTMAP_RES = 256;
 let heightmapData = null;
@@ -27,11 +27,13 @@ const onReadyCallbacks = [];
 const registeredGeometries = new Set();
 
 /**
- * Normalized repeat fractional calculation. At TEXTURE_REPEAT=1 (a single untiled copy
- * - see main.js's own "--- Ground ---" block) every world coordinate maps to u/v inside
- * [0,1] and this is just the identity; kept as a period-2 triangle wave (rather than
- * plain modulo) so this heightmap sampling stays correct if tiling is ever reintroduced
- * with MirroredRepeatWrapping, where every other tile is flipped.
+ * Normalized repeat fractional calculation matching WebGL MirroredRepeatWrapping (the
+ * ground texture's own wrap mode - see main.js's own "--- Ground ---" block). Plain
+ * modulo wrapping would sample this heightmap as if every tile were identical, but
+ * mirrored tiles alternate - every other tile is flipped - so without this, the 3D
+ * terrain bumps would land correctly in tile 0 and backwards in tile 1, tile 2, etc.
+ * A period-2 triangle wave does it: within each pair of tiles, the first half rises
+ * 0->1 (a normal tile) and the second half falls 1->0 (that same tile mirrored).
  */
 function repeatFrac(val) {
   let t = val % 2.0;
