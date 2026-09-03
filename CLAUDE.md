@@ -43,6 +43,8 @@ Change these, not scattered literals: `resourceTypes.js` (`RESOURCE_TYPES` — w
 The player and NPC slimes share a deforming-membrane shader in `slimeCreature.js`. NPC slimes register themselves and are all ticked by one `updateSlimeCreatures(realDeltaTime)` sweep; creatures removed from the scene drop from the registry automatically. The player's own body (`amoeba`) is updated separately with speed/load/gaze inputs.
 
 ### Model loading and `index.html` `<head>` ordering
+**Authoring a NEW animated asset?** Read `ASSET_PIPELINE.md` first — the Blender side (rig conventions, Blender 5.x API traps, export flags, texture optimisation, and how to verify a clip actually plays) is documented there rather than here. This section covers only how a finished asset is consumed at runtime.
+
 Two loaders, split by whether the asset is rigged — they are not interchangeable:
 - `fbxCharacterLoader.js` — the **un-rigged** single-mesh FBX characters (`models/plague_sludge_rat/` = the boss, `models/jellybean_slime/`). Measures the bounding box, rescales to `targetRadius`, and recentres by writing `.position` on the loaded root.
 - `gltfCharacterLoader.js` — the **rigged** GLB (`models/rat_walk.glb` = the player's Venom Rat: 181 deform bones + a baked `Walk` clip). Never writes a transform on `gltf.scene`, because on a rigged model that root IS the armature the clip animates; scale/facing/centering all go on a wrapper `Group` above it. Returns an `AnimationMixer` alongside the group and material.
