@@ -88,11 +88,20 @@ const RAT_CONFIG = {
   // off the animation channels), which at this model's ~0.79 normalization scale and the
   // clip's 0.667s period implies a ground speed of ~0.32 u/s. The player sprints at 7.5.
   // Matching exactly would need timeScale ~23 - a blur, not a walk. So these are tuned
-  // for readability instead: a slow shuffle at rest, ~4 gait cycles/second at full
-  // sprint, which is what a scurrying rodent reads as. Tune these two numbers, not the
+  // for readability instead: a slow walk when barely moving, ~4 gait cycles/second at
+  // full sprint, which is what a scurrying rodent reads as. Tune these numbers, not the
   // clip, if the gait looks wrong.
-  walkIdleTimeScale: 0.22,
+  walkMinTimeScale: 0.9,
   walkMaxTimeScale: 2.6,
+  // Below this speedRatio the player counts as STANDING STILL and the clip is blended
+  // out entirely - a standing rat must not paddle its legs. 0.02 of maxSpeed is ~0.15
+  // u/s, comfortably under any real movement but above float noise in the world-position
+  // delta this is measured from.
+  walkMoveThreshold: 0.02,
+  // Exponential blend rate (per second) between "walking" and "standing". Fast enough
+  // that the legs stop when you stop rather than coasting, slow enough that stopping
+  // reads as settling onto the paws instead of a snap. ~0.15s to cover the distance.
+  walkBlendRate: 14,
 
   // --- Procedural walk cycle ('venom' / boss only) ------------------------------------
   // The un-rigged Plague Sludge Rat FBX has no skeleton to drive, so its locomotion is
@@ -184,6 +193,10 @@ export function createRatMesh({ variant = 'venom' } = {}) {
   // Set once the rigged GLB lands ('cute' only). While null, the updater below falls
   // back to the procedural gait - which is also what the placeholder sphere gets.
   let walkMixer = null;
+  let walkAction = null;
+  // 0 = fully standing (rest pose), 1 = fully walking. Damped rather than switched, so
+  // the transition in either direction is a blend and not a pop.
+  let walkBlend = 0;
 
   const loadPromise = isCute
     ? loadGltfCharacter({
@@ -201,7 +214,7 @@ export function createRatMesh({ variant = 'venom' } = {}) {
       });
 
   loadPromise
-    .then(({ group: modelGroup, material, mixer = null }) => {
+    .then(({ group: modelGroup, material, mixer = null, action = null }) => {
       if (placeholderOcclusion) {
         placeholderOcclusion.dispose();
         placeholderOcclusion = null;
@@ -226,6 +239,10 @@ export function createRatMesh({ variant = 'venom' } = {}) {
       // the wrapper, or the clip's own body motion composes on top of a stale tilt.
       if (mixer) {
         walkMixer = mixer;
+        walkAction = action;
+        // Starts blended out: the player mutates into the Rat standing still, and the
+        // first frames of speedRatio read 0 anyway until there are two positions to diff.
+        walkAction?.setEffectiveWeight(0);
         gaitWrapper.position.y = 0;
         gaitWrapper.rotation.x = 0;
         gaitWrapper.rotation.z = 0;
@@ -269,15 +286,26 @@ export function createRatMesh({ variant = 'venom' } = {}) {
       hasLastPos = true;
       lastWorldPos.copy(worldPos);
 
-      // Rigged path: the skeleton IS the gait, so all this has to decide is how fast to
-      // run it - stands almost still at rest, scurries when sprinting.
+      // Rigged path: the skeleton IS the gait, so all this decides is how fast to run it
+      // and whether to run it at all.
       if (walkMixer) {
-        const timeScale = THREE.MathUtils.lerp(
-          RAT_CONFIG.walkIdleTimeScale,
+        // Standing still means STANDING, not walking slowly on the spot. Blending the
+        // action's WEIGHT (rather than just dropping its timeScale to 0, which would
+        // freeze it mid-stride with a paw in the air) hands the bones back to the mixer's
+        // stored original values - i.e. the model's own rest pose, which for this rig is
+        // a rat standing squarely on all fours. Weight and playback rate are separate
+        // knobs on purpose: the weight blend runs on the mixer's clock, so it still
+        // completes smoothly even as the clip itself slows to a stop underneath it.
+        const isMoving = speedRatio > RAT_CONFIG.walkMoveThreshold;
+        walkBlend = THREE.MathUtils.damp(walkBlend, isMoving ? 1 : 0, RAT_CONFIG.walkBlendRate, deltaTime);
+        if (walkBlend < 0.001) walkBlend = 0; // settle exactly, so a stopped rat is truly static
+        walkAction.setEffectiveWeight(walkBlend);
+        walkAction.timeScale = THREE.MathUtils.lerp(
+          RAT_CONFIG.walkMinTimeScale,
           RAT_CONFIG.walkMaxTimeScale,
           speedRatio,
         );
-        walkMixer.update(deltaTime * timeScale);
+        walkMixer.update(deltaTime);
         return;
       }
 
