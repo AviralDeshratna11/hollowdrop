@@ -98,8 +98,12 @@ const DISPLACEMENT_CONFIG = {
   // again, and then narrow to 40% of their width: a hard cone rather than a trail. The
   // old FBX tolerated 0.34/0.6; this geometry needs roughly a third of that to read the
   // same way. If a future model changes shape again, these two numbers are the dial.
-  tailLength: 0.12, // a trailing lean while moving, not a drawn-out point
-  tailPinch: 0.22,
+  // 0.04/0.08 is deliberately near-nothing: just enough asymmetry to register as motion
+  // rather than a rigid blob sliding. Set BOTH to 0 to remove the tail outright - the
+  // slime still leans and squashes convincingly from PlayerController's own speed-driven
+  // scale, which is a separate effect from this one.
+  tailLength: 0.04,
+  tailPinch: 0.08,
   streamlining: 0.45, // lower than the amoeba's own 0.6 - tendrils should survive at speed, not fully smooth away
   loadSwell: 0.1,
 };
