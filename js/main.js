@@ -175,7 +175,7 @@ const GROUND_SIZE = 90;
 const GROUND_SEGMENTS = 320;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
 
-const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_new.png', (tex) => {
+const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_new.jpg', (tex) => {
   initTextureElevation(tex.image);
 });
 groundTexture.wrapS = THREE.ClampToEdgeWrapping;
