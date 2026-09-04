@@ -78,6 +78,12 @@ export class InventoryWheelController {
     });
     document.body.appendChild(this.backdrop);
 
+    // Optional - set post-construction (main.js). Fires once per item actually expelled,
+    // from BOTH expel paths (a wheel segment tap and the Bag panel's Expel button), since
+    // they share _expelInDirection below. Currently the tutorial's "you can drop things"
+    // lesson; kept as a general hook rather than a tutorial-specific one.
+    this.onExpel = null;
+
     this._onPointerDown = this._onPointerDown.bind(this);
     this._onPointerMove = this._onPointerMove.bind(this);
     this._onPointerEnd = this._onPointerEnd.bind(this);
@@ -229,6 +235,7 @@ export class InventoryWheelController {
     this.uiManager.updateMassUI(this.inventoryManager.getInventoryWeight(), this.inventoryManager.maxWeight);
     this.playerController.triggerAbsorbPulse();
     this.mutationSystem?.onInventoryChanged();
+    this.onExpel?.(item);
   }
 
   /**

@@ -538,7 +538,7 @@ export function applyJellyRimTreatment(material, options = {}) {
  * Works on non-spherical geometry because the displacement is expressed as a
  * PROPORTIONAL push along each vertex's own direction/distance from the mesh's local
  * origin, not an absolute radius - centering the mesh at its own bounding-box center
- * (see fbxCharacterLoader.js) is what makes "direction from origin" a sane per-vertex
+ * (see gltfCharacterLoader.js) is what makes "direction from origin" a sane per-vertex
  * basis for an arbitrary artist-authored shape. It will still read differently than on
  * the amoeba's own icosphere: a lower-density or very unevenly-shaped mesh will show the
  * noise less smoothly, and concave regions can self-intersect under enough amplitude -

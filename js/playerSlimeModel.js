@@ -1,33 +1,43 @@
 import * as THREE from 'three';
-import { loadFbxCharacter } from './fbxCharacterLoader.js?v=5.3';
+import { loadGltfCharacter } from './gltfCharacterLoader.js?v=5.3';
 import { applyJellyRimTreatment, applyJellyDisplacement } from './slimeCreature.js?v=5.3';
 import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
-// Meshy AI "Jellybean Smile" - a static (unrigged, no animation) single mesh with its
-// own 4-texture PBR set. Loaded async (see loadFbxCharacter), so this module hands back
-// a Group immediately with a small placeholder sphere inside it, then swaps the real
-// model in once it arrives - the same "placeholder now, hot-swap later" shape the
-// project's very first imported-model attempt (rimuru_slime.glb, see git history) used,
-// since main.js needs a synchronous `group`/`bodyMaterial` to build PlayerController and
-// PlayerFormController before any network fetch could possibly finish.
+// Meshy AI "Jellybean Smile" - a static (unrigged, no animation) single mesh. Loaded
+// async, so this module hands back a Group immediately with a small placeholder sphere
+// inside it, then swaps the real model in once it arrives, since main.js needs a
+// synchronous `group`/`bodyMaterial` to build PlayerController and PlayerFormController
+// before any network fetch could possibly finish.
 //
-// The fetch itself is the actual bottleneck (the FBX + its 2048px texture set run to
-// ~20MB combined - see the project's own notes on this), so the swap still won't be
-// instant on a phone's WiFi. What CROSSFADE_DURATION buys is not a faster load, just a
-// less jarring one: the placeholder eases out as the real model eases in, rather than
-// popping between them the instant the fetch resolves.
-const MODEL_URLS = {
-  fbxUrl: 'models/jellybean_slime/slime.fbx',
-  baseColorUrl: 'models/jellybean_slime/slime_basecolor.png',
-  normalUrl: 'models/jellybean_slime/slime_normal.png',
-  roughnessUrl: 'models/jellybean_slime/slime_roughness.png',
-  metalnessUrl: 'models/jellybean_slime/slime_metallic.png',
-};
+// NOW A GLB, not the original FBX + four sibling .png maps. That set ran to 22.6 MB -
+// 71% of the game's entire asset payload for this one creature - which mattered once a
+// hard 35 MB budget appeared. As a GLB with its textures embedded and re-encoded
+// (tools/glb_optimize.py) the same model is 9.5 MB: ONE fetch instead of five, and no
+// sibling texture URLs to keep in sync. Nothing else uses the FBX loader now.
+//
+// Note this loader takes the texture maps off the GLB's OWN material. The old FBX path
+// did the opposite - it ignored the FBX's material and built one from the four separate
+// PNG URLs, because that material block pointed at the artist's local filesystem paths
+// which never resolved over HTTP. So the maps must be wired into the material inside
+// Blender before export; if the slime ever renders untextured, that is the first thing
+// to check.
+//
+// The fetch is still the load-time bottleneck, so the swap won't be instant on a phone's
+// WiFi. What CROSSFADE_DURATION buys is not a faster load, just a less jarring one: the
+// placeholder eases out as the real model eases in, rather than popping between them the
+// instant the fetch resolves.
+const MODEL_URL = 'models/jellybean_slime/slime.glb';
 
 // Fixed correction so the model's own front lines up with this project's forward
-// convention (Model faces -Z at rotation.y = 0) - verified with an isolated probe
-// render: at rotation.y = 0 the face (eyes/smile, on the model's upper +Z side) points
-// backward, so a half-turn brings it to face -Z as required.
+// convention (Model faces -Z at rotation.y = 0). Established on the FBX with an isolated
+// probe render: at rotation.y = 0 the face (eyes/smile) pointed backward, so a half-turn
+// brought it to face -Z as required.
+//
+// CARRIED OVER UNCHANGED to the GLB, which is an assumption rather than a re-verified
+// fact: the mesh is near-radially-symmetric from above (its footprint is 2.00 x 2.00,
+// so the bounding box says nothing about which way the face points) and a Blender round
+// trip can change the axis convention. If the slime looks away from its travel
+// direction, THIS is the number to change - try 0, then +/- Math.PI / 2.
 const FACING_ROTATION_Y = Math.PI;
 
 const CROSSFADE_DURATION = 0.4;
@@ -79,8 +89,21 @@ const DISPLACEMENT_CONFIG = {
   detailAmplitude: 0.008,
   detailFrequency: 3.2,
   detailSpeed: 1.0,
-  tailLength: 0.34, // a real streaming/trailing tail while moving, not a lean
-  tailPinch: 0.6,
+  // Tail settings are MESH-SPECIFIC, not universal - these were retuned when the model
+  // became slime.glb. The tail pushes each vertex along +Z proportionally to its own
+  // distance from the mesh origin, then pinches the cross-section. On the amoeba's
+  // icosphere that reads as a rounded teardrop, because every direction sits at the same
+  // radius. This mesh is a flattened disc (2.00 x 1.15 x 2.00 - 43% shorter in Y than
+  // wide), so its +Z vertices are already the furthest out, get pushed the furthest
+  // again, and then narrow to 40% of their width: a hard cone rather than a trail. The
+  // old FBX tolerated 0.34/0.6; this geometry needs roughly a third of that to read the
+  // same way. If a future model changes shape again, these two numbers are the dial.
+  // 0.04/0.08 is deliberately near-nothing: just enough asymmetry to register as motion
+  // rather than a rigid blob sliding. Set BOTH to 0 to remove the tail outright - the
+  // slime still leans and squashes convincingly from PlayerController's own speed-driven
+  // scale, which is a separate effect from this one.
+  tailLength: 0.04,
+  tailPinch: 0.08,
   streamlining: 0.45, // lower than the amoeba's own 0.6 - tendrils should survive at speed, not fully smooth away
   loadSwell: 0.1,
 };
@@ -144,14 +167,14 @@ export function createPlayerSlimeVisual(radius = 0.6) {
   let squintTime = null;
   let breatheTime = 0;
   let displacement = null; // set once the real model + its shader treatment are ready
-  let fbxOcclusion = null;
+  let modelOcclusion = null;
 
-  // Crossfade state - null outside the brief window right after the FBX arrives.
+  // Crossfade state - null outside the brief window right after the model arrives.
   let fadeTimer = null;
-  let fbxMaterial = null;
+  let modelMaterial = null;
 
-  api.ready = loadFbxCharacter({
-    ...MODEL_URLS,
+  api.ready = loadGltfCharacter({
+    url: MODEL_URL,
     targetRadius: radius,
     facingRotationY: FACING_ROTATION_Y,
     materialOptions: {
@@ -169,7 +192,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
       emissiveIntensity: 0.08,
     },
   })
-    .then(({ group: fbxGroup, material }) => {
+    .then(({ group: modelGroup, material }) => {
       applyJellyRimTreatment(material, {
         rimStrength: 0.9,
         rimPower: 2.2,
@@ -183,7 +206,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
         coreStrength: 0.12,
       });
       displacement = applyJellyDisplacement(material, DISPLACEMENT_CONFIG);
-      fbxOcclusion = attachOcclusionOutline(fbxGroup, {
+      modelOcclusion = attachOcclusionOutline(modelGroup, {
         color: 0x8dffc4,
         rimColor: 0xbfffe0,
         emissiveIntensity: 2.6,
@@ -193,8 +216,8 @@ export function createPlayerSlimeVisual(radius = 0.6) {
         uniforms: displacement?.uniforms,
         hasDisplacement: !!displacement,
       });
-      fbxMaterial = material;
-      group.add(fbxGroup);
+      modelMaterial = material;
+      group.add(modelGroup);
       fadeTimer = 0;
 
       // api.bodyMaterial updates now so any code just reading it (radius, etc.) sees the
@@ -231,7 +254,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
       fadeTimer += deltaTime;
       const t = Math.min(fadeTimer / CROSSFADE_DURATION, 1);
       placeholderMaterial.opacity = PLACEHOLDER_OPACITY * (1 - t);
-      fbxMaterial.opacity = TARGET_OPACITY * t;
+      modelMaterial.opacity = TARGET_OPACITY * t;
       if (t >= 1) {
         if (placeholderOcclusion) {
           placeholderOcclusion.dispose();
@@ -241,15 +264,15 @@ export function createPlayerSlimeVisual(radius = 0.6) {
         placeholderMesh.geometry.dispose();
         placeholderMaterial.dispose();
         fadeTimer = null;
-        // Only now, with fbxMaterial.opacity settled at TARGET_OPACITY (not the 0 it
+        // Only now, with modelMaterial.opacity settled at TARGET_OPACITY (not the 0 it
         // started at), is it safe for PlayerController.setActiveMaterial to read it as
         // the resting baseline - see the long comment in the .then() block above.
-        api.onReady?.(fbxMaterial);
+        api.onReady?.(modelMaterial);
       }
     }
 
     if (displacement) displacement.update(deltaTime, speedRatio, load);
-    if (fbxOcclusion) fbxOcclusion.update(deltaTime, speedRatio, load);
+    if (modelOcclusion) modelOcclusion.update(deltaTime, speedRatio, load);
     if (placeholderOcclusion) placeholderOcclusion.update(deltaTime, speedRatio, load);
 
     let widenScale = 0;

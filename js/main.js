@@ -34,6 +34,7 @@ import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=5.3';
 import { scatterWorldDressing, rockColliderRadius, realignDressingToTerrain } from './worldDressing.js?v=5.3';
 import { CollisionSystem } from './collision.js?v=5.3';
 import { updateSlimeCreatures } from './slimeCreature.js?v=5.3';
+import { TutorialController } from './tutorialController.js?v=5.3';
 import { ScreenShake } from './screenShake.js?v=5.3';
 import { DamageNumberController } from './damageNumbers.js?v=5.3';
 import { RadarController } from './radarController.js?v=5.3';
@@ -1003,6 +1004,76 @@ const gameFlowController = new GameFlowController({
   slimeReady: amoeba.ready,
 });
 
+// --- In-game tutorial -----------------------------------------------------------
+// Teaches the game while it is being played (see TUTORIAL_PLAN.md / tutorialController.js).
+// Everything below CHAINS onto the existing callbacks rather than replacing them - the
+// same idiom the mutationSystem.onRecipeChecked wrapper above uses - so every listener
+// that was already there keeps firing.
+const tutorialController = new TutorialController({
+  uiManager,
+  playerController,
+  inventoryManager,
+  metabolismSystem,
+  burdenSystem,
+  playerFormController,
+  projectileSystem,
+  radarController,
+});
+
+{
+  const previousOnAbsorbed = resourceManager.onAbsorbed;
+  resourceManager.onAbsorbed = (...args) => {
+    previousOnAbsorbed?.(...args);
+    tutorialController.notify('absorbed');
+  };
+
+  const previousOnOpen = inventoryUI.onOpen;
+  inventoryUI.onOpen = (...args) => {
+    previousOnOpen?.(...args);
+    tutorialController.notify('bagOpened');
+  };
+
+  // notifyConsumed() is already this system's "an item was eaten" announcement, so
+  // wrapping the instance method needs no change inside MetabolismSystem itself.
+  const previousNotifyConsumed = metabolismSystem.notifyConsumed.bind(metabolismSystem);
+  metabolismSystem.notifyConsumed = () => {
+    previousNotifyConsumed();
+    tutorialController.notify('consumed');
+  };
+
+  // Fires for a wheel-segment tap AND the Bag panel's Expel button - they share
+  // InventoryWheelController._expelInDirection.
+  inventoryWheel.onExpel = () => tutorialController.notify('expelled');
+
+  const previousOnFired = projectileSystem.onFired;
+  projectileSystem.onFired = (...args) => {
+    previousOnFired?.(...args);
+    tutorialController.notify('threw');
+  };
+
+  const previousOnMutationAvailable = mutationSystem.onMutationAvailable;
+  mutationSystem.onMutationAvailable = (recipe, firstDiscovery) => {
+    previousOnMutationAvailable?.(recipe, firstDiscovery);
+    if (recipe) tutorialController.notify('mutationAvailable');
+  };
+
+  // These two one-time toasts predate the tutorial and teach exactly what its 'eat' and
+  // 'drop' beats teach. Left alone they fire in the same breath as the coach banner, so
+  // the player gets told the same thing twice at once, at the top and the bottom of the
+  // screen - and the toast is the copy that can be silently dropped by the notification
+  // queue. So the tutorial owns these lessons while it is running; the toasts stay as the
+  // fallback for a player who skipped it, which is exactly when they are still wanted.
+  const previousOnLowEnergy = metabolismSystem.onLowEnergyReached;
+  metabolismSystem.onLowEnergyReached = () => {
+    if (tutorialController.isFinished) previousOnLowEnergy?.();
+  };
+
+  const previousOnHeavy = burdenSystem.onHeavyReached;
+  burdenSystem.onHeavyReached = (...args) => {
+    if (tutorialController.isFinished) previousOnHeavy?.(...args);
+  };
+}
+
 // --- Guided moments -------------------------------------------------------------
 gameFlowController.onFirstRunBegun = () => {
   gameFlowController.showOpeningObjective({
@@ -1025,6 +1096,14 @@ playerFormController.onTransformed = (recipe) => {
   });
 };
 
+{
+  const previousOnTransformed = playerFormController.onTransformed;
+  playerFormController.onTransformed = (...args) => {
+    previousOnTransformed?.(...args);
+    tutorialController.notify('transformed');
+  };
+}
+
 genomeFragmentController.onSecured = () => {
   gameFlowController.onGenomeFragmentSecured();
   if (DEBUG_APEX || DEBUG_RIVAL) console.log(`Human Genome Fragment secured (total: ${genomeFragmentController.collectedCount})`);
@@ -1032,6 +1111,8 @@ genomeFragmentController.onSecured = () => {
 
 // Dev-only inspection hook
 window.__hollowdrop = {
+  tutorialController,
+  resetTutorial: () => tutorialController.reset(),
   player,
   amoeba,
   camera,
@@ -1218,6 +1299,11 @@ function animate() {
     resourceManager.update(deltaTime, activePlayerPosition);
     stoneClusterManager.update(deltaTime, activePlayerPosition);
     deathRespawnManager.update(deltaTime);
+    // Last, so every condition it reads (load, energy, form, radar blips) is this
+    // frame's settled value. Inside the gate on purpose: that is what freezes the
+    // tutorial while the Bag is open or a reveal card is up, with no pause flag of
+    // its own. Scaled deltaTime, not realDeltaTime - step timeouts are simulation.
+    tutorialController.update(deltaTime);
   }
   objectiveIndicator.update();
 

@@ -148,7 +148,11 @@ export class GameFlowController {
       if (this._resetTimer >= duration) {
         this._resetGame();
         this._runEndingStarted = false;
-    this._hasShownOpening = false;
+        // NOT reset: showOpeningObjective is once per SESSION, not once per run (see its
+        // own doc comment). This line used to clear it, which re-showed the goal card on
+        // every Play Again - the opposite of what that method documents. The in-game
+        // tutorial makes the same promise and persists across reloads, so re-teaching
+        // here would be doubly wrong.
         resetRunStats(this.runStats);
         this.runStats.runStartTime = performance.now();
         this._resetPhase = 'fadeIn';

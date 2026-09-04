@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; }
+    a { color: #7cffb2; } a:hover { color: #9dffcf; }
+    @keyframes coachPulse {
+      0%   { transform: scale(1);   opacity: 0.55; }
+      70%  { transform: scale(1.5); opacity: 0; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+  </style>
+</helmet>
+
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background:
+     radial-gradient(120% 80% at 30% 20%, #12241c 0%, #0a1410 55%, #05100c 100%);
+     color: #eafff2;">
+
+  <!-- cave floor texture suggestion, not literal art -->
+  <div style="position: absolute; inset: 0; opacity: 0.5; background:
+       radial-gradient(circle at 22% 34%, rgb(124 255 178 / 0.07) 0 22px, transparent 23px),
+       radial-gradient(circle at 68% 22%, rgb(102 224 255 / 0.06) 0 30px, transparent 31px),
+       radial-gradient(circle at 78% 62%, rgb(178 102 255 / 0.05) 0 26px, transparent 27px),
+       radial-gradient(circle at 40% 74%, rgb(124 255 178 / 0.05) 0 18px, transparent 19px);"></div>
+
+  <!-- the player -->
+  <div style="position: absolute; left: 50%; top: 48%; width: 74px; height: 62px; transform: translate(-50%,-50%);
+       border-radius: 50%; background: radial-gradient(circle at 38% 32%, #b6ffd8 0%, #6cf2a4 45%, #2ea86a 100%);
+       box-shadow: 0 0 34px rgb(124 255 178 / 0.35);"></div>
+
+  <!-- vitals, top-left (existing) -->
+  <div style="position: absolute; top: 14px; left: 14px; display: flex; flex-direction: column; gap: 5px;">
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <div style="width: 52px; font-size: 8px; letter-spacing: 0.09em; color: rgb(234 255 242 / 0.5);">HEALTH</div>
+      <div style="width: 96px; height: 5px; border-radius: 999px; background: rgb(255 255 255 / 0.1); overflow: hidden;">
+        <div style="width: 100%; height: 100%; background: #ff6c6c;"></div></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <div style="width: 52px; font-size: 8px; letter-spacing: 0.09em; color: rgb(234 255 242 / 0.5);">ENERGY</div>
+      <div style="width: 96px; height: 5px; border-radius: 999px; background: rgb(255 255 255 / 0.1); overflow: hidden;">
+        <div style="width: 72%; height: 100%; background: #7cffb2;"></div></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <div style="width: 52px; font-size: 8px; letter-spacing: 0.09em; color: rgb(234 255 242 / 0.5);">MASS</div>
+      <div style="width: 96px; height: 5px; border-radius: 999px; background: rgb(255 255 255 / 0.1); overflow: hidden;">
+        <div style="width: 34%; height: 100%; background: #7cffb2;"></div></div>
+    </div>
+  </div>
+
+  <!-- radar, top-right (existing) -->
+  <div style="position: absolute; top: 14px; right: 14px; width: 78px; height: 78px; border-radius: 50%;
+       border: 1px solid rgb(124 255 178 / 0.28); background: rgb(10 20 16 / 0.6);"></div>
+
+  <!-- action stack, bottom-right (existing) - the thing the banner must clear -->
+  <div style="position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 12px; align-items: flex-end;">
+    <div style="position: relative; width: 60px; height: 60px; border-radius: 50%;
+         border: 1px solid rgb(124 255 178 / 0.3); background: rgb(10 20 16 / 0.6); color: #9dffcf;
+         display: flex; align-items: center; justify-content: center;">
+      <!-- pulse ring: the .tutorial-pulse treatment -->
+      <span style="position: absolute; inset: -3px; border-radius: 50%; border: 2px solid #7cffb2;
+            animation: coachPulse 1.8s ease-out infinite;"></span>
+      <svg viewBox="0 0 48 48" style="width: 26px; height: 26px;" aria-hidden="true">
+        <path d="M17 18 L18.5 11 a6 6 0 0 1 11 0 L31 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M13.5 18 H34.5 L32.5 39 a4 4 0 0 1 -4 3.5 H19.5 a4 4 0 0 1 -4 -3.5 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+      </svg>
+    </div>
+    <div style="width: 60px; height: 60px; border-radius: 50%; border: 1px solid rgb(124 255 178 / 0.18);
+         background: rgb(10 20 16 / 0.45); color: rgb(157 255 207 / 0.45);
+         display: flex; align-items: center; justify-content: center;">
+      <svg viewBox="0 0 48 48" style="width: 26px; height: 26px;" aria-hidden="true">
+        <path d="M6 15 H17 M4 24 H14 M7 33 H18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
+        <path d="M31 7 L41 13 L43 26 L35 38 L25 36 L21 22 Z" fill="currentColor" />
+      </svg>
+    </div>
+  </div>
+
+  <!-- THE COACH BANNER: left:16 / right:92 clears the 60px stack + its 16px margin -->
+  <div style="position: absolute; left: 16px; right: 92px; bottom: 20px;">
+    <div style="max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 10px;
+         padding: 10px 14px; border-radius: 999px;
+         background: rgb(10 20 16 / 0.6); border: 1px solid rgb(124 255 178 / 0.3);
+         backdrop-filter: blur(4px); box-shadow: 0 6px 24px rgb(5 5 8 / 0.45);">
+      <span style="flex: none; width: 6px; height: 6px; border-radius: 50%; background: #7cffb2;
+            box-shadow: 0 0 8px rgb(124 255 178 / 0.9);"></span>
+      <span style="flex: 1 1 auto; font-size: 13px; line-height: 1.35; color: #eafff2; text-wrap: pretty;">
+        Tap the bag to see what you are carrying.
+      </span>
+      <span style="flex: none; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+            color: rgb(234 255 242 / 0.45); padding-left: 2px;">Skip</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

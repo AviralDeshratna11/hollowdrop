@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; }
+    a { color: #7cffb2; } a:hover { color: #9dffcf; }
+    @keyframes coachPulse {
+      0%   { transform: scale(1);   opacity: 0.55; }
+      70%  { transform: scale(1.5); opacity: 0; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+    .lbl { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+           color: rgb(234 255 242 / 0.4); margin-bottom: 8px; }
+    .coach { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+             border-radius: 999px; background: rgb(10 20 16 / 0.6);
+             border: 1px solid rgb(124 255 178 / 0.3); backdrop-filter: blur(4px);
+             box-shadow: 0 6px 24px rgb(5 5 8 / 0.45); }
+    .dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #7cffb2;
+           box-shadow: 0 0 8px rgb(124 255 178 / 0.9); }
+    .msg { flex: 1 1 auto; font-size: 13px; line-height: 1.35; color: #eafff2; text-wrap: pretty; }
+    .skip { flex: none; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+            color: rgb(234 255 242 / 0.45); }
+    .btn { position: relative; width: 60px; height: 60px; border-radius: 50%;
+           border: 1px solid rgb(124 255 178 / 0.3); background: rgb(10 20 16 / 0.6);
+           color: #9dffcf; display: flex; align-items: center; justify-content: center; }
+  </style>
+</helmet>
+
+<div style="padding: 32px; background: #0a1410; color: #eafff2; display: flex;
+     flex-direction: column; gap: 26px; width: 560px; box-sizing: border-box;">
+
+  <div>
+    <div class="lbl">Coach — default</div>
+    <div class="coach"><span class="dot"></span><span class="msg">Drag anywhere to move.</span></div>
+  </div>
+
+  <div>
+    <div class="lbl">Coach — with Skip (first beat only)</div>
+    <div class="coach">
+      <span class="dot"></span>
+      <span class="msg">Roll over glowing things to absorb them.</span>
+      <span class="skip">Skip</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Coach — two lines, longest expected copy</div>
+    <div class="coach">
+      <span class="dot"></span>
+      <span class="msg">Too heavy. Press and hold on your body to open the wheel, then tap to drop.</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Coach — warning tone (heavy / hungry)</div>
+    <div class="coach" style="border-color: rgb(255 200 90 / 0.35);">
+      <span class="dot" style="background: #ffc85a; box-shadow: 0 0 8px rgb(255 200 90 / 0.9);"></span>
+      <span class="msg">The more you carry, the slower you get.</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Button pulse — idle vs .tutorial-pulse</div>
+    <div style="display: flex; gap: 28px; align-items: center;">
+      <div class="btn">
+        <svg viewBox="0 0 48 48" style="width: 26px; height: 26px;" aria-hidden="true">
+          <path d="M17 18 L18.5 11 a6 6 0 0 1 11 0 L31 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M13.5 18 H34.5 L32.5 39 a4 4 0 0 1 -4 3.5 H19.5 a4 4 0 0 1 -4 -3.5 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="btn" style="border-color: rgb(124 255 178 / 0.55);">
+        <span style="position: absolute; inset: -3px; border-radius: 50%; border: 2px solid #7cffb2;
+              animation: coachPulse 1.8s ease-out infinite;"></span>
+        <svg viewBox="0 0 48 48" style="width: 26px; height: 26px;" aria-hidden="true">
+          <path d="M17 18 L18.5 11 a6 6 0 0 1 11 0 L31 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M13.5 18 H34.5 L32.5 39 a4 4 0 0 1 -4 3.5 H19.5 a4 4 0 0 1 -4 -3.5 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="btn" style="border-color: rgb(255 45 158 / 0.55); color: #ff8fd0;">
+        <span style="position: absolute; inset: -3px; border-radius: 50%; border: 2px solid #ff2d9e;
+              animation: coachPulse 1.8s ease-out infinite;"></span>
+        <svg viewBox="0 0 48 48" style="width: 26px; height: 26px;" aria-hidden="true">
+          <path d="M16 16 L11 8 L19 13 Z" fill="currentColor" />
+          <path d="M31 13 L36 8 L33 16 Z" fill="currentColor" />
+          <path d="M10 30 C10 19 16 13 24 13 C32 13 38 20 38 28 C38 35 32 39 24 39 C16 39 10 37 10 30 Z" fill="currentColor" />
+        </svg>
+      </div>
+    </div>
+    <div style="margin-top: 10px; font-size: 11px; color: rgb(234 255 242 / 0.4);">
+      Mint for ordinary controls, mutation pink for the Mutate button — matching each button's own resting colour.
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
