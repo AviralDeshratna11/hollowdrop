@@ -160,27 +160,30 @@ scene.add(rimLight);
 // within roughly 30-34 units of the origin, so a 90-unit plane (45-unit half-width)
 // covers all of it with margin to spare.
 //
-// Exactly ONE copy of the texture is mapped across this plane - no tiling, so there is
-// nothing for a wrap mode to repeat or mirror at any edge. The image is a single
-// full-map illustration (five distinct biome regions - violet crystal cave, icy crystal
-// peaks, mossy green, a teal pool, molten red - not a small tileable pattern), so
-// tiling it would both repeat those unique regions and reintroduce the mirror-seam
-// problem a tiled MirroredRepeatWrapping setup had before. A single untiled copy has
-// neither problem, and since both the plane and the texture are square the 1:1 UV
-// mapping is not stretched or distorted in either axis. terrain.js's own GROUND_SIZE/
-// TEXTURE_REPEAT constants are updated to match this pair exactly (its heightmap
-// sampling needs the same values used here to stay aligned with what's actually
-// visible) - keep the two in sync if this ever changes again.
+// The texture repeats across this plane rather than stretching once - at repeat 1, the
+// image's own big rock formations each spanned ~13 world units, dwarfing the player
+// (PLAYER_RADIUS 0.6) far more than a real screenshot comparison showed they should
+// (individual rock/pebble detail read as noticeably smaller, more numerous, relative to
+// the slime). Tiling at TEXTURE_REPEAT below shrinks each instance of those same
+// features to a size that actually matches. MirroredRepeatWrapping rather than plain
+// RepeatWrapping: mirroring matches every tile edge to a flipped copy of itself with no
+// manual seam work (this source was never authored as a seamless tile - a real
+// screenshot showed a hard discontinuity line at every plain-repeat attempt tried
+// before this), at the cost of a faint symmetry between neighboring tiles that reads
+// far better than that seam did. terrain.js's own GROUND_SIZE/TEXTURE_REPEAT constants
+// are updated to match this pair exactly (its heightmap sampling needs the same values
+// used here to stay aligned with what's actually visible) - keep the two in sync if
+// this ever changes again.
 const GROUND_SIZE = 90;
 const GROUND_SEGMENTS = 320;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
 
-const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_new.jpg', (tex) => {
+const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_new.png', (tex) => {
   initTextureElevation(tex.image);
 });
-groundTexture.wrapS = THREE.ClampToEdgeWrapping;
-groundTexture.wrapT = THREE.ClampToEdgeWrapping;
-const GROUND_TEXTURE_REPEAT = 1; // single untiled copy - see the comment above
+groundTexture.wrapS = THREE.MirroredRepeatWrapping;
+groundTexture.wrapT = THREE.MirroredRepeatWrapping;
+const GROUND_TEXTURE_REPEAT = 3; // odd - centers a tile on the origin (the player's spawn point) rather than a seam
 groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
 groundTexture.colorSpace = THREE.SRGBColorSpace;
 groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();

@@ -3,21 +3,14 @@
 /**
  * 3D Terrain Elevation Engine - Texture-Driven
  *
- * Directly correlates subterranean 3D elevation with the visual features of the ground
- * texture's five biome regions (see main.js's own "--- Ground ---" block for the actual
- * image - a single full-map illustration, not a small tileable pattern):
- * - Uplifts icy crystal peaks and violet crystal-cave formations (bright/saturated,
- *   high-luminance regions) into jagged elevated terrain (+0.8m to +2.2m).
- * - Downlifts the teal/cyan pool into a sunken basin (-0.6m to -1.8m).
- * - Downlifts dark subterranean crevices and shadows (-0.5m to -1.0m).
- * - Gently uplifts mossy green and molten-red regions into low rolling mounds
- *   (+0.3m to +1.0m).
- * - Leaves the neutral gray stone paths at baseline with organic micro-variation.
- * - Samples texture coordinates using the same 1:1 UV mapping the visible mesh uses
- *   (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture
- *   setup - a single untiled copy, so no wrap-mode repetition to account for).
- * - Uses bilinear filtering and spatial smoothing for seamless, climbable, tactile 3D
- *   terrain across the large solid-color biome regions.
+ * Directly correlates subterranean 3D elevation with the visual features of cave_ground.jpg:
+ * - Uplifts craggy rock mounds, stone ridges, and boulder formations (+1.5m to +3.2m).
+ * - Downlifts cyan bioluminescent pools, crystal waters, and crater basins (-1.5m to -2.8m).
+ * - Downlifts dark subterranean crevices, fissures, and shadows (-1.2m to -2.2m).
+ * - Elevates purple fungal crater rims (+1.8m to +2.4m).
+ * - Leaves cobblestone trails and pathways at neutral baseline with organic stone micro-variation.
+ * - Samples texture coordinates using exact MirroredRepeatWrapping (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture setup).
+ * - Uses bilinear filtering and spatial smoothing for seamless, climbable, tactile 3D terrain.
  */
 
 // Must match the ground plane's own size and the texture's repeat exactly (see
@@ -25,7 +18,7 @@
 // the SAME texture at the SAME UV mapping the visible mesh uses, so any mismatch here
 // puts the 3D bumps in the wrong place relative to what the texture actually shows.
 export const GROUND_SIZE = 90;
-export const TEXTURE_REPEAT = 1; // single untiled copy - see main.js's own comment
+export const TEXTURE_REPEAT = 3;
 
 const HEIGHTMAP_RES = 256;
 let heightmapData = null;
@@ -34,11 +27,13 @@ const onReadyCallbacks = [];
 const registeredGeometries = new Set();
 
 /**
- * Normalized repeat fractional calculation. At TEXTURE_REPEAT=1 (a single untiled copy
- * - see main.js's own "--- Ground ---" block) every world coordinate maps to u/v inside
- * [0,1] and this is just the identity; kept as a period-2 triangle wave (rather than
- * plain modulo) so this heightmap sampling stays correct if tiling with
- * MirroredRepeatWrapping is ever reintroduced, where every other tile is flipped.
+ * Normalized repeat fractional calculation matching WebGL MirroredRepeatWrapping (the
+ * ground texture's own wrap mode - see main.js's own "--- Ground ---" block). Plain
+ * modulo wrapping would sample this heightmap as if every tile were identical, but
+ * mirrored tiles alternate - every other tile is flipped - so without this, the 3D
+ * terrain bumps would land correctly in tile 0 and backwards in tile 1, tile 2, etc.
+ * A period-2 triangle wave does it: within each pair of tiles, the first half rises
+ * 0->1 (a normal tile) and the second half falls 1->0 (that same tile mirrored).
  */
 function repeatFrac(val) {
   let t = val % 2.0;
@@ -117,46 +112,33 @@ export function initTextureElevation(image, onReady = null) {
         // Perceptual luminance calculation
         const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-        // Distinct feature detection, tuned to this image's five biome regions:
-        // 1. Icy crystal peaks (top-right) - bright AND blue-leaning, distinguished from
-        //    the teal pool below by luminance so the two don't overlap.
-        const iceMetric = lum > 0.5 ? Math.max(0, (g + b) * 0.5 - r) : 0;
+        // Distinct feature detection:
+        // 1. Cyan crystal pools / glowing water (high green & blue relative to red)
+        const cyanMetric = Math.max(0, (g + b) * 0.5 - r * 1.15);
 
-        // 2. Teal/cyan pool (bottom-center) - cyan-leaning but darker than the ice peaks.
-        const poolMetric = lum <= 0.5 ? Math.max(0, (g + b) * 0.5 - r * 1.15) : 0;
-
-        // 3. Violet crystal cave (top-left) - high red & blue relative to green.
+        // 2. Purple fungal territory (high red & blue relative to green)
         const purpleMetric = Math.max(0, (r + b) * 0.5 - g * 1.15);
 
-        // 4. Molten red region (bottom-right) - warm red-orange, low green & blue.
-        const lavaMetric = Math.max(0, r - (g + b) * 0.6);
-
-        // 5. Craggy rock / stone path highlights (general micro-variation everywhere)
+        // 3. Craggy rock / stone highlights (lighter rock textures and mounds)
         const rockFactor = Math.max(0, (lum - 0.11) / 0.38);
 
-        // 6. Dark subterranean crevices and chasms
+        // 4. Dark subterranean crevices and chasms
         const creviceFactor = Math.max(0, (0.09 - lum) / 0.09);
 
         // Calculate physical elevation:
         let elevation = 0;
 
-        // Elevate rock ridges and stone mounds UP (baseline micro-variation everywhere)
-        elevation += Math.pow(rockFactor, 1.2) * 1.2;
+        // Elevate rock ridges and stone mounds UP (+0.6m to +1.8m)
+        elevation += Math.pow(rockFactor, 1.2) * 1.8;
 
-        // De-elevate dark crevices and fissures DOWN
+        // De-elevate dark crevices and fissures DOWN (-0.5m to -1.0m)
         elevation -= Math.pow(creviceFactor, 1.1) * 1.0;
 
-        // Uplift icy crystal peaks into jagged elevated terrain
-        elevation += iceMetric * 2.2;
+        // De-elevate cyan pools into sunken crystal basins (-0.6m to -1.5m)
+        elevation -= cyanMetric * 1.8;
 
-        // De-elevate the teal pool into a sunken basin
-        elevation -= poolMetric * 1.8;
-
-        // Elevate the violet crystal-cave formations
-        elevation += purpleMetric * 1.6;
-
-        // Gently mound the molten-red region (raised scorched rock crust)
-        elevation += lavaMetric * 0.8;
+        // Elevate purple fungal crater rim (+0.6m to +1.2m)
+        elevation += purpleMetric * 1.2;
 
         rawGrid[y * w + x] = elevation;
       }
@@ -213,7 +195,7 @@ export function initTextureElevation(image, onReady = null) {
 if (typeof Image !== 'undefined') {
   const autoImg = new Image();
   autoImg.crossOrigin = 'anonymous';
-  autoImg.src = 'assets/textures/cave_ground_new.jpg';
+  autoImg.src = 'assets/textures/cave_ground_new.png';
   autoImg.onload = () => {
     initTextureElevation(autoImg);
   };
