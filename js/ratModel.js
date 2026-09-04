@@ -7,7 +7,7 @@ import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
  * Venom Rat: the player's mutated form, now Meshy AI's "Plague Sludge Rat" - a static
  * (unrigged, no animation/skin data - confirmed by scanning the FBX binary directly)
  * single mesh with its own 4-texture PBR set, loaded async the same way
- * playerSlimeModel.js loads the Jellybean Slime (see loadFbxCharacter/its own header
+ * playerSlimeModel.js loads the Jellybean Slime (see loadGltfCharacter/its own header
  * comment for why the FBX's own materials aren't used directly).
  *
  * Because it is one static mesh, there is nothing to articulate: no separate legs, ears
@@ -62,7 +62,7 @@ const FACING_ROTATION_Y = Math.PI;
 
 const RAT_CONFIG = {
   // Half the model's largest bounding-box dimension after normalization (see
-  // loadFbxCharacter). 0.42 matched the OLD primitives rat's raw sphere radius, but that
+  // loadGltfCharacter). 0.42 matched the OLD primitives rat's raw sphere radius, but that
   // rat also got stretched by a further bodyScale multiplier on top - reused as a flat
   // target here, the FBX (whose long axis is nose-to-tail) came out reading as too small
   // next to the HUD/other creatures. Bumped to give it the "real presence" the original

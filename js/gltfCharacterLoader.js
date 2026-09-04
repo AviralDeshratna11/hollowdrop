@@ -3,27 +3,29 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
 
 /**
- * Loader for RIGGED .glb characters - currently only the player's Venom Rat
- * (models/rat_walk.glb: one skinned mesh, a 181-deform-bone armature and a single
- * baked "Walk" clip). Deliberately a separate file from fbxCharacterLoader.js rather
- * than another branch inside it, because the two normalizations are incompatible:
+ * The loader for EVERY character in the game: the player's slime
+ * (models/jellybean_slime/slime.glb, static), the player's Venom Rat
+ * (models/rat_walk.glb) and the boss (models/plague_sludge_rat/rat_walk.glb), both
+ * rigged with a 181-deform-bone armature and a baked "Walk" clip.
  *
- *   fbxCharacterLoader does `fbx.position.sub(center)` on the loaded root to recentre
- *   it. That root IS the armature on a rigged model, and every animation channel is
- *   authored relative to it, so writing a transform there means the clip and the
- *   normalization fight over the same three properties. Here the gltf.scene is never
- *   touched: scale / facing / centering all go on a wrapper Group above it, leaving
- *   the armature's own transform entirely to the AnimationMixer.
+ * It began as a second loader alongside an FBX one, because the two normalizations are
+ * incompatible: that loader recentred by writing `.position` on the loaded root, and on
+ * a rigged model that root IS the armature every animation channel is authored relative
+ * to, so the clip and the normalization fought over the same three properties. Here
+ * gltf.scene is never touched: scale / facing / centering all go on a wrapper Group
+ * above it, leaving the armature's own transform entirely to the AnimationMixer. That
+ * turned out to be the better shape for the static models too, and the FBX path is now
+ * gone entirely - along with the FBXLoader/fflate/NURBS import chain it dragged in.
  *
  * Sizing is measured ONCE, at load, from the bind-pose bounding box. Box3.setFromObject
  * uses each geometry's own boundingBox (it does not evaluate skinning), so the measure
  * is pose-independent by construction - but it is still taken before the mixer's first
  * update, so there is no frame where a half-applied pose could influence the scale.
  *
- * Materials: same reasoning as fbxCharacterLoader's header - the game needs ONE
- * MeshStandardMaterial per character with a writable .emissive/.emissiveIntensity
- * (PlayerFormController drives the mutation-countdown glow through it every frame), so
- * the glTF's own material is unpacked for its texture maps and then discarded.
+ * Materials: the game needs ONE MeshStandardMaterial per character with a writable
+ * .emissive/.emissiveIntensity (PlayerFormController drives the mutation-countdown glow
+ * through it every frame, and playerSlimeModel patches the jelly rim/displacement into
+ * it), so the glTF's own material is unpacked for its texture maps and then discarded.
  */
 
 const gltfLoader = new GLTFLoader(assetLoadingManager);
@@ -62,8 +64,8 @@ export async function loadGltfCharacter({
     normalMap: src.normalMap ?? null,
     roughnessMap: src.roughnessMap ?? null,
     metalnessMap: src.metalnessMap ?? null,
-    // Same convention as fbxCharacterLoader: a packed map is read through its own
-    // channel, so the scalar becomes a full-strength multiplier rather than a value.
+    // A packed map is read through its own channel, so the scalar becomes a
+    // full-strength multiplier rather than a value.
     roughness: src.roughnessMap ? 1 : 0.6,
     metalness: src.metalnessMap ? 1 : 0,
     ...materialOptions,
@@ -95,9 +97,9 @@ export async function loadGltfCharacter({
   const scale = nativeRadius > 1e-6 ? targetRadius / nativeRadius : 1;
   group.scale.setScalar(scale);
 
-  // Recentred AFTER scale so the measured box already reflects it - matching how
-  // fbxCharacterLoader leaves its models, so a rigged character drops into the same
-  // local origin the static ones already sit at and nothing downstream shifts height.
+  // Recentred AFTER scale so the measured box already reflects it - every character
+  // lands with its bounding-box centre at the local origin, so nothing downstream has
+  // to special-case one model's height against another's.
   group.updateMatrixWorld(true);
   const settled = new THREE.Box3().setFromObject(group);
   group.position.sub(settled.getCenter(new THREE.Vector3()));
