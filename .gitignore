@@ -3,3 +3,8 @@ devserver.log
 *.log
 .DS_Store
 __pycache__/
+
+# Design-canvas working files are source; the seeded canvas is a ~2MB editor
+# payload rebuilt by tools/../seed-canvas.mjs on every change - not source.
+design/*.html
+!design/*.dc.html

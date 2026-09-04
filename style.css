@@ -3228,3 +3228,134 @@ html, body {
   color: var(--text);
   opacity: 0.7;
 }
+
+/* --- Tutorial coach ---------------------------------------------------------------
+   The in-game tutorial's one persistent message (tutorialController.js). Deliberately
+   its own element rather than another #pickup-notification variant: that queue is
+   capped at 4 and drops its OLDEST entries, so a teaching line can silently vanish in a
+   busy moment. This one stays up until its step is actually completed.
+
+   left/right rather than a centred transform: `right` is what guarantees it always
+   clears #action-stack (60px buttons + their own 16px inset), at every screen width,
+   without any max-width arithmetic. The inner element re-centres the content on wide
+   screens. */
+#tutorial-coach {
+  position: fixed;
+  left: 16px;
+  right: 92px;
+  bottom: max(20px, calc(env(safe-area-inset-bottom) + 20px));
+  z-index: 20;
+  /* Must never eat a movement drag - the joystick is floating and can begin anywhere,
+     including on top of this. Only the Skip button opts back in. Same reasoning as
+     #action-stack's own pointer-events:none. */
+  pointer-events: none;
+}
+#tutorial-coach[hidden] {
+  display: none;
+}
+
+#tutorial-coach-inner {
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--surface-rgb) / 0.6);
+  border: 1px solid rgb(var(--accent-rgb) / 0.3);
+  backdrop-filter: blur(var(--blur-hud));
+  box-shadow: 0 6px 24px rgb(var(--shadow-rgb) / 0.45);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#tutorial-coach.coach--visible #tutorial-coach-inner {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#tutorial-coach-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgb(var(--accent-rgb) / 0.9);
+}
+
+#tutorial-coach-text {
+  flex: 1 1 auto;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  text-wrap: pretty;
+}
+
+/* Pressure, not danger - amber rather than the red the health/starvation UI owns, so a
+   "you are getting heavy" nudge never reads as "you are being attacked". */
+#tutorial-coach.coach--warn #tutorial-coach-inner {
+  border-color: rgb(var(--warning-amber-rgb) / 0.35);
+}
+#tutorial-coach.coach--warn #tutorial-coach-dot {
+  background: rgb(var(--warning-amber-rgb));
+  box-shadow: 0 0 8px rgb(var(--warning-amber-rgb) / 0.9);
+}
+
+#tutorial-coach-skip {
+  flex: none;
+  pointer-events: auto;
+  appearance: none;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--text-rgb) / 0.45);
+  padding: 4px 2px 4px 6px;
+  cursor: pointer;
+}
+#tutorial-coach-skip:hover,
+#tutorial-coach-skip:focus-visible {
+  color: rgb(var(--text-rgb) / 0.8);
+}
+#tutorial-coach-skip[hidden] {
+  display: none;
+}
+
+/* Attention ring for a HUD button the current step is asking the player to press.
+   ::after so no element needs adding to the button's markup, and inset:-3px so the ring
+   sits just outside the 1px border rather than covering the icon. Inherits currentColor,
+   which is why the Mutate button pulses mutation-pink and the rest pulse mint - each
+   button's own resting colour, not one imposed accent. */
+.tutorial-pulse {
+  position: relative;
+}
+.tutorial-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid currentColor;
+  opacity: 0;
+  pointer-events: none;
+  animation: tutorial-pulse-ring 1.8s ease-out infinite;
+}
+@keyframes tutorial-pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  70%  { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* The game's only always-moving decoration. Respect the OS setting: keep the ring as a
+   static outline so the affordance survives, drop the animation. */
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-pulse::after {
+    animation: none;
+    opacity: 0.5;
+  }
+  #tutorial-coach-inner {
+    transition: none;
+  }
+}

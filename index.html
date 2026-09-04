@@ -13,7 +13,7 @@
      style.css) - every other typeface in the game is self-hosted from fonts/ (see the
      @font-face rules at the top of style.css), but this one comes from Google Fonts instead of
      joining them there. That's a deliberate exception, not an oversight: the game
-     already depends on jsdelivr for the entire Three.js engine and FBXLoader's import
+     already depends on jsdelivr for the entire Three.js engine and GLTFLoader's import
      chain below, so one more CDN font is a small addition next to that, and
      font-display: swap (part of Google's stylesheet) means a slow/failed fetch just
      shows the fallback in --font-ui/system-ui until/if it arrives - never a broken or
@@ -23,7 +23,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700&display=swap" rel="stylesheet" />
 <!-- Must precede the modulepreload hints below: a module preload that itself resolves
-     a bare specifier (FBXLoader.js does `import * as THREE from 'three'`) needs the
+     a bare specifier (GLTFLoader.js does `import * as THREE from 'three'`) needs the
      importmap already registered in the document, or the browser can't resolve "three"
      and the preload - and everything after it - fails outright. Moved here from just
      before js/main.js's own script tag for exactly that reason. -->
@@ -34,18 +34,19 @@
   }
 }
 </script>
-<!-- FBXLoader (used by ratModel.js/playerSlimeModel.js via fbxCharacterLoader.js) has
-     its own further imports (fflate, NURBSCurve -> NURBSUtils) that main.js's module
-     graph can only discover one file at a time as each parent finishes parsing - ES
-     modules link fully before ANY top-level code runs, so this was a sequential
-     multi-hop CDN round-trip standing entirely BEFORE the player's own model even
-     started fetching, independent of that fetch's own size. Preloading the whole chain
-     here lets the browser fetch every hop in parallel from the very start of page load
-     instead of discovering them one at a time. -->
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/FBXLoader.js" />
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/fflate.module.js" />
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSCurve.js" />
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/curves/NURBSUtils.js" />
+<!-- GLTFLoader (every character in the game now: gltfCharacterLoader.js loads the
+     player's slime, the player's Venom Rat and the boss) has its own further import,
+     BufferGeometryUtils, that main.js's module graph could only discover one file at a
+     time as each parent finishes parsing - ES modules link fully before ANY top-level
+     code runs, so that was a sequential multi-hop CDN round-trip standing entirely
+     BEFORE the player's own model even started fetching, independent of that fetch's own
+     size. Preloading both hops here lets the browser fetch them in parallel from the very
+     start of page load instead of discovering them one at a time.
+     The FBXLoader chain (FBXLoader -> fflate, NURBSCurve -> NURBSUtils) used to be
+     preloaded here too and is gone: nothing loads an FBX any more, so that was four
+     needless CDN round-trips on every page load. -->
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js" />
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js" />
 <script>
   // Force unregister stale service workers and clear browser cache storage on reload
   if ('serviceWorker' in navigator) {
@@ -188,6 +189,19 @@
      to its own `bottom` offset - so changing any button's height silently broke the
      others' alignment. They're a flex column now: DOM order IS stack order (top to
      bottom), and spacing comes from one `gap`. -->
+<!-- Tutorial coach: the in-game tutorial's one persistent message (see
+     tutorialController.js). Deliberately NOT routed through #pickup-notification -
+     that queue is capped and discards its oldest entries, which silently destroys
+     one-time teaching. Sits left of #action-stack (see style.css) and is
+     pointer-events:none apart from Skip, so it can never eat a movement swipe. -->
+<div id="tutorial-coach" aria-live="polite" hidden>
+  <div id="tutorial-coach-inner">
+    <span id="tutorial-coach-dot" aria-hidden="true"></span>
+    <span id="tutorial-coach-text"></span>
+    <button id="tutorial-coach-skip" type="button" hidden>Skip</button>
+  </div>
+</div>
+
 <div id="action-stack">
   <button id="inventory-toggle" aria-label="Open inventory">
     <svg class="action-icon action-icon--bag" viewBox="0 0 48 48" aria-hidden="true">

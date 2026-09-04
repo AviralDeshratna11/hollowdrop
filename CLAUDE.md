@@ -42,8 +42,19 @@ Change these, not scattered literals: `resourceTypes.js` (`RESOURCE_TYPES` — w
 ### Player visual: the amoeba/slime shader system
 The player and NPC slimes share a deforming-membrane shader in `slimeCreature.js`. NPC slimes register themselves and are all ticked by one `updateSlimeCreatures(realDeltaTime)` sweep; creatures removed from the scene drop from the registry automatically. The player's own body (`amoeba`) is updated separately with speed/load/gaze inputs.
 
-### FBX model loading and `index.html` `<head>` ordering
-Character models (`models/plague_sludge_rat/`, `models/jellybean_slime/`) load through `fbxCharacterLoader.js`. The `<head>` in `index.html` is order-sensitive and commented as such: the **importmap must precede the `modulepreload` hints**, because `FBXLoader.js` resolves the bare `three` specifier and its own import chain (fflate, NURBSCurve → NURBSUtils) is preloaded to fetch every CDN hop in parallel rather than discovering them one at a time. If you touch that `<head>`, preserve the ordering and the preload chain.
+### Model loading and `index.html` `<head>` ordering
+**Authoring a NEW animated asset?** Read `ASSET_PIPELINE.md` first — the Blender side (rig conventions, Blender 5.x API traps, export flags, texture optimisation, and how to verify a clip actually plays) is documented there rather than here. This section covers only how a finished asset is consumed at runtime.
+
+Two loaders, split by whether the asset is rigged — they are not interchangeable:
+- `fbxCharacterLoader.js` — the **un-rigged** single-mesh FBX characters (`models/plague_sludge_rat/` = the boss, `models/jellybean_slime/`). Measures the bounding box, rescales to `targetRadius`, and recentres by writing `.position` on the loaded root.
+- `gltfCharacterLoader.js` — the **rigged** GLB (`models/rat_walk.glb` = the player's Venom Rat: 181 deform bones + a baked `Walk` clip). Never writes a transform on `gltf.scene`, because on a rigged model that root IS the armature the clip animates; scale/facing/centering all go on a wrapper `Group` above it. Returns an `AnimationMixer` alongside the group and material.
+
+Both build **one** `MeshStandardMaterial` per character from the texture maps, because several controllers drive `.emissive`/`.emissiveIntensity` on it every frame.
+
+The `<head>` in `index.html` is order-sensitive and commented as such: the **importmap must precede the `modulepreload` hints**, because both loaders resolve the bare `three` specifier and their own import chains (FBXLoader → fflate, NURBSCurve → NURBSUtils; GLTFLoader → BufferGeometryUtils) are preloaded to fetch every CDN hop in parallel rather than discovering them one at a time. If you touch that `<head>`, preserve the ordering and the preload chain.
+
+### The occlusion outline and skinned meshes
+`attachOcclusionOutline` (`occlusionOutline.js`) builds a **second mesh sharing the target's geometry**. On a rigged character that copy must be a `SkinnedMesh` bound to the same `Skeleton` — as a plain `Mesh` it hangs in bind pose while the real body animates away from it. The file handles this automatically (`options.skinned` selects a skinning vertex shader), but it is the thing to check first if a new rigged model's highlight looks wrong.
 
 ## Debugging
 

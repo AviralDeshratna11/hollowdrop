@@ -195,11 +195,14 @@ export function createVenomRatBossMesh() {
   const rat = createRatMesh(); // default 'venom' pink - the existing Venom Rat design
 
   // PredatorController forces `body.position.y = 0.28 + bob` every frame. Offset the rat
-  // up within this pivot so it sits at roughly the same height above ground the player's
-  // own Venom Rat does (~0.6 centre). Eyeballed on the un-rigged FBX - tune if it
-  // floats/sinks.
+  // up within this pivot so its paws meet the ground rather than sinking through it.
+  // 0.32 was eyeballed against the OLD un-rigged FBX; the rigged GLB that replaced it has
+  // different proportions (0.857 tall once normalized to bodyRadius) and sat 0.09 below
+  // the terrain. 0.41 is that measured correction, not another guess - re-measure with
+  // Box3 on the body SkinnedMesh (excluding the health-bar/warning sprites, which are
+  // children of this same group and would inflate the box) if the model changes again.
   const bodyPivot = new THREE.Group();
-  rat.position.y = 0.32;
+  rat.position.y = 0.41;
   bodyPivot.add(rat);
   group.add(bodyPivot);
 

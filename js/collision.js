@@ -3,11 +3,22 @@ import * as THREE from 'three';
 /**
  * Circle-based collision for the player against solid world objects.
  *
- * Everything here is 2D in the XZ plane. This game is played from a fixed top-down
- * camera on flat ground, and every solid thing in it is roughly round from above, so
- * circles are not an approximation worth apologising for - they are the actual shape.
- * A physics engine, or even swept AABBs, would be far more machinery than the problem
- * needs.
+ * Everything here is 2D in the XZ plane. That is not because the ground is flat - it is
+ * not: terrain.js displaces the ground mesh into a heightfield sampled from the ground
+ * texture's own pixels, with rock mounds up to +3.2, crevices down to -2.8, and a lake
+ * basin 2.2 deep. Height is simply not this file's problem. Nothing ever collides with
+ * the ground; things CONFORM to it, each reading getTerrainHeight(x, z) for its own Y
+ * (see PlayerController, which also samples four neighbours to tilt onto the slope).
+ * With the vertical axis resolved elsewhere and a fixed top-down camera, what is left
+ * for collision is genuinely horizontal - and every solid thing in the game is roughly
+ * round from above, so circles are not an approximation worth apologising for, they are
+ * the actual shape. A physics engine, or even swept AABBs, would be far more machinery
+ * than the problem needs.
+ *
+ * The consequence worth knowing: a collider is a vertical cylinder of infinite height,
+ * so you cannot pass over or under one. Nothing in this game asks to - there is no
+ * jumping and no verticality beyond conforming to the surface - but an overhang or a
+ * bridge would need more than this.
  *
  * Resolution is push-out plus slide: the player is pushed to the surface of whatever
  * they overlap, and only the component of their velocity pointing INTO the obstacle is

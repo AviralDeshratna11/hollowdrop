@@ -23,12 +23,15 @@ const TICK_SECONDS = TICK_MS / 1000;
 // --- Ring motion ------------------------------------------------------------------
 // The ring is deliberately NOT a direct readout of itemsLoaded/itemsTotal. Three
 // things about the real numbers make that read as jitter rather than progress:
-//   - There are only ~11 tracked items, so each one is a ~9% jump.
-//   - The two character bundles are the overwhelming majority of the BYTES but only
-//     a few of the items, so the ring would sit dead still for seconds at a time.
-//   - itemsTotal GROWS mid-load (each bundle's four textures only register with the
-//     manager once loadFbxCharacter actually calls for them), so loaded/total can
-//     genuinely drop - the ring would visibly run backwards.
+//   - There are only a handful of tracked items, so each one is a large jump. This
+//     got MORE pronounced when the characters became single GLBs with embedded
+//     textures: each one used to be five items (an FBX plus four PBR maps) and is
+//     now one, so the item count dropped by roughly two thirds.
+//   - Those character models are the overwhelming majority of the BYTES but only a
+//     few of the items, so the ring would sit dead still for seconds at a time.
+//   - itemsTotal can still GROW mid-load, since a loader only registers with the
+//     manager once it actually calls for a file, so loaded/total can genuinely drop
+//     - the ring would visibly run backwards.
 // So: the real number only ever ratchets forward (_realProgress), a creep keeps the
 // ring moving while nothing is reporting, and the displayed value eases toward
 // whichever is further along. Combined with the CSS transition on stroke-dashoffset

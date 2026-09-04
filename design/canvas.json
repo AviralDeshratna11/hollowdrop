@@ -1,0 +1,11 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 390, "h": 844, "title": "In situ (phone)" },
+    { "file": "States.dc.html", "x": 510, "y": 0, "w": 560, "h": 640, "title": "Banner states + pulse" }
+  ],
+  "annotations": [
+    { "id": "clearance", "x": 0, "y": -130, "w": 390, "text": "Banner spans left:16 / right:92 so it always clears the 60px action stack + its 16px margin. pointer-events:none on the bar; only Skip takes taps." },
+    { "id": "tone", "x": 510, "y": -130, "w": 560, "text": "Mint = instruction. Amber = pressure (heavy / hungry). Pulse colour matches each button's own resting colour." }
+  ],
+  "launch": { "view": "canvas" }
+}
