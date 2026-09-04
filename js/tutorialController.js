@@ -69,7 +69,7 @@ export const TUTORIAL_STEPS = [
   {
     id: 'absorb',
     requires: ['move'],
-    text: 'Roll over glowing things to absorb them.',
+    text: 'Approach a glowing thing and tap it. Inspect it, then Acquire to absorb it.',
     doneEvent: 'absorbed',
   },
   {

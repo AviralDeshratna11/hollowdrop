@@ -86,7 +86,7 @@ function getIconHtml(type) {
 
 /** Pairs with getIconHtml()/GENOME_ICON_URL - call once per <img data-icon-fallback>
  *  after it's actually in the DOM (spec section 74: never show a broken-image icon). */
-function wireIconFallbacks(root) {
+export function wireIconFallbacks(root) {
   root.querySelectorAll('img[data-icon-fallback]').forEach((img) => {
     img.addEventListener('error', () => {
       const type = img.dataset.iconFallback;
@@ -124,8 +124,11 @@ function buildInventoryStacks(items) {
 }
 
 /** Combines a stack with its (authoritative, never duplicated) RESOURCE_TYPES metadata
- *  into everything the grid cell / detail panel need to render (spec section 28). */
-function getInventoryItemUIData(stack) {
+ *  into everything the grid cell / detail panel need to render (spec section 28).
+ *  Exported so ResourceInteractionController's world-resource Inspect panel can reuse
+ *  the exact same icon/category/energy/mutation-ingredient/recipe-lookup logic rather
+ *  than maintaining a second copy of it for resources still sitting in the world. */
+export function getInventoryItemUIData(stack) {
   const meta = RESOURCE_TYPES[stack.type];
   return {
     type: stack.type,

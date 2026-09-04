@@ -79,8 +79,13 @@ function createLabelSprite(text) {
 }
 
 /**
- * Owns every world resource: spawning, idle animation, proximity attraction,
- * and the absorb/reject state machine. Pure proximity checks - no raycasting.
+ * Owns every world resource: spawning, idle animation, and the attract/absorb/reject
+ * state machine. Resources no longer attract or absorb automatically on proximity -
+ * the only way into the 'attracting' state is an explicit beginAcquire() call from
+ * ResourceInteractionController, itself only reachable after the player has inspected
+ * the resource and pressed Acquire (see that file). Everything downstream of that call
+ * (the pull-toward-player animation, the final absorb-or-reject-if-full branch, the
+ * Living Inventory hookup) is completely unchanged from when proximity triggered it.
  */
 export class ResourceManager {
   constructor(scene, inventoryManager, uiManager, playerController, mutationSystem = null) {
@@ -185,6 +190,24 @@ export class ResourceManager {
     return this.resources.filter((r) => position.distanceToSquared(r.mesh.position) < radiusSq);
   }
 
+  /**
+   * The one authoritative entry point for collecting a resource, called only by
+   * ResourceInteractionController after the player has pressed Acquire on an inspected
+   * resource. Starts the exact same pull-toward-player + shrink absorption animation
+   * (and, if the inventory is already full, the same reject-and-bounce-away animation)
+   * that used to trigger automatically on proximity - only the trigger changed, not the
+   * animation, the capacity check, or the eventual inventoryManager.addItem() call.
+   * Returns false without effect if the resource can't currently be picked up at all
+   * (already mid-animation, still in its post-drop recollection cooldown, etc.) - the
+   * caller is expected to have already validated distance before calling this.
+   */
+  beginAcquire(resource) {
+    if (resource.state !== 'idle' || !resource.collectible || resource.isPhysicsActive) return false;
+    resource.state = 'attracting';
+    resource.stateTime = 0;
+    return true;
+  }
+
   removeResource(resource) {
     this.scene.remove(resource.mesh);
     resource.mesh.traverse((child) => {
@@ -247,17 +270,21 @@ export class ResourceManager {
         this._updateRejected(resource, deltaTime);
         continue;
       }
-
-      const distSq = playerPosition.distanceToSquared(resource.mesh.position);
-
-      if (distSq < ABSORB_RADIUS_SQ) {
-        this._tryAbsorb(resource, playerPosition);
-      } else if (distSq < ATTRACTION_RADIUS_SQ) {
-        this._updateAttracting(resource, deltaTime, playerPosition, distSq);
-      } else {
-        resource.state = 'idle';
-        this._applyIdleAnimation(resource);
+      if (resource.state === 'attracting') {
+        // Only ever entered via beginAcquire() (an explicit Acquire press from
+        // ResourceInteractionController) - proximity alone no longer starts this.
+        // Once committed, it keeps pulling every frame regardless of live distance,
+        // the same pull-then-shrink-then-absorb animation this always played.
+        const distSq = playerPosition.distanceToSquared(resource.mesh.position);
+        if (distSq < ABSORB_RADIUS_SQ) {
+          this._tryAbsorb(resource, playerPosition);
+        } else {
+          this._updateAttracting(resource, deltaTime, playerPosition, distSq);
+        }
+        continue;
       }
+
+      this._applyIdleAnimation(resource);
     }
 
     this.particles.update(deltaTime, playerPosition);

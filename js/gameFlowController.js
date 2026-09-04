@@ -16,6 +16,10 @@ export const GAME_STATES = {
   // AI/timer/physics system - opening the panel freezes all of that for free, the same
   // way REVEAL already does for the info-card overlay.
   INVENTORY: 'inventory',
+  // The world-resource Inspect panel, open (see openResourceInspect()/
+  // closeResourceInspect() below). Exact same reasoning as INVENTORY above - one more
+  // value under the same isPlayingState gate rather than a parallel pause boolean.
+  RESOURCE_INSPECT: 'resource_inspect',
 };
 
 export const GAME_FLOW_CONFIG = {
@@ -213,6 +217,24 @@ export class GameFlowController {
    *  showReveal()/showOpeningObjective() use for their own dismissal. */
   closeInventory() {
     if (this.state === GAME_STATES.INVENTORY) this.state = GAME_STATES.PLAYING;
+  }
+
+  /**
+   * Opens the world-resource Inspect panel as a full gameplay pause (movement, AI,
+   * energy drain, and the mutation timer all pause while it's up) - byte-for-byte the
+   * same shape as openInventory() above. Refusing outside PLAYING means this can never
+   * be opened on top of the Bag panel, a reveal card, or any other overlay without any
+   * extra check at the call site (see ResourceInteractionController).
+   */
+  openResourceInspect() {
+    if (this.state !== GAME_STATES.PLAYING) return false;
+    this.state = GAME_STATES.RESOURCE_INSPECT;
+    return true;
+  }
+
+  /** Only resumes if nothing else claimed the state while the panel was up. */
+  closeResourceInspect() {
+    if (this.state === GAME_STATES.RESOURCE_INSPECT) this.state = GAME_STATES.PLAYING;
   }
 
   /** The opening objective card. Shown once per session, not once per run - a player

@@ -3,10 +3,11 @@ import { InputController } from './inputController.js?v=5.3';
 import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
 import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js?v=5.3';
 import { ResourceManager } from './resourceManager.js?v=5.3';
-import { UIManager } from './uiManager.js?v=5.3';
+import { UIManager } from './uiManager.js?v=5.5';
 import { InventoryUI } from './inventoryUI.js?v=5.3';
 import { InventoryInteractionController } from './inventoryInteraction.js?v=5.3';
 import { InventoryWheelController } from './inventoryWheel.js?v=5.3';
+import { ResourceInteractionController } from './resourceInteractionController.js?v=5.5';
 import { BurdenSystem } from './burdenSystem.js?v=5.3';
 import { PlayerHealthState, DEBUG_HEALTH } from './playerHealth.js?v=5.3';
 import { PredatorController, DEBUG_PREDATOR_COMBAT, VENOM_RAT_BOSS_LOOT } from './predatorController.js?v=5.3';
@@ -34,7 +35,7 @@ import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=5.3';
 import { scatterWorldDressing, rockColliderRadius, realignDressingToTerrain } from './worldDressing.js?v=5.3';
 import { CollisionSystem } from './collision.js?v=5.3';
 import { updateSlimeCreatures } from './slimeCreature.js?v=5.3';
-import { TutorialController } from './tutorialController.js?v=5.3';
+import { TutorialController } from './tutorialController.js?v=5.5';
 import { ScreenShake } from './screenShake.js?v=5.3';
 import { DamageNumberController } from './damageNumbers.js?v=5.3';
 import { RadarController } from './radarController.js?v=5.3';
@@ -293,7 +294,7 @@ const inventoryInteraction = new InventoryInteractionController({
   mutationSystem,
   playerRadius: PLAYER_RADIUS,
 });
-inputController.setGestureGuard((e) => inventoryInteraction.tryBeginItemTouch(e));
+inputController.setGestureGuard((e) => inventoryInteraction.tryBeginItemTouch(e) || resourceInteractionController.tryBeginResourceTouch(e));
 
 const inventoryWheel = new InventoryWheelController({
   canvas,
@@ -691,6 +692,10 @@ const inventoryUI = new InventoryUI(inventoryManager, {
     inputController.cancel();
     inventoryInteraction.cancelActiveGesture();
     inventoryWheel.cancel();
+    // Inspect must never stack under the Bag panel (spec section 54) - and since both
+    // share the same PLAYING-only gate, openInventory() below would silently fail while
+    // Inspect still held the state, so this has to close it first, not merely after.
+    resourceInteractionController.forceClose();
     gameFlowController.openInventory();
   },
   onClose: () => gameFlowController.closeInventory(),
@@ -810,7 +815,12 @@ const deathRespawnManager = new DeathRespawnManager({
     );
     cameraLookTarget.copy(player.position);
   },
-  onPlayerDeath: () => runStats.deaths++,
+  onPlayerDeath: () => {
+    // Close Inspect immediately on death (spec section 52) - never collect the
+    // resource, never leave a stale target/highlight/ring pointing at empty air.
+    resourceInteractionController.forceClose();
+    runStats.deaths++;
+  },
 });
 
 // Radar reads the tracked death drop from here to show a recovery marker (RadarController
@@ -959,6 +969,7 @@ function resetGame() {
   mutationSystem.reset();
   mutationSystem.onInventoryChanged();
 
+  resourceInteractionController.reset();
   resourceManager.clearAll();
   resourceManager.particles.clear();
   combatVFX.clear();
@@ -1002,6 +1013,23 @@ const gameFlowController = new GameFlowController({
   runStats,
   resetGame,
   slimeReady: amoeba.ready,
+});
+
+// --- Resource Interaction: Inspect -> Acquire ------------------------------------
+// Replaces automatic proximity pickup entirely (see resourceManager.js's own
+// beginAcquire()/removed auto-attract) - approaching a resource only highlights it now;
+// collecting it requires tapping it (or its ring prompt) to Inspect, then pressing
+// Acquire in the panel. See resourceInteractionController.js for the full flow.
+const resourceInteractionController = new ResourceInteractionController({
+  canvas,
+  camera,
+  scene,
+  player,
+  resourceManager,
+  inventoryManager,
+  burdenSystem,
+  mutationSystem,
+  gameFlowController,
 });
 
 // --- In-game tutorial -----------------------------------------------------------
@@ -1125,6 +1153,7 @@ window.__hollowdrop = {
   inventoryInteraction,
   inventoryWheel,
   inventoryUI,
+  resourceInteractionController,
   collisionSystem,
   playerHealth,
   metabolismSystem,
@@ -1298,6 +1327,9 @@ function animate() {
     const activePlayerPosition = deathRespawnManager.isPlaying ? player.position : OFFSCREEN_POSITION;
     resourceManager.update(deltaTime, activePlayerPosition);
     stoneClusterManager.update(deltaTime, activePlayerPosition);
+    // canAct-gated (not just isPlayingState) - interacting with a world resource is an
+    // action the same way movement/combat are, so it stops the instant either does.
+    if (canAct) resourceInteractionController.update(deltaTime);
     deathRespawnManager.update(deltaTime);
     // Last, so every condition it reads (load, energy, form, radar blips) is this
     // frame's settled value. Inside the gate on purpose: that is what freezes the
