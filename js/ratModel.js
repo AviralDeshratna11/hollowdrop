@@ -45,8 +45,8 @@ import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 // sibling texture URLs to keep in sync, and a real skeleton to drive.
 //
 // The boss was the last thing in the game still faking locomotion: models/plague_sludge_
-// rat/ used to hold an un-rigged FBX with no skin or animation data at all, so the boss
-// could only ever be bobbed and rocked as a whole. rat_walk.glb replaced it with the same
+// rat/rat.fbx has no skin or animation data at all, so it could only ever be bobbed and
+// rocked as a whole (see WALK CYCLE below). rat_walk.glb replaces it with the same
 // 181-deform-bone Rigify build the player's form uses, authored per ASSET_PIPELINE.md.
 // The old .fbx and its four .png maps are still on disk and are now referenced by
 // nothing - ~40 MB, safe to delete once this is signed off.
