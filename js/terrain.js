@@ -3,42 +3,37 @@
 /**
  * 3D Terrain Elevation Engine - Texture-Driven
  *
- * Directly correlates subterranean 3D elevation with the visual features of cave_ground.jpg:
+ * Directly correlates subterranean 3D elevation with the visual features of the
+ * generated 3x3 cave-ground atlas:
  * - Uplifts craggy rock mounds, stone ridges, and boulder formations (+1.5m to +3.2m).
  * - Downlifts cyan bioluminescent pools, crystal waters, and crater basins (-1.5m to -2.8m).
  * - Downlifts dark subterranean crevices, fissures, and shadows (-1.2m to -2.2m).
  * - Elevates purple fungal crater rims (+1.8m to +2.4m).
  * - Leaves cobblestone trails and pathways at neutral baseline with organic stone micro-variation.
- * - Samples texture coordinates using exact MirroredRepeatWrapping (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture setup).
+ * - Samples atlas coordinates over the same world bounds used by main.js's ground mesh.
  * - Uses bilinear filtering and spatial smoothing for seamless, climbable, tactile 3D terrain.
  */
 
-// Must match the ground plane's own size and the texture's repeat exactly (see
-// main.js's own "--- Ground ---" block) - this module's whole heightmap is a sample of
-// the SAME texture at the SAME UV mapping the visible mesh uses, so any mismatch here
-// puts the 3D bumps in the wrong place relative to what the texture actually shows.
+// Must match the ground plane's own size exactly (see main.js's own "--- Ground ---"
+// block) - this module's whole heightmap is a sample of the SAME atlas at the SAME UV
+// mapping the visible mesh uses, so any mismatch here puts the 3D bumps in the wrong
+// place relative to what the texture actually shows.
 export const GROUND_SIZE = 90;
-export const TEXTURE_REPEAT = 3;
+export const TEXTURE_REPEAT = 3; // visual tile count inside cave_ground_generated_atlas.png
 
-const HEIGHTMAP_RES = 256;
+const HEIGHTMAP_RES = 512;
 let heightmapData = null;
 let isHeightmapReady = false;
 const onReadyCallbacks = [];
 const registeredGeometries = new Set();
 
 /**
- * Normalized repeat fractional calculation matching WebGL MirroredRepeatWrapping (the
- * ground texture's own wrap mode - see main.js's own "--- Ground ---" block). Plain
- * modulo wrapping would sample this heightmap as if every tile were identical, but
- * mirrored tiles alternate - every other tile is flipped - so without this, the 3D
- * terrain bumps would land correctly in tile 0 and backwards in tile 1, tile 2, etc.
- * A period-2 triangle wave does it: within each pair of tiles, the first half rises
- * 0->1 (a normal tile) and the second half falls 1->0 (that same tile mirrored).
+ * Normalized atlas fractional calculation matching the single non-repeating ground
+ * mesh. The generated image already contains nine distinct regions, so the sampler
+ * should move once across the whole atlas instead of repeating or mirroring.
  */
-function repeatFrac(val) {
-  let t = val % 2.0;
-  if (t < 0) t += 2.0;
-  return t <= 1.0 ? t : 2.0 - t;
+function atlasFrac(val) {
+  return Math.min(1.0, Math.max(0, val));
 }
 
 /**
@@ -46,13 +41,13 @@ function repeatFrac(val) {
  * used before or in absence of image decoding.
  */
 function sampleAnalyticalHeight(worldX, worldZ) {
-  const u = repeatFrac(((worldX / GROUND_SIZE) + 0.5) * TEXTURE_REPEAT);
-  const v = repeatFrac(((-worldZ / GROUND_SIZE) + 0.5) * TEXTURE_REPEAT);
+  const u = atlasFrac((worldX / GROUND_SIZE) + 0.5);
+  const v = atlasFrac((-worldZ / GROUND_SIZE) + 0.5);
 
   // Approximate texture features analytically
-  const wave1 = Math.sin(u * Math.PI * 2) * Math.cos(v * Math.PI * 2);
-  const wave2 = Math.sin(u * Math.PI * 4 + 1.2) * Math.cos(v * Math.PI * 4 - 0.7) * 0.6;
-  const wave3 = Math.cos(u * Math.PI * 8 - 0.5) * Math.sin(v * Math.PI * 8 + 0.3) * 0.3;
+  const wave1 = Math.sin(u * Math.PI * 6) * Math.cos(v * Math.PI * 6);
+  const wave2 = Math.sin(u * Math.PI * 12 + 1.2) * Math.cos(v * Math.PI * 12 - 0.7) * 0.6;
+  const wave3 = Math.cos(u * Math.PI * 24 - 0.5) * Math.sin(v * Math.PI * 24 + 0.3) * 0.3;
 
   const combined = wave1 + wave2 + wave3;
   return combined * 1.4;
@@ -72,7 +67,7 @@ export function onTerrainElevationReady(cb) {
 }
 
 /**
- * Decodes image data from cave_ground.jpg onto an offscreen canvas and constructs
+ * Decodes image data from the generated cave ground atlas onto an offscreen canvas and constructs
  * a high-fidelity, smoothed elevation grid based on the texture features.
  */
 export function initTextureElevation(image, onReady = null) {
@@ -195,24 +190,24 @@ export function initTextureElevation(image, onReady = null) {
 if (typeof Image !== 'undefined') {
   const autoImg = new Image();
   autoImg.crossOrigin = 'anonymous';
-  autoImg.src = 'assets/textures/cave_ground_new.png';
+  autoImg.src = 'assets/textures/cave_ground_generated_atlas.png?v=4';
   autoImg.onload = () => {
     initTextureElevation(autoImg);
   };
 }
 
 /**
- * Samples the texture heightmap using bilinear filtering and RepeatWrapping.
+ * Samples the texture heightmap using bilinear filtering over the generated atlas.
  */
 function sampleTextureHeight(worldX, worldZ) {
   if (!heightmapData || !isHeightmapReady) {
     return sampleAnalyticalHeight(worldX, worldZ);
   }
 
-  // Normalized UV coordinates [0..TEXTURE_REPEAT]
+  // Normalized UV coordinates [0..1] over the full 3x3 atlas.
   // PlaneGeometry localY is -worldZ; WebGL texture flipY places UV (0,1) at image top (y=0)
-  const uFrac = repeatFrac(((worldX / GROUND_SIZE) + 0.5) * TEXTURE_REPEAT);
-  const vFrac = repeatFrac(((-worldZ / GROUND_SIZE) + 0.5) * TEXTURE_REPEAT);
+  const uFrac = atlasFrac((worldX / GROUND_SIZE) + 0.5);
+  const vFrac = atlasFrac((-worldZ / GROUND_SIZE) + 0.5);
 
   const fx = uFrac * (HEIGHTMAP_RES - 1);
   const fy = (1.0 - vFrac) * (HEIGHTMAP_RES - 1);

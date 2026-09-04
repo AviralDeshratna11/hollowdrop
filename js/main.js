@@ -38,7 +38,7 @@ import { ScreenShake } from './screenShake.js?v=5.3';
 import { DamageNumberController } from './damageNumbers.js?v=5.3';
 import { RadarController } from './radarController.js?v=5.3';
 import { RadarHUD } from './radarHUD.js?v=5.3';
-import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady, LAKE_CONFIG } from './terrain.js?v=5.3';
+import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady, LAKE_CONFIG } from './terrain.js?v=5.4';
 import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
@@ -160,32 +160,25 @@ scene.add(rimLight);
 // within roughly 30-34 units of the origin, so a 90-unit plane (45-unit half-width)
 // covers all of it with margin to spare.
 //
-// The texture repeats across this plane rather than stretching once - at repeat 1, the
-// image's own big rock formations each spanned ~13 world units, dwarfing the player
-// (PLAYER_RADIUS 0.6) far more than a real screenshot comparison showed they should
-// (individual rock/pebble detail read as noticeably smaller, more numerous, relative to
-// the slime). Tiling at TEXTURE_REPEAT below shrinks each instance of those same
-// features to a size that actually matches. MirroredRepeatWrapping rather than plain
-// RepeatWrapping: mirroring matches every tile edge to a flipped copy of itself with no
-// manual seam work (this source was never authored as a seamless tile - a real
-// screenshot showed a hard discontinuity line at every plain-repeat attempt tried
-// before this), at the cost of a faint symmetry between neighboring tiles that reads
-// far better than that seam did. terrain.js's own GROUND_SIZE/TEXTURE_REPEAT constants
-// are updated to match this pair exactly (its heightmap sampling needs the same values
-// used here to stay aligned with what's actually visible) - keep the two in sync if
-// this ever changes again.
+// The ground is a single 3072px generated 3x3 atlas, not one repeated tile. The nine generated
+// regions also exist as assets/textures/ground_tiles/cave_ground_generated_tile_r*c*.png for
+// inspection/reuse, but using the full atlas on this mesh keeps filtering continuous
+// across tile boundaries and avoids both mirror symmetry and visible edge seams.
+// terrain.js samples this same atlas over the same world bounds, so visible crags,
+// basins, and glowing patches line up with the 3D elevation the player walks on.
 const GROUND_SIZE = 90;
 const GROUND_SEGMENTS = 320;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
 
-const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_new.png', (tex) => {
+const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_generated_atlas.png?v=4', (tex) => {
   initTextureElevation(tex.image);
 });
-groundTexture.wrapS = THREE.MirroredRepeatWrapping;
-groundTexture.wrapT = THREE.MirroredRepeatWrapping;
-const GROUND_TEXTURE_REPEAT = 3; // odd - centers a tile on the origin (the player's spawn point) rather than a seam
-groundTexture.repeat.set(GROUND_TEXTURE_REPEAT, GROUND_TEXTURE_REPEAT);
+groundTexture.wrapS = THREE.ClampToEdgeWrapping;
+groundTexture.wrapT = THREE.ClampToEdgeWrapping;
 groundTexture.colorSpace = THREE.SRGBColorSpace;
+groundTexture.minFilter = THREE.LinearMipmapLinearFilter;
+groundTexture.magFilter = THREE.LinearFilter;
+groundTexture.generateMipmaps = true;
 groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
 applyTerrainElevation(groundGeometry);

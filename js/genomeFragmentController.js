@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createGenomeFragmentMesh } from './genomeFragmentModel.js?v=5.3';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 export const FRAGMENT_STATES = {
   EXPOSED: 'exposed',

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createPredatorMesh } from './predatorModel.js?v=5.3';
 import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 export const DEBUG_PREDATOR = false;
 export const DEBUG_PREDATOR_COMBAT = false;

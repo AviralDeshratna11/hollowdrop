@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 import { makeRng } from './worldDressing.js?v=5.3';
 import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 

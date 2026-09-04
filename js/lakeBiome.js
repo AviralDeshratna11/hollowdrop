@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LAKE_CONFIG, isPointInLake, getWaterDepth, getTerrainHeight } from './terrain.js?v=5.3';
+import { LAKE_CONFIG, isPointInLake, getWaterDepth, getTerrainHeight } from './terrain.js?v=5.4';
 import {
   playWaterSplashSound,
   playWaterWadeSound,

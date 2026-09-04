@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getTerrainHeight, isPointInLake, LAKE_CONFIG } from './terrain.js?v=5.3';
+import { getTerrainHeight, isPointInLake, LAKE_CONFIG } from './terrain.js?v=5.4';
 
 // --- Tunable movement architecture ---------------------------------------
 export const PLAYER_MAX_SPEED = 6.0;      // world units / second at full swipe

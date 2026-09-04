@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createApexMesh } from './apexModel.js?v=5.3';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 import {
   playApexRoarSound,
   playApexAttackSound,

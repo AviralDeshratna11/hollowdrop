@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
 import { createResourceMesh } from './resourceModels.js?v=5.3';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 export const DEBUG_PROJECTILE = false;
 

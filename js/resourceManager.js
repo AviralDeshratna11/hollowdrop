@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
 import { createResourceMesh } from './resourceModels.js?v=5.3';
 import { AbsorbParticles } from './absorbParticles.js?v=5.3';
-import { getTerrainHeight, isPointInLake, LAKE_CONFIG } from './terrain.js?v=5.3';
+import { getTerrainHeight, isPointInLake, LAKE_CONFIG } from './terrain.js?v=5.4';
 
 /**
  * Distinguishes heavy sinking resources (stone, iron, glands) from light buoyant ones (spores, mushrooms, DNA).

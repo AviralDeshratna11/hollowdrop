@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 /**
  * boundaryEnvironment.js — Complete Subterranean Cavern Enclosure & Bio-Forest System

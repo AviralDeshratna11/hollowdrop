@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 /**
  * Decorative world props - dark rocks and glowing toxic flora. Originally lived

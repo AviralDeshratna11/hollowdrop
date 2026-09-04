@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
 import { EXPEL_PHYSICS } from './resourceManager.js?v=5.3';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 export const WHEEL_CONFIG = {
   // How long the press has to be held before the wheel opens.

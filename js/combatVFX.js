@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 // Shared geometries for efficiency
 const FANG_UPPER_GEOM = new THREE.ConeGeometry(0.1, 0.28, 5);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createGlowBeetleMesh } from './preyModel.js?v=5.3';
 import { PLAYER_FORMS } from './playerFormController.js?v=5.3';
 import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
-import { getTerrainHeight } from './terrain.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 export const DEBUG_PREY = false;
 
