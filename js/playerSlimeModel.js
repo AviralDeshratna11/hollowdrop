@@ -89,8 +89,17 @@ const DISPLACEMENT_CONFIG = {
   detailAmplitude: 0.008,
   detailFrequency: 3.2,
   detailSpeed: 1.0,
-  tailLength: 0.34, // a real streaming/trailing tail while moving, not a lean
-  tailPinch: 0.6,
+  // Tail settings are MESH-SPECIFIC, not universal - these were retuned when the model
+  // became slime.glb. The tail pushes each vertex along +Z proportionally to its own
+  // distance from the mesh origin, then pinches the cross-section. On the amoeba's
+  // icosphere that reads as a rounded teardrop, because every direction sits at the same
+  // radius. This mesh is a flattened disc (2.00 x 1.15 x 2.00 - 43% shorter in Y than
+  // wide), so its +Z vertices are already the furthest out, get pushed the furthest
+  // again, and then narrow to 40% of their width: a hard cone rather than a trail. The
+  // old FBX tolerated 0.34/0.6; this geometry needs roughly a third of that to read the
+  // same way. If a future model changes shape again, these two numbers are the dial.
+  tailLength: 0.12, // a trailing lean while moving, not a drawn-out point
+  tailPinch: 0.22,
   streamlining: 0.45, // lower than the amoeba's own 0.6 - tendrils should survive at speed, not fully smooth away
   loadSwell: 0.1,
 };
