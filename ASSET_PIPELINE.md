@@ -75,6 +75,40 @@ armature, or you ship all of them.
 **Rigify bone families:** `DEF-` deform the mesh; `ORG-`/`MCH-` are control and mechanism
 bones. The rat rig is 760 bones total, **181 deform**. Only DEF- matters to three.js.
 
+**Orphaned actions get exported too.** `animation_data.action = None` only UNASSIGNS an
+action; it does not delete it, and `use_fake_user = True` then stops Blender ever
+collecting it. Iterating on a cycle (rebuilding it a few times to tune a number) silently
+leaves `Walk.001 … Walk.00N` in the file, and the exporter ships **all of them** — 543
+channels each. `glb_inspect.py` catches it immediately (it prints one `--- clip --- `
+block per clip). Purge before exporting:
+
+```python
+keep = rig.animation_data.action
+for a in list(bpy.data.actions):
+    if a is not keep:
+        a.use_fake_user = False
+        bpy.data.actions.remove(a)
+keep.name = "Walk"
+```
+
+**`IK_Stretch` hides over-reach instead of revealing it.** Rigify limbs ship with
+`IK_Stretch = 1.0`, so an IK target placed beyond the limb's reach STRETCHES the bones
+rather than stopping — the mesh rubber-bands and it is easy to miss in a small viewport.
+Check numerically: a chain's true no-stretch reach is the sum of its rest bone lengths,
+and anything demanded beyond that is stretch.
+
+```python
+reach = sum(rig.data.bones[b].length for b in chain)          # e.g. thigh..foot
+demand = (rig.pose.bones[root].head - rig.pose.bones[tip].tail).length
+over_pct = (demand / reach - 1.0) * 100                       # > 0 means stretching
+```
+
+This bites hardest when the **bind pose is asymmetric**. On the boss rat the front-left
+paw rests 0.34 further forward than the front-right (on a 2.0-long body), so a symmetric
+swing pushed that one limb 8.8% past reach while the other three still had 11-18% to
+spare. The fix is a per-paw bias on that limb's swing CENTRE, not a shorter stride for
+all four — shortening globally costs three good limbs their readability to rescue one.
+
 ---
 
 ## 3. Authoring a walk-in-place cycle
@@ -272,7 +306,12 @@ readability instead. Expect the same trade on any new creature.
   This blocks automated in-browser verification, so fix it before the next asset job.
 - `models/cute_rat/` (13 MB) is now referenced by nothing — the GLB replaced it. Delete
   when you're confident.
-- `rat_walk.glb` geometry is still 66,536 triangles (textures were optimised, mesh wasn't).
-- The **boss** rat (`'venom'` variant, `predatorModel.js`) still uses the procedural
-  bob/pitch/roll gait, because its FBX has no skeleton to drive. Only the player's
-  `'cute'` variant is skeletally animated.
+- The PLAYER's `models/rat_walk.glb` is still 66,536 triangles (textures were optimised,
+  mesh wasn't). For contrast the boss's model is **5,534** - decimating before rigging,
+  as step 1 of the checklist says, is what makes that difference.
+- ~~The **boss** rat still uses the procedural bob/pitch/roll gait.~~ **RESOLVED** -
+  the boss now runs `models/plague_sludge_rat/rat_walk.glb`, a rigged 181-deform-bone
+  build authored with this document. Both variants are skeletal; the procedural gait
+  survives only as the pre-load placeholder-sphere fallback.
+- `models/plague_sludge_rat/rat.fbx` and its four `.png` maps (~40 MB) are now
+  referenced by nothing. Delete when you are confident.

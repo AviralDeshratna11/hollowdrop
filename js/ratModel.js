@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { loadFbxCharacter } from './fbxCharacterLoader.js?v=5.3';
 import { loadGltfCharacter } from './gltfCharacterLoader.js?v=5.3';
 import { registerSlimeUpdater } from './slimeCreature.js?v=5.3';
 import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
@@ -21,41 +20,39 @@ import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
  * existing countdown-glow pulse still visibly lights the creature up, just as a
  * whole-body glow instead of ear/tail highlights.
  *
- * TWO GAITS live here, because the two variants are two different assets:
+ * BOTH variants are rigged GLBs now, each with a 181-deform-bone armature and a baked
+ * four-beat "Walk" clip driven by an AnimationMixer whose timeScale is the measured
+ * travel speed - so both actually walk instead of vibrating:
  *
- *   'cute' (the PLAYER's form) is now models/rat_walk.glb - a genuinely rigged mesh with
- *      a 181-deform-bone armature and a baked four-beat "Walk" clip. Its legs are driven
- *      by an AnimationMixer whose timeScale is the measured travel speed, so it actually
- *      walks instead of vibrating. This replaces the Crystal Violet Mouse mesh outright:
- *      it is a different model with its own textures, so the player's rat LOOKS
- *      different now, not just animates differently.
+ *   'cute'  = the PLAYER's form, models/rat_walk.glb
+ *   'venom' = the BOSS (predatorModel.js), models/plague_sludge_rat/rat_walk.glb
  *
- *   'venom' (the BOSS, predatorModel.js) stays on the un-rigged Plague Sludge Rat FBX
- *      and therefore keeps the procedural bob/pitch/roll fake below. That fake is the
- *      only locomotion a rig-less mesh can have, and re-skinning the boss is out of
- *      scope here - so both paths are kept rather than deleting one and silently
- *      freezing the boss.
+ * Each replaced its predecessor mesh outright rather than merely gaining animation, so
+ * both creatures LOOK different from the versions before them, not just move differently.
+ *
+ * The procedural bob/pitch/roll gait further down is NOT dead code: it is what animates
+ * the placeholder sphere in the window between createRatMesh() returning synchronously
+ * and the GLB actually arriving. It is the only locomotion a rig-less mesh can have,
+ * which is exactly what the placeholder is.
  *
  * Both register through the same registerSlimeUpdater block, which self-measures speed
  * from the group's own world-position delta (the exact idiom slimeCreature.js's own
  * update() uses when no explicit speedRatio is threaded in) so it needs no controller
- * reference; only what it does with that speed differs.
+ * reference.
  */
 
-const RAT_MODEL_URLS = {
-  fbxUrl: 'models/plague_sludge_rat/rat.fbx',
-  baseColorUrl: 'models/plague_sludge_rat/rat_basecolor.png',
-  normalUrl: 'models/plague_sludge_rat/rat_normal.png',
-  roughnessUrl: 'models/plague_sludge_rat/rat_roughness.png',
-  metalnessUrl: 'models/plague_sludge_rat/rat_metallic.png',
-};
-
-// The player's own Venom Rat: a rigged GLB with its textures embedded, so unlike the FBX
-// pairs above it is a single fetch with no sibling texture URLs to keep in sync. Replaces
-// the previous un-rigged Meshy "Crystal Violet Mouse" (models/cute_rat/, still on disk
-// and still referenced by nothing else - safe to delete once this is signed off).
+// BOTH variants are now rigged GLBs with their textures embedded - one fetch each, no
+// sibling texture URLs to keep in sync, and a real skeleton to drive.
+//
+// The boss was the last thing in the game still faking locomotion: models/plague_sludge_
+// rat/rat.fbx has no skin or animation data at all, so it could only ever be bobbed and
+// rocked as a whole (see WALK CYCLE below). rat_walk.glb replaces it with the same
+// 181-deform-bone Rigify build the player's form uses, authored per ASSET_PIPELINE.md.
+// The old .fbx and its four .png maps are still on disk and are now referenced by
+// nothing - ~40 MB, safe to delete once this is signed off.
+const RAT_GLB_URL = 'models/plague_sludge_rat/rat_walk.glb';
 const CUTE_RAT_GLB_URL = 'models/rat_walk.glb';
-const CUTE_RAT_WALK_CLIP = 'Walk';
+const WALK_CLIP = 'Walk';
 
 // Fixed correction so the model's own front lines up with this project's forward
 // convention (Model faces -Z at rotation.y = 0) - verified with an isolated probe
@@ -198,20 +195,13 @@ export function createRatMesh({ variant = 'venom' } = {}) {
   // the transition in either direction is a blend and not a pop.
   let walkBlend = 0;
 
-  const loadPromise = isCute
-    ? loadGltfCharacter({
-        url: CUTE_RAT_GLB_URL,
-        targetRadius: RAT_CONFIG.bodyRadius,
-        facingRotationY: FACING_ROTATION_Y,
-        clipName: CUTE_RAT_WALK_CLIP,
-        materialOptions,
-      })
-    : loadFbxCharacter({
-        ...RAT_MODEL_URLS,
-        targetRadius: RAT_CONFIG.bodyRadius,
-        facingRotationY: FACING_ROTATION_Y,
-        materialOptions,
-      });
+  const loadPromise = loadGltfCharacter({
+    url: isCute ? CUTE_RAT_GLB_URL : RAT_GLB_URL,
+    targetRadius: RAT_CONFIG.bodyRadius,
+    facingRotationY: FACING_ROTATION_Y,
+    clipName: WALK_CLIP,
+    materialOptions,
+  });
 
   loadPromise
     .then(({ group: modelGroup, material, mixer = null, action = null }) => {
