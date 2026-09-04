@@ -3,17 +3,13 @@
 /**
  * 3D Terrain Elevation Engine - Texture-Driven
  *
- * Directly correlates subterranean 3D elevation with the visual features of the ground
- * texture (a single hand-assembled 3x3 mosaic of 9 distinct cave-floor images - see
- * main.js's own "--- Ground ---" block - not one image tiled or mirrored):
+ * Directly correlates subterranean 3D elevation with the visual features of cave_ground.jpg:
  * - Uplifts craggy rock mounds, stone ridges, and boulder formations (+1.5m to +3.2m).
  * - Downlifts cyan bioluminescent pools, crystal waters, and crater basins (-1.5m to -2.8m).
  * - Downlifts dark subterranean crevices, fissures, and shadows (-1.2m to -2.2m).
  * - Elevates purple fungal crater rims (+1.8m to +2.4m).
  * - Leaves cobblestone trails and pathways at neutral baseline with organic stone micro-variation.
- * - Samples texture coordinates using the same 1:1 UV mapping the visible mesh uses
- *   (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture
- *   setup - a single untiled copy, so no wrap-mode repetition to account for).
+ * - Samples texture coordinates using exact MirroredRepeatWrapping (GROUND_SIZE/TEXTURE_REPEAT below, kept in sync with main.js's own ground texture setup).
  * - Uses bilinear filtering and spatial smoothing for seamless, climbable, tactile 3D terrain.
  */
 
@@ -22,7 +18,7 @@
 // the SAME texture at the SAME UV mapping the visible mesh uses, so any mismatch here
 // puts the 3D bumps in the wrong place relative to what the texture actually shows.
 export const GROUND_SIZE = 90;
-export const TEXTURE_REPEAT = 1; // single untiled mosaic - see main.js's own comment
+export const TEXTURE_REPEAT = 3;
 
 const HEIGHTMAP_RES = 256;
 let heightmapData = null;
@@ -31,11 +27,13 @@ const onReadyCallbacks = [];
 const registeredGeometries = new Set();
 
 /**
- * Normalized repeat fractional calculation. At TEXTURE_REPEAT=1 (a single untiled copy
- * - see main.js's own "--- Ground ---" block) every world coordinate maps to u/v inside
- * [0,1] and this is just the identity; kept as a period-2 triangle wave (rather than
- * plain modulo) so this heightmap sampling stays correct if tiling with
- * MirroredRepeatWrapping is ever reintroduced, where every other tile is flipped.
+ * Normalized repeat fractional calculation matching WebGL MirroredRepeatWrapping (the
+ * ground texture's own wrap mode - see main.js's own "--- Ground ---" block). Plain
+ * modulo wrapping would sample this heightmap as if every tile were identical, but
+ * mirrored tiles alternate - every other tile is flipped - so without this, the 3D
+ * terrain bumps would land correctly in tile 0 and backwards in tile 1, tile 2, etc.
+ * A period-2 triangle wave does it: within each pair of tiles, the first half rises
+ * 0->1 (a normal tile) and the second half falls 1->0 (that same tile mirrored).
  */
 function repeatFrac(val) {
   let t = val % 2.0;
@@ -197,7 +195,7 @@ export function initTextureElevation(image, onReady = null) {
 if (typeof Image !== 'undefined') {
   const autoImg = new Image();
   autoImg.crossOrigin = 'anonymous';
-  autoImg.src = 'assets/textures/cave_ground_new.jpg';
+  autoImg.src = 'assets/textures/cave_ground_new.png';
   autoImg.onload = () => {
     initTextureElevation(autoImg);
   };
