@@ -123,6 +123,7 @@ const DISPLACEMENT_CONFIG = {
  */
 export function createPlayerSlimeVisual(radius = 0.6) {
   const group = new THREE.Group();
+  group.renderOrder = 10;
 
   const placeholderMaterial = new THREE.MeshStandardMaterial({
     color: 0x8dffc4,
@@ -134,6 +135,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
     depthWrite: false,
   });
   const placeholderMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), placeholderMaterial);
+  placeholderMesh.renderOrder = 10;
   group.add(placeholderMesh);
 
   let placeholderOcclusion = attachOcclusionOutline(placeholderMesh, {
@@ -217,6 +219,10 @@ export function createPlayerSlimeVisual(radius = 0.6) {
         hasDisplacement: !!displacement,
       });
       modelMaterial = material;
+      modelGroup.renderOrder = 10;
+      modelGroup.traverse((child) => {
+        if (child.isMesh) child.renderOrder = 10;
+      });
       group.add(modelGroup);
       fadeTimer = 0;
 

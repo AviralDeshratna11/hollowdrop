@@ -55,6 +55,7 @@ export class DeathRespawnManager {
     pickRespawnPosition,
     onRespawnCamera,
     onPlayerDeath,
+    slimeTrail = null,
   }) {
     this.player = player;
     this.playerController = playerController;
@@ -70,6 +71,7 @@ export class DeathRespawnManager {
     this.genomeFragmentController = genomeFragmentController;
     this.uiManager = uiManager;
     this.respawnPosition = respawnPosition.clone();
+    this.slimeTrail = slimeTrail;
     // Death respawns pick a random valid spot via this (injected from main.js, which owns
     // world/collision knowledge); a new-run reset / debug forceRespawn still uses the fixed
     // respawnPosition above. Null-safe: without it, every respawn falls back to that spot.
@@ -300,6 +302,7 @@ export class DeathRespawnManager {
     this.playerHealth.reset();
     this.playerHealth.grantInvulnerability(DEATH_CONFIG.respawnInvulnerability);
     this.metabolismSystem.reset(); // never respawn hungry
+    this.slimeTrail?.clear();
 
     // Predator shouldn't already be camping the fresh spawn point.
     this.predatorController.disengage();
