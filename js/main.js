@@ -364,6 +364,7 @@ if (DEBUG_MUTATION) {
 // --- Prey (Glow Beetle) + Venom Bite combat ------------------------------------
 const preyManager = new PreyManager(scene, playerController, playerFormController, resourceManager, uiManager, {
   onDefeated: () => runStats.preyDefeated++,
+  playerHealth, // defeating a beetle absorbs its essence and heals the player (primary heal source)
 });
 
 function populateWorldPrey() {
