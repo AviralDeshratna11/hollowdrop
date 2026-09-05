@@ -1278,11 +1278,14 @@ html, body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  /* Fully opaque: both explicit stops below carry no alpha, and the box's own
-     inset box-shadow (glow) blends against THIS background - already opaque by the
-     time it's applied - not against whatever sits behind the element, so it can't
-     reintroduce see-through the way a translucent gradient stop would. */
-  background: radial-gradient(circle at 50% 40%, rgb(var(--loading-bg-rgb)), rgb(var(--loading-bg-deep-rgb)) 100%);
+  /* Fully opaque with the custom portrait background artwork (assets/ui/title_screen_bg.jpg).
+     Layered with a subtle radial vignette (keeping center loading spinner & top title crisp and
+     readable) over the artwork, with the dynamic --loading-*-rgb gradient underneath as a fallback
+     during initial load/paint. */
+  background:
+    radial-gradient(circle at 50% 45%, rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.52) 100%),
+    url("assets/ui/title_screen_bg.jpg") center/cover no-repeat,
+    radial-gradient(circle at 50% 40%, rgb(var(--loading-bg-rgb)), rgb(var(--loading-bg-deep-rgb)) 100%);
   box-shadow: inset 0 0 min(30vw, 220px) rgb(var(--loading-accent-rgb) / 0.22);
   opacity: 0;
   pointer-events: none;
