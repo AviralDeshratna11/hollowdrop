@@ -55,6 +55,20 @@ const PHYSICS_REST_EPSILON = 0.02; // velocity^2 threshold below which drop phys
 export const DEBUG_RESOURCES = false;
 export const DEBUG_RESOURCE_LABELS = false;
 
+// Ambient consumable renewal: seeded once by spawnTestZone, these used to never come
+// back, so a long session ran dry. This tops each type back up toward a target count on
+// a slow interval (a sustainable trickle - the player still roams to gather). Stone is
+// deliberately absent (it comes from StoneClusterManager); DNA/glands stay kill-earned.
+const AMBIENT_RESPAWN = {
+  interval: 15, // seconds between top-up passes (interval-gated, never per-frame)
+  minRadius: 3, // placement ring around the world origin, matching the initial scatter
+  maxRadius: 18,
+  minPlayerDist: 4, // don't spawn items right on top of the player
+  targets: { spore: 4, mushroom: 4, blue_mushroom: 3, toxic_spore: 4, iron: 4 },
+};
+
+const tempSpawnPos = new THREE.Vector3(); // reused - no per-respawn allocation
+
 let nextResourceId = 1;
 
 function createLabelSprite(text) {
@@ -98,6 +112,7 @@ export class ResourceManager {
     this.resources = [];
     this.particles = new AbsorbParticles(scene);
     this._elapsed = 0;
+    this._respawnTimer = AMBIENT_RESPAWN.interval; // ambient consumable top-up clock
   }
 
   spawnResource(type, position) {
@@ -185,6 +200,43 @@ export class ResourceManager {
     }
   }
 
+  /** Trickle top-up (see AMBIENT_RESPAWN): for each renewable consumable type currently
+   *  below its world target, spawns ONE fresh item at a random ring position clear of the
+   *  player. Only freely-grabbable stock counts (idle + collectible + not mid-physics), so
+   *  items being acquired/expelled don't distort the tally. Reuses spawnResource(), which
+   *  already resolves terrain/lake rest height. */
+  _topUpAmbient(playerPosition) {
+    const counts = {};
+    for (const r of this.resources) {
+      if (r.state === 'idle' && r.collectible && !r.isPhysicsActive && r.type in AMBIENT_RESPAWN.targets) {
+        counts[r.type] = (counts[r.type] || 0) + 1;
+      }
+    }
+
+    const minPlayerDistSq = AMBIENT_RESPAWN.minPlayerDist ** 2;
+    for (const [type, target] of Object.entries(AMBIENT_RESPAWN.targets)) {
+      if ((counts[type] || 0) >= target) continue; // already stocked - one type per tick each
+
+      let x = 0;
+      let z = 0;
+      let placed = false;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = AMBIENT_RESPAWN.minRadius + Math.random() * (AMBIENT_RESPAWN.maxRadius - AMBIENT_RESPAWN.minRadius);
+        x = Math.cos(angle) * radius;
+        z = Math.sin(angle) * radius;
+        if (!playerPosition) { placed = true; break; }
+        const dx = x - playerPosition.x;
+        const dz = z - playerPosition.z;
+        if (dx * dx + dz * dz >= minPlayerDistSq) { placed = true; break; }
+      }
+      if (!placed) continue;
+
+      tempSpawnPos.set(x, 0, z); // y=0 -> spawnResource resolves rest height itself
+      this.spawnResource(type, tempSpawnPos);
+    }
+  }
+
   getNearbyResources(position, radius) {
     const radiusSq = radius * radius;
     return this.resources.filter((r) => position.distanceToSquared(r.mesh.position) < radiusSq);
@@ -224,6 +276,7 @@ export class ResourceManager {
    *  Respawning the configured starting population is the caller's job (main.js). */
   clearAll() {
     for (const resource of [...this.resources]) this.removeResource(resource);
+    this._respawnTimer = AMBIENT_RESPAWN.interval; // fresh trickle clock for the new run
   }
 
   /**
@@ -246,6 +299,14 @@ export class ResourceManager {
 
   update(deltaTime, playerPosition) {
     this._elapsed += deltaTime;
+
+    // Ambient consumable trickle-respawn - interval-gated so the per-type count pass
+    // (one cheap loop) never runs every frame.
+    this._respawnTimer -= deltaTime;
+    if (this._respawnTimer <= 0) {
+      this._respawnTimer = AMBIENT_RESPAWN.interval;
+      this._topUpAmbient(playerPosition);
+    }
 
     for (let i = this.resources.length - 1; i >= 0; i--) {
       const resource = this.resources[i];
