@@ -106,7 +106,18 @@ let viewZoom = 1; // multiplies CAMERA_OFFSET everywhere it's used; set by updat
 /** Recompute viewZoom from the current window aspect, and push fog + far plane out with
  *  it. Called once at startup and from onResize() (covers orientation changes too). */
 function updateViewZoom() {
-  const aspect = window.innerWidth / window.innerHeight;
+  // Guarded because BOTH of these can be 0 before the first real layout - a background
+  // or just-restored tab, a 0-sized iframe, an embedded preview pane, some in-app
+  // browsers. 0/0 is NaN, and an unguarded NaN here does not stay local: it poisons
+  // viewZoom, then camera.aspect, then camera.position via the line below this
+  // function - and updateCamera() only ever LERPS position, so once it is NaN every
+  // subsequent frame lerps NaN into NaN and the game renders BLACK FOREVER. A later
+  // resize repairs aspect and viewZoom but cannot repair position, which is what made
+  // this so confusing to diagnose. Falling back to the framing contract's own aspect
+  // keeps every downstream value finite.
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const aspect = (vw > 0 && vh > 0) ? vw / vh : REFERENCE_ASPECT;
   viewZoom = THREE.MathUtils.clamp(REFERENCE_ASPECT / aspect, 1, CAMERA_MAX_ZOOM_OUT);
   scene.fog.near = FOG_NEAR_BASE * viewZoom;
   scene.fog.far = FOG_FAR_BASE * viewZoom;
@@ -708,6 +719,11 @@ const inventoryUI = new InventoryUI(inventoryManager, {
 const desiredCameraPos = new THREE.Vector3();
 const cameraLookTarget = new THREE.Vector3();
 
+/** True only if all three components are real numbers - see updateCamera()'s own note. */
+function isFiniteVec3(v) {
+  return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+}
+
 function updateCamera(deltaTime) {
   const zoom = memorySequenceController.getCameraZoom();
   const offsetScale = (1 - zoom) * viewZoom;
@@ -723,6 +739,16 @@ function updateCamera(deltaTime) {
   camera.lookAt(cameraLookTarget.x, 0, cameraLookTarget.z);
 
   camera.position.add(screenShake.offset);
+
+  // Belt and braces for the NaN trap described in updateViewZoom(). The guard up there
+  // removes the known cause; this makes ANY future cause survivable. Both of these
+  // smooth toward their target rather than being assigned, so a single non-finite frame
+  // - from a bad viewZoom, a bad shake offset, whatever - would otherwise persist for
+  // the rest of the session with nothing on screen and no error in the console.
+  // desiredCameraPos is always finite now, so snapping to it recovers within one frame.
+  // Costs three comparisons a frame; buys "the view can never get permanently stuck".
+  if (!isFiniteVec3(camera.position)) camera.position.copy(desiredCameraPos);
+  if (!isFiniteVec3(cameraLookTarget)) cameraLookTarget.copy(player.position);
 }
 
 // --- Random death-respawn selection --------------------------------------------
