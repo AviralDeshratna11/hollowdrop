@@ -126,6 +126,7 @@ export class ResourceInteractionController {
     if (this._scanTimer <= 0) {
       this._scanTimer = RESOURCE_INTERACTION_CONFIG.scanInterval;
       this.scanNearbyResources();
+      this._handleResourceContact();
     }
 
     this._updateWorldRing();
@@ -138,6 +139,68 @@ export class ResourceInteractionController {
    *  interaction candidate - it isn't sitting there waiting to be found. */
   _isCandidate(resource) {
     return resource.state === 'idle' && resource.collectible && !resource.isPhysicsActive;
+  }
+
+  /**
+   * The single "you are standing on a resource" handler. Contact is the trigger in both
+   * cases; only the outcome differs by whether the player has met this type before:
+   *
+   *   - never seen it  -> the Inspect panel opens itself and introduces it
+   *   - already met it -> it is collected silently, no prompt, no pause
+   *
+   * Inspect exists to teach a resource, and it only teaches once: re-reading "Heavy
+   * Mineral, 2.0 mass" on the ninth Iron costs two taps and a full gameplay pause (the
+   * panel runs in RESOURCE_INSPECT, which halts movement, AI, energy and the mutation
+   * timer) to convey nothing. So the panel became the discovery moment only, and a type
+   * the player knows behaves the way everything did before the Inspect system existed.
+   * Reloading thrown-rock ammunition mid-fight depends on that - two taps and a pause per
+   * rock is not something you can do while a boss is charging.
+   *
+   * Tap-to-inspect (see _onPointerEnd) still works and is untouched: it remains the way
+   * to look at something you can see but have not walked to yet.
+   *
+   * Runs on the throttled scan tick rather than every frame, and needs no pause guard of
+   * its own: update() is only called while gameFlowController.state === PLAYING, so this
+   * is already inert with a panel open, during death, and on the title screen.
+   */
+  _handleResourceContact() {
+    const acquireSq = RESOURCE_INTERACTION_CONFIG.acquireRadius * RESOURCE_INTERACTION_CONFIG.acquireRadius;
+    const playerPos = this.player.position;
+
+    let nearestUnknown = null;
+    let nearestUnknownDistSq = Infinity;
+
+    // Every resource in range, not just the nearest - walking through a cluster should
+    // pick the cluster up, not one item per pass.
+    for (const resource of this.resourceManager.resources) {
+      if (!this._isCandidate(resource)) continue;
+      const distSq = playerPos.distanceToSquared(resource.mesh.position);
+      if (distSq >= acquireSq) continue;
+
+      if (!this._inspectedTypes.has(resource.type)) {
+        if (distSq < nearestUnknownDistSq) {
+          nearestUnknownDistSq = distSq;
+          nearestUnknown = resource;
+        }
+        continue;
+      }
+
+      // Load-bearing, not merely the capacity rule: beginAcquire() on a full inventory
+      // still starts the pipeline, which then plays the reject-and-bounce animation. On a
+      // repeating tick that would fire every scan for as long as the player stood there.
+      // Checking first means a full inventory simply ignores the resource.
+      if (!this.inventoryManager.canAddItem(resource.type)) continue;
+
+      this.resourceManager.beginAcquire(resource);
+      // No longer sitting in the world waiting to be found, so it must not stay the
+      // highlight/prompt target - clearTarget() also drops it as the explicit tap target.
+      if (resource === this.currentTarget) this.clearTarget();
+    }
+
+    // At most one introduction per contact. The panel is modal and pauses the game, so a
+    // second one could not open anyway; picking the nearest means walking into a mixed
+    // pile introduces whatever you actually touched first.
+    if (nearestUnknown) this.inspect(nearestUnknown);
   }
 
   scanNearbyResources() {
@@ -242,6 +305,15 @@ export class ResourceInteractionController {
 
   _updatePromptPosition() {
     if (!this.currentTarget || this.state === RESOURCE_INTERACTION_STATE.INSPECTING) {
+      this.promptRoot.classList.remove('resource-ring--visible');
+      return;
+    }
+    // An already-known type is auto-acquired the moment it is in range, and the ring
+    // only shows within inspectRadius - which is the same 1.6 as acquireRadius. Without
+    // this the ring would flash "INSPECT" for one scan tick before the resource flew
+    // into the player, advertising an interaction that is about to not happen. The world
+    // ring and emissive highlight stay: "there is something here" is still true.
+    if (this._inspectedTypes.has(this.currentTarget.type)) {
       this.promptRoot.classList.remove('resource-ring--visible');
       return;
     }
