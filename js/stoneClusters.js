@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getTerrainHeight } from './terrain.js?v=5.4';
+import { getTerrainHeight, isPointInLake } from './terrain.js?v=5.4';
 import { makeRng } from './worldDressing.js?v=5.3';
 import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
@@ -21,6 +21,21 @@ import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
 const HARVEST_RADIUS = 2.0;
 const HARVEST_INTERVAL = 0.18; // Seconds between successive stone absorbs from a cluster
+
+// Stone renewal: clusters are one-shot (they deplete permanently), but fresh ones appear
+// at random valid spots over time so the base Slime's thrown-stone ammo never fully runs
+// out. Deliberately a slow trickle - the player still has to roam to gather. All tunable.
+const STONE_RESPAWN = {
+  interval: 22, // seconds between respawn attempts
+  maxActiveClusters: 14, // cap on live (non-depleted) clusters; ~2 over the initial 12
+  minPlayerDist: 5, // never pop a cluster in right on top of the player
+  minRadius: 5, // placement ring around the world origin (the active play zone)
+  maxRadius: 24,
+  attempts: 12, // bounded placement search per respawn tick, then give up until next tick
+  clearanceMargin: 0.4, // extra spacing required beyond the cluster's own collider radius
+  // Trickle skews small/medium so respawns read as scattered pebbles, not new outcrops.
+  tierWeights: [['small', 0.55], ['medium', 0.33], ['large', 0.12]],
+};
 
 const stoneGeometries = [
   new THREE.DodecahedronGeometry(0.24, 0),
@@ -68,6 +83,11 @@ export class StoneClusterManager {
 
     this.clusters = [];
     this.rng = makeRng(0x53746f);
+
+    // Set in populateWorldClusters; reused to keep respawned clusters out of the same
+    // zones the initial placement avoids (spawn ring, arena, predator territory).
+    this._exclusions = [];
+    this._respawnTimer = STONE_RESPAWN.interval;
 
     // Register dynamic colliders for all active clusters
     if (this.collisionSystem) {
@@ -159,6 +179,8 @@ export class StoneClusterManager {
   }
 
   populateWorldClusters({ exclusions = [] } = {}) {
+    this._exclusions = exclusions; // reused by the over-time respawn (see _trySpawnRandomCluster)
+    this._respawnTimer = STONE_RESPAWN.interval;
     const isClear = (x, z) => exclusions.every(({ x: ex, z: ez, radius }) => {
       const dx = x - ex;
       const dz = z - ez;
@@ -227,9 +249,18 @@ export class StoneClusterManager {
       });
     }
     this.clusters = [];
+    this._respawnTimer = STONE_RESPAWN.interval; // fresh trickle clock for the new run
   }
 
   update(deltaTime, playerPosition) {
+    // Trickle-respawn: interval-gated (never a per-frame search), spawns one fresh cluster
+    // at a random valid spot when live clusters are below the cap.
+    this._respawnTimer -= deltaTime;
+    if (this._respawnTimer <= 0) {
+      this._respawnTimer = STONE_RESPAWN.interval;
+      this._trySpawnRandomCluster(playerPosition);
+    }
+
     for (let cIdx = this.clusters.length - 1; cIdx >= 0; cIdx--) {
       const cluster = this.clusters[cIdx];
       if (cluster.depleted) continue;
@@ -248,6 +279,60 @@ export class StoneClusterManager {
           this._tryHarvestStone(cluster, playerPosition);
         }
       }
+    }
+  }
+
+  /** Number of live (non-depleted) clusters - the value the respawn cap is measured
+   *  against. Depleted entries linger in the array but don't count. */
+  _activeClusterCount() {
+    let n = 0;
+    for (const c of this.clusters) if (!c.depleted) n++;
+    return n;
+  }
+
+  /** Weighted-random tier pick (skewed small/medium) for a trickle respawn. */
+  _pickRespawnTier() {
+    let r = this.rng();
+    for (const [tier, weight] of STONE_RESPAWN.tierWeights) {
+      if (r < weight) return tier;
+      r -= weight;
+    }
+    return 'small';
+  }
+
+  /** Attempts to place ONE new cluster at a random valid spot (see STONE_RESPAWN). Bails
+   *  quietly if the live-cluster cap is reached or no clear spot is found this tick - the
+   *  next interval simply tries again. Reuses spawnCluster() for the actual build. */
+  _trySpawnRandomCluster(playerPosition) {
+    if (this._activeClusterCount() >= STONE_RESPAWN.maxActiveClusters) return;
+
+    const tier = this._pickRespawnTier();
+    const cfg = CLUSTER_CONFIGS[tier] || CLUSTER_CONFIGS.small;
+    const minPlayerDistSq = STONE_RESPAWN.minPlayerDist ** 2;
+
+    for (let attempt = 0; attempt < STONE_RESPAWN.attempts; attempt++) {
+      const angle = this.rng() * Math.PI * 2;
+      const radius = STONE_RESPAWN.minRadius + this.rng() * (STONE_RESPAWN.maxRadius - STONE_RESPAWN.minRadius);
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+
+      if (isPointInLake(x, z)) continue; // stone doesn't grow in water
+      if (playerPosition) {
+        const dx = x - playerPosition.x;
+        const dz = z - playerPosition.z;
+        if (dx * dx + dz * dz < minPlayerDistSq) continue; // not at the player's feet
+      }
+      const inExcluded = this._exclusions.some(({ x: ex, z: ez, radius: er }) => {
+        const dx = x - ex;
+        const dz = z - ez;
+        return dx * dx + dz * dz <= er * er;
+      });
+      if (inExcluded) continue;
+      // Rejects rocks, the boss body, and existing clusters (all registered colliders).
+      if (this.collisionSystem && !this.collisionSystem.isClear(x, z, cfg.colliderRadius + STONE_RESPAWN.clearanceMargin)) continue;
+
+      this.spawnCluster(tier, x, z);
+      return;
     }
   }
 
