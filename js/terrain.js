@@ -1,25 +1,15 @@
 // terrain.js — Texture-Driven 3D Terrain Elevation Engine
 
 /**
- * 3D Terrain Elevation Engine - Texture-Driven
- *
- * Directly correlates subterranean 3D elevation with the visual features of the
- * generated 3x3 cave-ground atlas:
- * - Uplifts craggy rock mounds, stone ridges, and boulder formations (+1.5m to +3.2m).
- * - Downlifts cyan bioluminescent pools, crystal waters, and crater basins (-1.5m to -2.8m).
- * - Downlifts dark subterranean crevices, fissures, and shadows (-1.2m to -2.2m).
- * - Elevates purple fungal crater rims (+1.8m to +2.4m).
- * - Leaves cobblestone trails and pathways at neutral baseline with organic stone micro-variation.
- * - Samples atlas coordinates over the same world bounds used by main.js's ground mesh.
- * - Uses bilinear filtering and spatial smoothing for seamless, climbable, tactile 3D terrain.
+ * The color atlas and authored semantic height map cover the same 90m square.
+ * Image top is world -Z. One UV span covers all nine unique regions.
+ * Geometry, creatures, collision heights and props all sample this height field.
+ * Physical relief is independent of snow, glow and other albedo colors.
  */
-
-// Must match the ground plane's own size exactly (see main.js's own "--- Ground ---"
-// block) - this module's whole heightmap is a sample of the SAME atlas at the SAME UV
-// mapping the visible mesh uses, so any mismatch here puts the 3D bumps in the wrong
-// place relative to what the texture actually shows.
 export const GROUND_SIZE = 90;
-export const TEXTURE_REPEAT = 3; // visual tile count inside cave_ground_generated_atlas.png
+export const GROUND_ATLAS_URL = 'assets/textures/biomes/terrain-atlas.png?v=1';
+export const GROUND_HEIGHTMAP_URL = 'assets/textures/biomes/terrain-height.png?v=1';
+export const TEXTURE_REPEAT = 1;
 
 const HEIGHTMAP_RES = 512;
 let heightmapData = null;
@@ -37,8 +27,7 @@ function atlasFrac(val) {
 }
 
 /**
- * Analytical fallback terrain field matching texture frequency and features
- * used before or in absence of image decoding.
+ * Low relief fallback used before or in absence of height-map decoding.
  */
 function sampleAnalyticalHeight(worldX, worldZ) {
   const u = atlasFrac((worldX / GROUND_SIZE) + 0.5);
@@ -50,7 +39,7 @@ function sampleAnalyticalHeight(worldX, worldZ) {
   const wave3 = Math.cos(u * Math.PI * 24 - 0.5) * Math.sin(v * Math.PI * 24 + 0.3) * 0.3;
 
   const combined = wave1 + wave2 + wave3;
-  return combined * 1.4;
+  return combined * 0.15;
 }
 
 /**
@@ -67,10 +56,10 @@ export function onTerrainElevationReady(cb) {
 }
 
 /**
- * Decodes image data from the generated cave ground atlas onto an offscreen canvas and constructs
- * a high-fidelity, smoothed elevation grid based on the texture features.
+ * Decodes the separate grayscale relief map and smooths it into climbable slopes.
+ * Clamp sampling at the world edges; opposite edges are not adjacent.
  */
-export function initTextureElevation(image, onReady = null) {
+export function initTerrainHeightmap(image, onReady = null) {
   if (onReady) {
     onTerrainElevationReady(onReady);
   }
@@ -79,7 +68,7 @@ export function initTextureElevation(image, onReady = null) {
 
   if (typeof HTMLImageElement !== 'undefined' && image instanceof HTMLImageElement && !image.complete) {
     image.addEventListener('load', () => {
-      initTextureElevation(image, onReady);
+      initTerrainHeightmap(image);
     }, { once: true });
     return;
   }
@@ -100,40 +89,10 @@ export function initTextureElevation(image, onReady = null) {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const idx = (y * w + x) * 4;
-        const r = imgData[idx] / 255;
-        const g = imgData[idx + 1] / 255;
-        const b = imgData[idx + 2] / 255;
-
-        // Perceptual luminance calculation
-        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-
-        // Distinct feature detection:
-        // 1. Cyan crystal pools / glowing water (high green & blue relative to red)
-        const cyanMetric = Math.max(0, (g + b) * 0.5 - r * 1.15);
-
-        // 2. Purple fungal territory (high red & blue relative to green)
-        const purpleMetric = Math.max(0, (r + b) * 0.5 - g * 1.15);
-
-        // 3. Craggy rock / stone highlights (lighter rock textures and mounds)
-        const rockFactor = Math.max(0, (lum - 0.11) / 0.38);
-
-        // 4. Dark subterranean crevices and chasms
-        const creviceFactor = Math.max(0, (0.09 - lum) / 0.09);
-
-        // Calculate physical elevation:
-        let elevation = 0;
-
-        // Elevate rock ridges and stone mounds UP (+0.6m to +1.8m)
-        elevation += Math.pow(rockFactor, 1.2) * 1.8;
-
-        // De-elevate dark crevices and fissures DOWN (-0.5m to -1.0m)
-        elevation -= Math.pow(creviceFactor, 1.1) * 1.0;
-
-        // De-elevate cyan pools into sunken crystal basins (-0.6m to -1.5m)
-        elevation -= cyanMetric * 1.8;
-
-        // Elevate purple fungal crater rim (+0.6m to +1.2m)
-        elevation += purpleMetric * 1.2;
+        // Authored semantic height, independent of albedo: 128 = level path,
+        // 0 = -1.2m depression, 255 = +1.2m ridge. Snow and bright minerals
+        // are therefore not automatically interpreted as mountains.
+        const elevation = (imgData[idx] - 128) / 128 * 1.2;
 
         rawGrid[y * w + x] = elevation;
       }
@@ -154,8 +113,8 @@ export function initTextureElevation(image, onReady = null) {
 
           for (let dy = -radius; dy <= radius; dy++) {
             for (let dx = -radius; dx <= radius; dx++) {
-              const nx = (x + dx + w) % w;
-              const ny = (y + dy + h) % h;
+              const nx = Math.min(w - 1, Math.max(0, x + dx));
+              const ny = Math.min(h - 1, Math.max(0, y + dy));
               sum += src[ny * w + nx];
               count++;
             }
@@ -182,18 +141,8 @@ export function initTextureElevation(image, onReady = null) {
       try { cb(); } catch (e) { console.error(e); }
     }
   } catch (err) {
-    console.warn('Could not decode texture heightmap directly, using analytical field.', err);
+    console.warn('Could not decode terrain height map, using analytical fallback.', err);
   }
-}
-
-// Auto-load texture eagerly if running in browser
-if (typeof Image !== 'undefined') {
-  const autoImg = new Image();
-  autoImg.crossOrigin = 'anonymous';
-  autoImg.src = 'assets/textures/cave_ground_generated_atlas.png?v=4';
-  autoImg.onload = () => {
-    initTextureElevation(autoImg);
-  };
 }
 
 /**
@@ -278,12 +227,12 @@ export function getTerrainHeight(x, z) {
   const distFromOrigin = Math.sqrt(x * x + z * z);
   const boundarySlope = distFromOrigin > BOUNDARY_SLOPE_START ? Math.min((distFromOrigin - BOUNDARY_SLOPE_START) * 0.06, 2.0) : 0;
 
-  // 1. Texture-driven 3D relief: uplift rocks, downlift pools and crevices
+  // 1. Authored relief: uplift rocks, downlift pools and crevices.
   const rawTextureElevation = sampleTextureHeight(x, z);
 
-  // 2. Continuous subterranean macro undulation across the 200m cavern
-  const macroRoll1 = Math.sin(x * 0.045 + 0.5) * Math.cos(z * 0.04 - 0.3) * 0.8;
-  const macroRoll2 = Math.cos(x * 0.08 - 0.9) * Math.sin(z * 0.075 + 1.1) * 0.45;
+  // 2. Subtle macro undulation across the 90m cavern
+  const macroRoll1 = Math.sin(x * 0.045 + 0.5) * Math.cos(z * 0.04 - 0.3) * 0.15;
+  const macroRoll2 = Math.cos(x * 0.08 - 0.9) * Math.sin(z * 0.075 + 1.1) * 0.08;
 
   // 3. Smooth sunken Abyssal Lake basin with bank drop & sediment smoothing
   const dx = (x - LAKE_CONFIG.center.x) / LAKE_CONFIG.rx;
@@ -336,12 +285,14 @@ export function applyTerrainElevation(geometry) {
 
   positions.needsUpdate = true;
   geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
 }
 
 export default {
   GROUND_SIZE,
   TEXTURE_REPEAT,
-  initTextureElevation,
+  initTerrainHeightmap,
   onTerrainElevationReady,
   getTerrainHeight,
   applyTerrainElevation,

@@ -40,7 +40,7 @@ import { ScreenShake } from './screenShake.js?v=5.3';
 import { DamageNumberController } from './damageNumbers.js?v=5.3';
 import { RadarController } from './radarController.js?v=5.3';
 import { RadarHUD } from './radarHUD.js?v=5.3';
-import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady, LAKE_CONFIG } from './terrain.js?v=5.4';
+import { getTerrainHeight, applyTerrainElevation, initTerrainHeightmap, onTerrainElevationReady, LAKE_CONFIG, GROUND_SIZE, GROUND_ATLAS_URL, GROUND_HEIGHTMAP_URL } from './terrain.js?v=5.4';
 import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
@@ -162,19 +162,14 @@ scene.add(rimLight);
 // within roughly 30-34 units of the origin, so a 90-unit plane (45-unit half-width)
 // covers all of it with margin to spare.
 //
-// The ground is a single 3072px generated 3x3 atlas, not one repeated tile. The nine generated
-// regions also exist as assets/textures/ground_tiles/cave_ground_generated_tile_r*c*.png for
-// inspection/reuse, but using the full atlas on this mesh keeps filtering continuous
-// across tile boundaries and avoids both mirror symmetry and visible edge seams.
-// terrain.js samples this same atlas over the same world bounds, so visible crags,
-// basins, and glowing patches line up with the 3D elevation the player walks on.
-const GROUND_SIZE = 90;
+// Nine independently painted biomes are stitched into one continuous atlas.
+// The separate semantic height map shares its UVs and world bounds, so snow
+// brightness and mineral glow cannot create spurious mountains or pits.
 const GROUND_SEGMENTS = 320;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
 
-const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_generated_atlas.png?v=4', (tex) => {
-  initTextureElevation(tex.image);
-});
+const groundTexture = new THREE.TextureLoader(assetLoadingManager).load(GROUND_ATLAS_URL);
+new THREE.ImageLoader(assetLoadingManager).load(GROUND_HEIGHTMAP_URL, initTerrainHeightmap);
 groundTexture.wrapS = THREE.ClampToEdgeWrapping;
 groundTexture.wrapT = THREE.ClampToEdgeWrapping;
 groundTexture.colorSpace = THREE.SRGBColorSpace;
