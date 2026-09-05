@@ -758,40 +758,7 @@ html, body {
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
 }
 
-.radar-mushroom {
-  position: absolute;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  pointer-events: none;
-}
-
-.radar-mushroom i {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
-  background: radial-gradient(circle at 35% 30%, #cdf1ff, #4aa9e0 70%);
-  box-shadow: 0 0 6px rgba(120, 210, 255, 0.9);
-}
-
-.radar-mushroom i:nth-child(2) {
-  width: 9px;
-  height: 9px;
-}
-
-.radar-mushroom--1 {
-  top: -2%;
-  left: 12%;
-}
-
-.radar-mushroom--2 {
-  bottom: 2%;
-  left: -2%;
-}
-
-.species-radar--expanded .radar-frame-vine,
-.species-radar--expanded .radar-mushroom {
+.species-radar--expanded .radar-frame-vine {
   display: none;
 }
 
