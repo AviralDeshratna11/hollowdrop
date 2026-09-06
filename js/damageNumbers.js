@@ -49,8 +49,9 @@ export class DamageNumberController {
    * @param worldPosition THREE.Vector3 the hit happened at
    * @param amount        number shown
    * @param variant       'player' (damage the player dealt) | 'incoming' (damage taken)
+   * @param isCrit        boolean whether this was a critical strike
    */
-  spawn(worldPosition, amount, variant = 'player') {
+  spawn(worldPosition, amount, variant = 'player', isCrit = false) {
     const el = this._pool.pop();
     if (!el) return; // pool exhausted - drop the number rather than allocate mid-combat
 
@@ -61,10 +62,12 @@ export class DamageNumberController {
       offsetX: (Math.random() - 0.5) * jitter * 2,
       offsetZ: (Math.random() - 0.5) * jitter * 2,
       elapsed: 0,
+      isCrit,
     };
 
-    el.textContent = String(Math.round(amount));
-    el.className = `damage-number damage-number--${variant}`;
+    const rounded = Math.round(amount);
+    el.textContent = isCrit ? `${rounded} CRIT!` : String(rounded);
+    el.className = `damage-number damage-number--${variant}${isCrit ? ' damage-number--crit' : ''}`;
     this._active.push(entry);
     this._position(entry, 0);
     el.classList.add('damage-number--visible');
@@ -81,7 +84,8 @@ export class DamageNumberController {
     const x = (tempProject.x * 0.5 + 0.5) * rect.width + rect.left;
     const y = (1 - (tempProject.y * 0.5 + 0.5)) * rect.height + rect.top;
 
-    entry.el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+    const scale = entry.isCrit ? (t < 0.25 ? 1.35 - (t / 0.25) * 0.15 : 1.2) : 1;
+    entry.el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${scale})`;
     // Hold full opacity for the first half, then fade - the number needs to be
     // readable before it starts disappearing.
     entry.el.style.opacity = t < 0.5 ? '1' : String(1 - (t - 0.5) / 0.5);
@@ -93,7 +97,7 @@ export class DamageNumberController {
       entry.elapsed += deltaTime;
       const t = entry.elapsed / DAMAGE_NUMBER_CONFIG.lifetime;
       if (t >= 1) {
-        entry.el.classList.remove('damage-number--visible');
+        entry.el.classList.remove('damage-number--visible', 'damage-number--crit');
         entry.el.style.opacity = '0';
         this._active.splice(i, 1);
         this._pool.push(entry.el);
@@ -107,7 +111,7 @@ export class DamageNumberController {
    *  previous run can't linger into the new one. */
   clear() {
     for (const entry of this._active) {
-      entry.el.classList.remove('damage-number--visible');
+      entry.el.classList.remove('damage-number--visible', 'damage-number--crit');
       entry.el.style.opacity = '0';
       this._pool.push(entry.el);
     }

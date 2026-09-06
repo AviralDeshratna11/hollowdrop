@@ -13,6 +13,8 @@ import {
   playApexDeathSound,
   playBiteHitSound,
 } from './soundEffects.js?v=5.3';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
+
 
 export const DEBUG_APEX = false;
 
@@ -795,7 +797,8 @@ export class ApexController {
   }
 
   _hitPlayer(amount, attackType) {
-    const hit = this.playerHealth.takeDamage(amount, this);
+    const { damage } = calculateAttackDamage(amount, false);
+    const hit = this.playerHealth.takeDamage(damage, this);
     if (hit) {
       playBiteHitSound();
       if (DEBUG_APEX) console.log(`Player hit by Murkmaw (${attackType})! Health: ${this.playerHealth.currentHealth}`);

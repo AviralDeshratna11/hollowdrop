@@ -9,6 +9,8 @@ import {
   playLaserBurnSound,
   playTerminalInteractSound,
 } from './soundEffects.js?v=5.3';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
+
 
 /**
  * sector7RuinsBiome.js — Ancient Pre-Collapse Research Ruins (Sector 7)
@@ -1388,7 +1390,8 @@ export class Sector7RuinsBiome {
           } else {
             // Player caught in defense laser
             if (this.playerHealth) {
-              this.playerHealth.takeDamage(16, { sourceType: 'laser_barrier', type: 'laser' });
+              const { damage } = calculateAttackDamage(16, false);
+              this.playerHealth.takeDamage(damage, { sourceType: 'laser_barrier', type: 'laser' });
             }
             playLaserBurnSound();
             if (this.screenShake) this.screenShake.add(0.3);

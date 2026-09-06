@@ -771,3 +771,39 @@ export function playBubblePopSound() {
   osc.stop(t + 0.06);
 }
 
+/**
+ * Resonant critical hit impact sound (visceral snap + high harmonic chime).
+ */
+export function playCritHitSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  // Punchy low transient thump
+  const subOsc = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  subOsc.type = 'triangle';
+  subOsc.frequency.setValueAtTime(240, t);
+  subOsc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+  subGain.gain.setValueAtTime(0.45, t);
+  subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  subOsc.connect(subGain);
+  subGain.connect(ctx.destination);
+  subOsc.start(t);
+  subOsc.stop(t + 0.15);
+
+  // Sharp metallic / high harmonic shimmer
+  const chimeOsc = ctx.createOscillator();
+  const chimeGain = ctx.createGain();
+  chimeOsc.type = 'sine';
+  chimeOsc.frequency.setValueAtTime(1250, t);
+  chimeOsc.frequency.exponentialRampToValueAtTime(2400, t + 0.08);
+  chimeGain.gain.setValueAtTime(0.3, t);
+  chimeGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  chimeOsc.connect(chimeGain);
+  chimeGain.connect(ctx.destination);
+  chimeOsc.start(t);
+  chimeOsc.stop(t + 0.22);
+}
+
+

@@ -53,6 +53,8 @@ import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
 import { BoundaryEnvironment } from './boundaryEnvironment.js?v=6.0';
 import { LakeBiome } from './lakeBiome.js?v=5.3';
 import { SlimeTrailSystem } from './slimeTrail.js?v=7.0';
+import { playCritHitSound } from './soundEffects.js?v=5.3';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -667,8 +669,12 @@ playerCombatController.onAttackConnected = () => {
   triggerHitstop(0.055);
   screenShake.add(0.22);
 };
-playerCombatController.onHit = (entity, damage) => {
-  damageNumbers.spawn(entity.mesh.position, damage, 'player');
+playerCombatController.onHit = (entity, damage, isCrit = false) => {
+  damageNumbers.spawn(entity.mesh.position, damage, 'player', isCrit);
+  if (isCrit) {
+    screenShake.add(0.12);
+    playCritHitSound();
+  }
 };
 playerCombatController.onBiteHit = (entity, hitPos, forwardDir) => {
   combatVFX.spawnBiteEffect(hitPos, forwardDir);
@@ -697,8 +703,12 @@ predatorController.aimPriority = 1;
 rivalController.aimPriority = 1;
 apexController.aimPriority = 2;
 
-projectileSystem.onHit = (entity, damage) => {
-  damageNumbers.spawn(entity.mesh.position, damage, 'player');
+projectileSystem.onHit = (entity, damage, isCrit = false) => {
+  damageNumbers.spawn(entity.mesh.position, damage, 'player', isCrit);
+  if (isCrit) {
+    screenShake.add(0.12);
+    playCritHitSound();
+  }
 };
 projectileSystem.onImpact = (position, hitSomething) => {
   if (!hitSomething) return;
@@ -927,7 +937,7 @@ const OFFSCREEN_POSITION = new THREE.Vector3(9999, 9999, 9999);
 
 if (DEBUG_HEALTH) {
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'h' || e.key === 'H') playerHealth.takeDamage(20, null);
+    if (e.key === 'h' || e.key === 'H') playerHealth.takeDamage(calculateAttackDamage(20, false).damage, null);
     if (e.key === 'k' || e.key === 'K') playerHealth.takeDamage(playerHealth.currentHealth, null);
     if (e.key === 'r' || e.key === 'R') deathRespawnManager.forceRespawn();
   });
@@ -977,7 +987,7 @@ window.addEventListener('keydown', (e) => {
 if (DEBUG_PREDATOR_COMBAT) {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'k' || e.key === 'K') {
-      predatorController.takeDamage(15, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
+      predatorController.takeDamage(calculateAttackDamage(15, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'h' || e.key === 'H') predatorController.debugHeal();
     if (e.key === 'j' || e.key === 'J') predatorController.debugTeleportNearPlayer();
@@ -993,7 +1003,7 @@ if (DEBUG_APEX) {
     if (e.key === '4') apexController.debugForceAttack('burrow');
     if (e.key === 'p' || e.key === 'P') apexController.debugForcePhase2();
     if (e.key === 'k' || e.key === 'K') {
-      apexController.takeDamage(30, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
+      apexController.takeDamage(calculateAttackDamage(30, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'g' || e.key === 'G') apexController.debugSetHealth(15);
   });
@@ -1005,7 +1015,7 @@ if (DEBUG_RIVAL) {
     if (e.key === 'm' || e.key === 'M') rivalController.debugForceMutation();
     if (e.key === 'f' || e.key === 'F') rivalController.debugForceFireBreath();
     if (e.key === 'k' || e.key === 'K') {
-      rivalController.takeDamage(20, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
+      rivalController.takeDamage(calculateAttackDamage(20, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'o' || e.key === 'O') rivalController.debugForceSeekFragment();
   });
