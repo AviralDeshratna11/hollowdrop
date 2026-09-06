@@ -45,8 +45,9 @@ import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
 import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
-import { BoundaryEnvironment } from './boundaryEnvironment.js?v=5.3';
+import { BoundaryEnvironment } from './boundaryEnvironment.js?v=5.7';
 import { LakeBiome } from './lakeBiome.js?v=5.3';
+import { SlimeTrailSystem } from './slimeTrail.js?v=7.0';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -202,20 +203,24 @@ scene.add(ground);
 const PLAYER_RADIUS = 0.6;
 const PLAYER_SPAWN_POSITION = new THREE.Vector3(0, PLAYER_RADIUS, 0);
 const player = new THREE.Group();
+player.renderOrder = 10;
 player.position.copy(PLAYER_SPAWN_POSITION);
 scene.add(player);
 
 const slimeVisual = new THREE.Group();
+slimeVisual.renderOrder = 10;
 player.add(slimeVisual);
 
 const amoeba = createPlayerSlimeVisual(PLAYER_RADIUS);
 const slimeMaterial = amoeba.bodyMaterial;
+amoeba.group.renderOrder = 10;
 slimeVisual.add(amoeba.group);
 
 // The player's own mutated form is the CUTE purple rat (per the reference art), distinct
 // from the boss's pink Venom Rat below - same mesh/gait/combat, only its look differs.
 const ratVisual = createRatMesh({ variant: 'cute' });
 const ratMaterial = ratVisual.userData.bodyMaterial;
+ratVisual.renderOrder = 10;
 ratVisual.visible = false;
 player.add(ratVisual);
 
@@ -375,6 +380,7 @@ if (DEBUG_MUTATION) {
 // --- Prey (Glow Beetle) + Venom Bite combat ------------------------------------
 const preyManager = new PreyManager(scene, playerController, playerFormController, resourceManager, uiManager, {
   onDefeated: () => runStats.preyDefeated++,
+  playerHealth, // defeating a beetle absorbs its essence and heals the player (primary heal source)
 });
 
 function populateWorldPrey() {
@@ -588,6 +594,7 @@ playerFormController.playerCombatController = playerCombatController;
 const screenShake = new ScreenShake();
 const damageNumbers = new DamageNumberController(camera, canvas);
 const combatVFX = new CombatVFXSystem(scene);
+const slimeTrail = new SlimeTrailSystem(scene);
 apexController.combatVFX = combatVFX;
 apexController.screenShake = screenShake;
 
@@ -822,6 +829,7 @@ const deathRespawnManager = new DeathRespawnManager({
   genomeFragmentController,
   uiManager,
   respawnPosition: PLAYER_SPAWN_POSITION,
+  slimeTrail,
   // Death respawns land at a random valid spot; a new-run reset still uses
   // PLAYER_SPAWN_POSITION above so resetGame()'s player-centred resource scatter
   // re-centres correctly.
@@ -994,6 +1002,7 @@ function resetGame() {
   resourceManager.clearAll();
   resourceManager.particles.clear();
   combatVFX.clear();
+  slimeTrail.clear();
   populateWorldResources();
 
   stoneClusterManager.clearAll();
@@ -1366,6 +1375,15 @@ function animate() {
   screenShake.update(realDeltaTime);
   damageNumbers.update(realDeltaTime);
   combatVFX.update(realDeltaTime);
+  slimeTrail.update(
+    deltaTime,
+    player.position,
+    playerController.currentVelocity,
+    isPlayingState && canAct && playerFormController.currentForm === PLAYER_FORMS.SLIME
+  );
+  if (isPlayingState && rivalController && typeof rivalController.isAlive === 'function' && rivalController.isAlive() && rivalController.currentForm === 'SLIME') {
+    slimeTrail.update(deltaTime, rivalController.mesh.position, null, true, 'rival');
+  }
   boundaryEnvironment.update(realDeltaTime);
   lakeBiome.update(deltaTime, player.position, playerController);
 

@@ -14,8 +14,68 @@ import { getTerrainHeight } from './terrain.js?v=5.4';
  * per frame - it is built once at load and then costs only its draw calls.
  */
 
+/**
+ * Generates planar triplanar UV coordinates for faceted rock geometries
+ * without spherical pinching at poles or seam distortion.
+ */
+function applyTriplanarRockUVs(geometry, scale = 1.0) {
+  const nonIndexed = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  const pos = nonIndexed.attributes.position;
+  const uvs = new Float32Array(pos.count * 2);
+
+  for (let i = 0; i < pos.count; i += 3) {
+    const ax = pos.getX(i);
+    const ay = pos.getY(i);
+    const az = pos.getZ(i);
+
+    const bx = pos.getX(i + 1);
+    const by = pos.getY(i + 1);
+    const bz = pos.getZ(i + 1);
+
+    const cx = pos.getX(i + 2);
+    const cy = pos.getY(i + 2);
+    const cz = pos.getZ(i + 2);
+
+    const e1x = bx - ax;
+    const e1y = by - ay;
+    const e1z = bz - az;
+
+    const e2x = cx - ax;
+    const e2y = cy - ay;
+    const e2z = cz - az;
+
+    const nx = Math.abs(e1y * e2z - e1z * e2y);
+    const ny = Math.abs(e1z * e2x - e1x * e2z);
+    const nz = Math.abs(e1x * e2y - e1y * e2x);
+
+    const verts = [[ax, ay, az], [bx, by, bz], [cx, cy, cz]];
+
+    for (let k = 0; k < 3; k++) {
+      const [vx, vy, vz] = verts[k];
+      let u, v;
+      if (ny >= nx && ny >= nz) {
+        u = vx * scale;
+        v = vz * scale;
+      } else if (nx >= ny && nx >= nz) {
+        u = vz * scale;
+        v = vy * scale;
+      } else {
+        u = vx * scale;
+        v = vy * scale;
+      }
+      uvs[(i + k) * 2 + 0] = u;
+      uvs[(i + k) * 2 + 1] = v;
+    }
+  }
+
+  nonIndexed.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  nonIndexed.computeVertexNormals();
+  return nonIndexed;
+}
+
 const ROCK_BASE_RADIUS = 0.5;
-const rockGeometry = new THREE.DodecahedronGeometry(ROCK_BASE_RADIUS, 0);
+const rawRockGeometry = new THREE.DodecahedronGeometry(ROCK_BASE_RADIUS, 0);
+const rockGeometry = applyTriplanarRockUVs(rawRockGeometry, 1.8);
 
 /** Solid radius for a rock at a given scale. Deliberately tighter than the visual
  *  0.5 * scale: a collider matching the silhouette exactly makes you catch on corners
@@ -49,8 +109,157 @@ export function makeRng(seed) {
   };
 }
 
+let cachedDressingRockTex = null;
+let cachedDressingRockBump = null;
+
+/**
+ * Procedurally generates a detailed dark gray rock texture with mineral grain,
+ * stratified stone fissures, and chiseled highlights.
+ */
+function getDressingRockTexture() {
+  if (cachedDressingRockTex) return cachedDressingRockTex;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  // Base bright stone gray with cool slate undertone (tuned 5% darker)
+  ctx.fillStyle = '#646c77';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Multi-frequency mineral stone grain
+  const rng = makeRng(0x89ab12);
+  for (let i = 0; i < 3500; i++) {
+    const x = rng() * 256;
+    const y = rng() * 256;
+    const size = 0.8 + rng() * 2.2;
+    const lum = 72 + (rng() * 82) | 0;
+    const tintB = Math.min(255, lum + (rng() * 14) | 0);
+    ctx.fillStyle = `rgb(${lum}, ${lum + 4}, ${tintB})`;
+    ctx.fillRect(x, y, size, size);
+  }
+
+  // Stone fissures & fracture seams
+  ctx.strokeStyle = 'rgba(28, 34, 40, 0.85)';
+  ctx.lineWidth = 1.8;
+  for (let c = 0; c < 7; c++) {
+    ctx.beginPath();
+    let cx = rng() * 256;
+    let cy = rng() * 256;
+    ctx.moveTo(cx, cy);
+    for (let seg = 0; seg < 4; seg++) {
+      cx += (rng() - 0.5) * 55;
+      cy += (rng() - 0.5) * 55;
+      ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+  }
+
+  // Chiseled strata highlight ridges along fractures
+  ctx.strokeStyle = 'rgba(195, 209, 223, 0.78)';
+  ctx.lineWidth = 1.4;
+  for (let c = 0; c < 7; c++) {
+    ctx.beginPath();
+    let cx = rng() * 256;
+    let cy = rng() * 256;
+    ctx.moveTo(cx, cy);
+    for (let seg = 0; seg < 3; seg++) {
+      cx += (rng() - 0.5) * 45;
+      cy += (rng() - 0.5) * 45;
+      ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+  }
+
+  // Micro-crystal mineral flecks
+  for (let f = 0; f < 100; f++) {
+    const fx = rng() * 256;
+    const fy = rng() * 256;
+    ctx.fillStyle = 'rgba(235, 244, 252, 0.95)';
+    ctx.fillRect(fx, fy, 1.5, 1.5);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  cachedDressingRockTex = tex;
+  return tex;
+}
+
+/**
+ * Procedurally generates a surface bump map for tactile stone depth & faceting.
+ */
+function getDressingRockBumpMap() {
+  if (cachedDressingRockBump) return cachedDressingRockBump;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, 256, 256);
+
+  const rng = makeRng(0x89ab12);
+  for (let i = 0; i < 2500; i++) {
+    const x = rng() * 256;
+    const y = rng() * 256;
+    const val = 100 + (rng() * 60) | 0;
+    ctx.fillStyle = `rgb(${val}, ${val}, ${val})`;
+    ctx.fillRect(x, y, 1.5, 1.5);
+  }
+
+  // Recessed fracture grooves
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 2.2;
+  for (let c = 0; c < 7; c++) {
+    ctx.beginPath();
+    let cx = rng() * 256;
+    let cy = rng() * 256;
+    ctx.moveTo(cx, cy);
+    for (let seg = 0; seg < 4; seg++) {
+      cx += (rng() - 0.5) * 55;
+      cy += (rng() - 0.5) * 55;
+      ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+  }
+
+  // Raised chisel edges
+  ctx.strokeStyle = '#f0f0f0';
+  ctx.lineWidth = 1.4;
+  for (let c = 0; c < 6; c++) {
+    ctx.beginPath();
+    let cx = rng() * 256;
+    let cy = rng() * 256;
+    ctx.moveTo(cx, cy);
+    for (let seg = 0; seg < 3; seg++) {
+      cx += (rng() - 0.5) * 45;
+      cy += (rng() - 0.5) * 45;
+      ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  cachedDressingRockBump = tex;
+  return tex;
+}
+
 function createRockMaterial(color) {
-  return new THREE.MeshStandardMaterial({ flatShading: true, color, roughness: 0.9 });
+  return new THREE.MeshStandardMaterial({
+    map: getDressingRockTexture(),
+    bumpMap: getDressingRockBumpMap(),
+    bumpScale: 0.06,
+    flatShading: true,
+    color,
+    roughness: 0.76,
+    metalness: 0.10,
+  });
 }
 
 const registeredDressingGroups = [];
@@ -184,7 +393,7 @@ export function buildArenaDressing(scene, center, radius, rng = makeRng(0x4a11))
   }
 
   buildInstances(scene, rocks, plants, {
-    rockColor: 0x1c1420,
+    rockColor: 0x7b7288,
     plantBodyColor: 0x140a1e,
     plantGlowColor: 0xb23fff,
     glowIntensity: 1.1,
@@ -252,16 +461,13 @@ export function scatterWorldDressing(scene, {
     });
   }
 
-  // The rock colour is deliberately DARKER than the darkest part of the ground
-  // mottling rather than a mid-tone: a rock tinted close to the floor's own range just
-  // disappears into it. Sitting below the floor's value makes each one read as a
-  // silhouette, and the scene's rim light then catches its top edge - the same thing
-  // that makes the creatures legible against this background.
+  // Immovable decorative and obstacle stones across the cavern bed are textured with
+  // a tactile dark gray slate stone material that catches directional and rim lighting.
   //
   // Unpickable greenish flora has been removed so all glowing mushrooms/spores on the
   // ground are exclusively collectible resources.
   buildInstances(scene, rocks, [], {
-    rockColor: 0x0d1310,
+    rockColor: 0x7d8792,
   });
 
   return { rocks };

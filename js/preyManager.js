@@ -3,6 +3,7 @@ import { createGlowBeetleMesh } from './preyModel.js?v=5.3';
 import { PLAYER_FORMS } from './playerFormController.js?v=5.3';
 import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
 import { getTerrainHeight } from './terrain.js?v=5.4';
+import { playBubblePopSound } from './soundEffects.js?v=5.3';
 
 export const DEBUG_PREY = false;
 
@@ -32,7 +33,16 @@ export const GLOW_BEETLE_CONFIG = {
   healthBarFadeStart: 0.3,
   deathDuration: 0.45,
   lootScatter: 0.35,
+  // Slime-essence absorption heal (the primary way the player recovers health): defeating
+  // a beetle streams part of it into the player, restoring this much. Clamped to maxHealth
+  // by PlayerHealthState.heal, so it can never overheal. Tune here.
+  healOnAbsorb: 15,
+  absorbTravelTime: 0.3, // matches AbsorbParticles' pull duration - heal lands as the essence arrives
 };
+
+// Vital green essence pulled into the player on absorption - distinct from the cyan
+// death-pop burst so the heal reads as its own beat.
+const ESSENCE_COLOR = 0x7cffb2;
 
 const PREY_STATES = { WANDER: 'WANDER', FLEE: 'FLEE', DEAD: 'DEAD' };
 
@@ -68,14 +78,20 @@ let nextPreyId = 1;
  * future enemy type could implement the identical interface with no changes here.
  */
 export class PreyManager {
-  constructor(scene, playerController, playerFormController, resourceManager, uiManager, { onDefeated } = {}) {
+  constructor(scene, playerController, playerFormController, resourceManager, uiManager, { onDefeated, playerHealth } = {}) {
     this.scene = scene;
     this.playerController = playerController;
     this.playerFormController = playerFormController;
     this.resourceManager = resourceManager;
     this.uiManager = uiManager;
     this.onDefeated = onDefeated; // optional - fires once per _die(), e.g. for run-stats tracking
+    // Optional - defeating a beetle restores health by absorbing its essence (the game's
+    // primary heal source). Null-safe if not injected. See _beginAbsorption below.
+    this.playerHealth = playerHealth ?? null;
     this.prey = [];
+    // In-flight essence absorptions ({ timer }) - each heals once when its timer elapses,
+    // independent of the (already-removed) beetle entity. See _updatePendingAbsorptions.
+    this._pendingAbsorptions = [];
   }
 
   spawnGlowBeetle(position) {
@@ -120,6 +136,10 @@ export class PreyManager {
   }
 
   update(deltaTime) {
+    // Ticked outside the prey loop so an essence still in flight heals even after its
+    // beetle has been fully removed (and after every beetle is gone).
+    this._updatePendingAbsorptions(deltaTime);
+
     for (let i = this.prey.length - 1; i >= 0; i--) {
       const entity = this.prey[i];
 
@@ -271,6 +291,7 @@ export class PreyManager {
     if (t < 1) return;
 
     this._dropLoot(entity);
+    this._beginAbsorption(entity); // essence streams into the player and heals on arrival
 
     this.scene.remove(entity.mesh);
     entity.mesh.traverse((child) => {
@@ -297,6 +318,33 @@ export class PreyManager {
     if (DEBUG_PREY) console.log('Dropped Beetle DNA\nDropped Organic Biomass');
   }
 
+  /** Defeat -> absorption: once the beetle has collapsed, part of its essence separates
+   *  and streams into the player (reusing the same pull-to-player particle burst that
+   *  absorbing a world resource already uses), with the health restore scheduled for when
+   *  it arrives. The pending entry lives on the manager, not the entity, so the beetle can
+   *  be removed immediately and the heal still lands correctly. */
+  _beginAbsorption(entity) {
+    this.resourceManager.particles.spawnBurst(entity.mesh.position, ESSENCE_COLOR, 12);
+    this._pendingAbsorptions.push({ timer: GLOW_BEETLE_CONFIG.absorbTravelTime });
+  }
+
+  /** Lands in-flight absorptions: when the essence reaches the player, restore health
+   *  (clamped to maxHealth by PlayerHealthState.heal - never overheals, and no-ops while
+   *  dead), then reuse the membrane absorb-pulse and the collect sound as the "consumed it"
+   *  feedback. One heal per defeated beetle; multiple can be in flight at once. */
+  _updatePendingAbsorptions(deltaTime) {
+    if (this._pendingAbsorptions.length === 0) return;
+    for (let i = this._pendingAbsorptions.length - 1; i >= 0; i--) {
+      const a = this._pendingAbsorptions[i];
+      a.timer -= deltaTime;
+      if (a.timer > 0) continue;
+      this._pendingAbsorptions.splice(i, 1);
+      this.playerHealth?.heal(GLOW_BEETLE_CONFIG.healOnAbsorb);
+      this.playerController.triggerAbsorbPulse();
+      playBubblePopSound();
+    }
+  }
+
   /** Full reset for a brand-new run (Play Again) - removes every Glow Beetle
    *  regardless of its current state (wandering, fleeing, mid-death-animation).
    *  Respawning the configured starting population is the caller's job (main.js),
@@ -311,6 +359,7 @@ export class PreyManager {
       });
     }
     this.prey = [];
+    this._pendingAbsorptions = []; // drop any essence mid-flight so it can't heal into the new run
   }
 
   // --- Shared helpers --------------------------------------------------------
