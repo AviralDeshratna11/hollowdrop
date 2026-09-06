@@ -63,11 +63,11 @@ const COMPLETION_EPSILON = 0.995; // treat as full, then snap to exactly 1
 const COMPLETE_HOLD_MS = 450;
 
 const STATUS_MESSAGES = [
-  'Calibrating membrane…',
-  'Warming cave lighting…',
-  'Loading terrain…',
-  'Adapting form…',
-  'Nearly there…',
+  'A small life stirs…',
+  'Beyond the moss gate…',
+  'Following the glow…',
+  'The hollow is waking…',
+  'Your journey awaits…',
 ];
 const STATUS_INTERVAL_SECONDS = 1.8;
 

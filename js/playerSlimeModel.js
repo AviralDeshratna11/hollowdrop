@@ -174,6 +174,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
   // Crossfade state - null outside the brief window right after the model arrives.
   let fadeTimer = null;
   let modelMaterial = null;
+  let modelBottom = -radius;
 
   api.ready = loadGltfCharacter({
     url: MODEL_URL,
@@ -195,6 +196,8 @@ export function createPlayerSlimeVisual(radius = 0.6) {
     },
   })
     .then(({ group: modelGroup, material }) => {
+      modelGroup.updateMatrixWorld(true);
+      modelBottom = new THREE.Box3().setFromObject(modelGroup).min.y;
       // Gentle surface normals and a wet highlight make the source mesh read as
       // jelly, rather than hard, heavily embossed rock under the new key light.
       material.normalScale.set(0.25, 0.25);
@@ -307,6 +310,9 @@ export function createPlayerSlimeVisual(radius = 0.6) {
     const bodyScale = Math.max(1 + breathe + swell + widenScale + squintScale, 0.05);
     // Lift the source mesh's low dome while preserving its collision footprint.
     group.scale.set(bodyScale, bodyScale * 1.45, bodyScale);
+    // Anchor the visible underside instead of suspending a short mesh at the
+    // collision sphere's center. Breathing now expands upward from the floor.
+    group.position.y = -radius - modelBottom * group.scale.y + 0.015;
   }
 
   function triggerWiden() {

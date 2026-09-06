@@ -444,6 +444,8 @@
      sits at a lower z-index than this screen's 50, so full opacity alone is what hides
      them completely - no extra JS/state wiring needed for that. -->
 <div id="title-screen" class="title-screen--visible">
+  <div class="title-atmosphere" aria-hidden="true"></div>
+  <p class="title-chapter">BENEATH THE FORGOTTEN WORLD</p>
   <div class="title-content">
     <h1 class="title-name">HOLLOWDROP</h1>
     <p class="title-subtitle">The Living Colony</p>
@@ -471,12 +473,21 @@
              everything else on this screen. -->
         <div class="title-loading-blob"></div>
       </div>
-      <p id="title-loading-status" class="title-loading-status">Calibrating membrane…</p>
+      <p id="title-loading-status" class="title-loading-status">A small life stirs…</p>
     </div>
 
     <button id="title-begin-button" type="button" hidden>TAP TO BEGIN</button>
   </div>
 </div>
+
+<section id="cavern-intro" role="dialog" aria-modal="true" aria-label="Enter the living cavern" hidden>
+  <video id="intro-video" playsinline muted preload="metadata" poster="assets/video/cavern-awakening-poster.jpg" src="assets/video/cavern-awakening.mp4"></video>
+  <div class="intro-vignette" aria-hidden="true"></div>
+  <div class="intro-top"><span>HOLLOWDROP <i> / </i> THE LIVING COLONY</span><button id="intro-sound" type="button" aria-pressed="false">Sound off</button></div>
+  <div class="intro-caption"><span class="intro-kicker">CHAPTER I</span><h2>The Hollow Awakens</h2><p>Even the smallest life leaves a trace.</p></div>
+  <button id="intro-skip" type="button">Enter cavern <span aria-hidden="true">→</span></button>
+  <div class="intro-progress-track" aria-hidden="true"><div id="intro-progress"></div></div>
+</section>
 
 <!-- Memory Reveal: shown once, ~0.6s after the Human Genome Fragment is secured (see
      MemorySequenceController / GameFlowController.onGenomeFragmentSecured). Content is

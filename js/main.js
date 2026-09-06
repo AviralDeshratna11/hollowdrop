@@ -3,6 +3,7 @@ import { createResourceLighting } from './resourceLighting.js';
 import { createPaintedGroundMaterial } from './paintedGround.js';
 import { createTerrainOutcrops } from './terrainOutcrops.js';
 import { CAVE_CLEARINGS } from './caveLayout.js';
+import { LANDMARK_SITES, createCaveLandmarks } from './caveLandmarks.js';
 import { InputController } from './inputController.js?v=5.3';
 import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
 import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js?v=5.3';
@@ -516,6 +517,7 @@ tree2.position.set(tree2Trunk.x, getTerrainHeight(tree2Trunk.x, tree2Trunk.z), t
 scene.add(tree2);
 
 const mapExclusions = [
+  ...LANDMARK_SITES.map(({ x, z, radius }) => ({ x, z, radius })),
   { x: PLAYER_SPAWN_POSITION.x, z: PLAYER_SPAWN_POSITION.z, radius: 7 },
   { x: fragmentExtractionPosition.x, z: fragmentExtractionPosition.z, radius: 5 },
   { x: apexArenaCenter.x, z: apexArenaCenter.z, radius: APEX_CONFIG.arenaRadius + 3 },
@@ -584,9 +586,10 @@ function populateClearingResources() {
     }
   }
 }
-populateClearingResources();
 
 onTerrainElevationReady(() => {
+  createCaveLandmarks(scene, collisionSystem);
+  populateClearingResources();
   applyTerrainElevation(groundGeometry);
 
   tree1.position.y = getTerrainHeight(tree1Trunk.x, tree1Trunk.z);
@@ -1227,6 +1230,7 @@ genomeFragmentController.onSecured = () => {
 // Dev-only inspection hook
 window.__hollowdrop = {
   renderer,
+  slimeTrail,
   tutorialController,
   resetTutorial: () => tutorialController.reset(),
   player,
@@ -1434,14 +1438,13 @@ function animate() {
   damageNumbers.update(realDeltaTime);
   combatVFX.update(realDeltaTime);
   slimeTrail.update(
-    deltaTime,
+    realDeltaTime,
     player.position,
     playerController.currentVelocity,
     isPlayingState && canAct && playerFormController.currentForm === PLAYER_FORMS.SLIME
   );
-  if (isPlayingState && rivalController && typeof rivalController.isAlive === 'function' && rivalController.isAlive() && rivalController.currentForm === 'SLIME') {
-    slimeTrail.update(deltaTime, rivalController.mesh.position, null, true, 'rival');
-  }
+  slimeTrail.update(realDeltaTime, rivalController?.mesh.position, null,
+    isPlayingState && !!rivalController?.isAlive?.() && rivalController.currentForm === 'SLIME', 'rival');
   boundaryEnvironment.update(realDeltaTime);
   lakeBiome.update(deltaTime, player.position, playerController);
 

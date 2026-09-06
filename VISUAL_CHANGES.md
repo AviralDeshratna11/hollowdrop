@@ -1,5 +1,18 @@
 # Local visual update
 
+## Slime contact, cave landmarks and opening film
+
+- Replaced square, flat trail stamps with rounded shader footprints on a 4 x 4 terrain-conforming grid. Wet green residue lasts 0.5-0.8 seconds, fades smoothly, is capped at 96 patches per slime, and clears on reset. Inactive rival trails now age out too. Visible slime mesh height is anchored at its underside so breathing grows upward from ground contact.
+- Added five authored 3D landmarks: a moss-covered stone gateway with an open central passage, a branched root hollow, an exposed fossil bed, a basalt-and-crystal wellspring and a violet reliquary. Static colliders protect solid supports; random dressing avoids these areas. Clearing pickups are placed after the landmarks exist. Painted stone, subtle bark grain and bleached bone materials use existing art and procedural surface detail.
+- Added the supplied `veo-c7670fa3.mp4` unchanged as `assets/video/cavern-awakening.mp4` (1080 x 1920, 24 FPS, 8 seconds, 14.7 MB). `cavern-awakening-poster.jpg` is a frame extracted from that supplied clip. No generated replacement video was used.
+- Reworked the opening with restrained ivory typography, cavern artwork, chapter framing and a progress line. Begin plays the portrait film inline, with sound and Enter cavern controls, then fades into the existing opening/tutorial. Gameplay remains paused throughout the film. Ending, skipping, playback rejection and timeout all converge on one guarded completion path. Reset does not replay the intro.
+- The local Python server now supports single byte-range MP4 requests for playback/seek, including suffix ranges, HEAD and 416 responses; normal game files retain the existing no-cache behavior.
+
+Validation: JavaScript syntax and whitespace checks; isolated desktop Chrome and a 430 x 932 viewport. Natural video completion, sound toggle, skip and deliberately failed media all reached the opening/tutorial. Real drag movement created residue and stopping left zero patches after expiration; reset cleared the trail and restored 24 clearing pickups. Sampled trail vertices matched terrain + 0.018m to floating-point precision. Video range tests compared returned bytes for prefix, middle, suffix, open-ended and full requests, and checked HEAD and invalid ranges. No JavaScript or shader errors occurred; missing favicon responses and the deliberately aborted video request were the expected console failures. Physical phone performance is not measured.
+
+New review images in `design/visual-review/`: `intro-title.png`, `intro-video.png`, `intro-desktop.png`, `slime-trail.png`, `moss-gate.png`, `root-hollow.png`, `fossil-bed.png`, and `wellspring.png`.
+
+
 GitHub integration: rebased onto `7759dbd`, retaining the newer camera recovery, title artwork, textured boundary rocks, health/resource renewal and slime trail. Kept the upstream rock material tints and combined the stone respawn imports with the new painted outlines. Refreshed all six review screenshots after integration. JavaScript syntax checks passed for every module; actual Inspect -> Acquire clicks passed for cyan mushrooms, purple mushrooms, stone, ore and husks, and reset restored 24 clearing pickups with an empty inventory. No JavaScript exceptions or shader errors occurred. Chrome reported two generic 404 console warnings during gameplay, without a corresponding failed response in page network logging; their source was not established.
 
 ## Cave map layout follow-up
