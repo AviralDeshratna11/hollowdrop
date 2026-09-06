@@ -230,9 +230,14 @@ export function getTerrainHeight(x, z) {
   // 1. Authored relief: uplift rocks, downlift pools and crevices.
   const rawTextureElevation = sampleTextureHeight(x, z);
 
-  // 2. Subtle macro undulation across the 90m cavern
-  const macroRoll1 = Math.sin(x * 0.045 + 0.5) * Math.cos(z * 0.04 - 0.3) * 0.15;
-  const macroRoll2 = Math.cos(x * 0.08 - 0.9) * Math.sin(z * 0.075 + 1.1) * 0.08;
+  // 2. Walkable raised shelves and hollows across the 90m cavern
+  const macroRoll1 = Math.sin(x * 0.18 + 0.5) * Math.cos(z * 0.16 - 0.3) * 0.48;
+  const macroRoll2 = Math.cos(x * 0.31 - 0.9) * Math.sin(z * 0.27 + 1.1) * 0.18;
+  // Low, weathered rock shelves: broad enough to walk over, tall enough to
+  // reveal real silhouette, directional shading and parallax at game scale.
+  const shelfWave = Math.sin(x * 0.47 + z * 0.21) * Math.cos(z * 0.39 - x * 0.12);
+  const shelf = Math.pow(Math.max(0, shelfWave), 2) * 0.52;
+  const dryRelief = (macroRoll1 + macroRoll2 + shelf) * (1 - getLakeBasinFactor(x, z) * 0.9);
 
   // 3. Smooth sunken Abyssal Lake basin with bank drop & sediment smoothing
   const dx = (x - LAKE_CONFIG.center.x) / LAKE_CONFIG.rx;
@@ -260,7 +265,7 @@ export function getTerrainHeight(x, z) {
     textureElevation = rawTextureElevation * rockSmoothing;
   }
 
-  return textureElevation + macroRoll1 + macroRoll2 + boundarySlope - lakeDip;
+  return textureElevation + dryRelief + boundarySlope - lakeDip;
 }
 
 /**

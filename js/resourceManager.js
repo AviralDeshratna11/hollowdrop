@@ -70,6 +70,8 @@ const AMBIENT_RESPAWN = {
 const tempSpawnPos = new THREE.Vector3(); // reused - no per-respawn allocation
 
 let nextResourceId = 1;
+const groundUp = new THREE.Vector3(0, 1, 0);
+const resourceNormal = new THREE.Vector3();
 
 function createLabelSprite(text) {
   const canvas = document.createElement('canvas');
@@ -288,11 +290,7 @@ export class ResourceManager {
       const restY = getResourceRestHeight(resource.type, resource.mesh.position.x, resource.mesh.position.z);
       resource.baseY = restY;
       if (!resource.isPhysicsActive && resource.state === 'idle') {
-        if (resource.type.endsWith('_dna')) {
-          resource.mesh.position.y = restY + 0.12;
-        } else {
-          resource.mesh.position.y = restY;
-        }
+        this._applyIdleAnimation(resource);
       }
     }
   }
@@ -393,7 +391,7 @@ export class ResourceManager {
     resource.state = 'attracting';
     const t = 1 - Math.exp(-ATTRACTION_PULL_RATE * deltaTime);
     resource.mesh.position.lerp(playerPosition, t);
-    resource.mesh.position.y = resource.baseY + 0.15; // slight lift while being pulled in
+    resource.mesh.position.y = Math.max(resource.mesh.position.y, getResourceRestHeight(resource.type, resource.mesh.position.x, resource.mesh.position.z) + 0.12);
 
     const proximity = 1 - Math.sqrt(distSq) / ATTRACTION_RADIUS; // 0 (just entered) .. 1 (at center)
     resource.mesh.scale.setScalar(resource.baseScale * (1 - proximity * 0.35));
@@ -469,6 +467,15 @@ export class ResourceManager {
     mesh.scale.setScalar(baseScale);
 
     const isFloating = isPointInLake(mesh.position.x, mesh.position.z) && isBuoyantResource(type) && (baseY > getTerrainHeight(mesh.position.x, mesh.position.z));
+    if (!type.endsWith('_dna')) {
+      const { x, z } = mesh.position;
+      resourceNormal.set(
+        getTerrainHeight(x - 0.2, z) - getTerrainHeight(x + 0.2, z),
+        0.4,
+        getTerrainHeight(x, z - 0.2) - getTerrainHeight(x, z + 0.2)
+      ).normalize();
+      mesh.quaternion.setFromUnitVectors(groundUp, isFloating ? groundUp : resourceNormal);
+    }
     const waterBob = isFloating ? Math.sin(this._elapsed * 3.2 + phase) * 0.045 : 0;
 
     switch (type) {
@@ -491,7 +498,7 @@ export class ResourceManager {
         mesh.scale.set(baseScale * breathe, baseScale * (1 + (breathe - 1) * 0.5), baseScale * breathe);
         if (mesh.userData.pulseMaterials) {
           const pulse = 0.5 + Math.sin(this._elapsed * 2.5 + phase) * 0.35;
-          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.45 + pulse * 0.45;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.14 + pulse * 0.14;
         }
         break;
       }
@@ -502,7 +509,7 @@ export class ResourceManager {
         mesh.scale.set(baseScale * breathe, baseScale * (1 + (breathe - 1) * 0.6), baseScale * breathe);
         if (mesh.userData.pulseMaterials) {
           const pulse = 0.7 + Math.sin(this._elapsed * 3.2 + phase) * 0.35;
-          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.6 + pulse * 0.6;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.16 + pulse * 0.16;
         }
         break;
       }
@@ -510,7 +517,7 @@ export class ResourceManager {
         mesh.position.y = baseY;
         if (mesh.userData.pulseMaterials) {
           const pulse = 0.5 + Math.sin(this._elapsed * 2.5 + phase) * 0.35;
-          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.4 + pulse * 0.6;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.12 + pulse * 0.18;
         }
         break;
       case 'toxic_gland': {
@@ -521,7 +528,7 @@ export class ResourceManager {
         mesh.scale.set(baseScale * (1 + squish), baseScale * (1 - squish), baseScale * (1 + squish));
         if (mesh.userData.pulseMaterials) {
           const pulse = 0.6 + Math.sin(pulseT) * 0.4;
-          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.6 + pulse * 0.6;
+          for (const mat of mesh.userData.pulseMaterials) mat.emissiveIntensity = 0.16 + pulse * 0.16;
         }
         break;
       }

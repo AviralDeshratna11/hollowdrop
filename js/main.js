@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { createResourceLighting } from './resourceLighting.js';
+import { createPaintedGroundMaterial } from './paintedGround.js';
+import { createTerrainOutcrops } from './terrainOutcrops.js';
+import { CAVE_CLEARINGS } from './caveLayout.js';
 import { InputController } from './inputController.js?v=5.3';
 import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
 import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js?v=5.3';
@@ -77,7 +81,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   CAMERA_FAR_BASE
 );
-const CAMERA_OFFSET = new THREE.Vector3(0, 11, 7); // top-down / slightly angled
+const CAMERA_OFFSET = new THREE.Vector3(0, 5.6, 5.0); // top-down / slightly angled
 const CAMERA_FOLLOW_SMOOTHING = 3.5; // lower = laggier camera, doesn't affect player physics
 
 // --- Equal map view across devices ------------------------------------------
@@ -145,15 +149,26 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 // those ramps actually readable (and keeps their hue instead of blowing out to white).
 // Nothing here depends on post-processing - this is the plain forward renderer.
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-// ACES darkens midtones relative to no tone mapping at all, so exposure and the two
-// light intensities below are lifted together to compensate. These three numbers are
-// the tuning knobs for overall scene brightness - adjust them as a group, not singly.
-renderer.toneMappingExposure = 1.45;
+// Warm key light models the rock facets; cool fill keeps the shaded silhouettes
+// readable. Moderate exposure preserves painted mids and saturated mushroom caps.
+renderer.toneMappingExposure = 1.18;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 // --- Lighting --------------------------------------------------------------
-scene.add(new THREE.AmbientLight(0x88ccaa, 0.85));
-const dirLight = new THREE.DirectionalLight(0xbfffe0, 1.35);
-dirLight.position.set(6, 14, 4);
+scene.add(new THREE.HemisphereLight(0xb4d4d5, 0x30382c, 1.15));
+const dirLight = new THREE.DirectionalLight(0xffecc6, 2.1);
+dirLight.position.set(-8, 14, 6);
+// A compact shadow volume follows the player, preserving contact detail on mobile.
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.left = dirLight.shadow.camera.bottom = -13;
+dirLight.shadow.camera.right = dirLight.shadow.camera.top = 13;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 45;
+dirLight.shadow.normalBias = 0.035;
+dirLight.shadow.bias = -0.0002;
+scene.add(dirLight.target);
 scene.add(dirLight);
 
 // Rim/back light. Every creature in this game is deliberately near-black (the Cave
@@ -163,7 +178,7 @@ scene.add(dirLight);
 // opposite the key, in a cool violet that the warm-green key never produces, so it
 // catches the top/back edge of a body and separates it from the floor behind it.
 // Low intensity on purpose: it should define an edge, not look like a second sun.
-const rimLight = new THREE.DirectionalLight(0x7d8cff, 0.75);
+const rimLight = new THREE.DirectionalLight(0x739de0, 0.65);
 rimLight.position.set(-8, 5, -9);
 scene.add(rimLight);
 
@@ -177,7 +192,9 @@ scene.add(rimLight);
 // Nine independently painted biomes are stitched into one continuous atlas.
 // The separate semantic height map shares its UVs and world bounds, so snow
 // brightness and mineral glow cannot create spurious mountains or pits.
-const GROUND_SEGMENTS = 320;
+// The height field's shelves span metres; 35cm spacing preserves their shape.
+// Finer grids spend vertices on distant terrain outside the camera's view.
+const GROUND_SEGMENTS = 256;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
 
 const groundTexture = new THREE.TextureLoader(assetLoadingManager).load(GROUND_ATLAS_URL);
@@ -194,10 +211,12 @@ applyTerrainElevation(groundGeometry);
 
 const ground = new THREE.Mesh(
   groundGeometry,
-  new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1 })
+  createPaintedGroundMaterial(groundTexture, assetLoadingManager, renderer.capabilities.getMaxAnisotropy())
 );
 ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
 scene.add(ground);
+onTerrainElevationReady(() => createTerrainOutcrops(scene, ground.material));
 
 // --- Player root + swappable visuals -----------------------------------------
 const PLAYER_RADIUS = 0.6;
@@ -210,6 +229,16 @@ scene.add(player);
 const slimeVisual = new THREE.Group();
 slimeVisual.renderOrder = 10;
 player.add(slimeVisual);
+
+// A small invisible caster gives the jelly a soft contact shadow without
+// drawing its 167k-vertex source model again into the shadow map every frame.
+const slimeShadow = new THREE.Mesh(
+  new THREE.SphereGeometry(PLAYER_RADIUS * 0.90, 16, 10),
+  new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false })
+);
+slimeShadow.scale.y = 0.82;
+slimeShadow.castShadow = true;
+slimeVisual.add(slimeShadow);
 
 const amoeba = createPlayerSlimeVisual(PLAYER_RADIUS);
 const slimeMaterial = amoeba.bodyMaterial;
@@ -263,6 +292,11 @@ const resourceManager = new ResourceManager(scene, inventoryManager, uiManager, 
 resourceManager.onAbsorbed = () => runStats.resourcesAbsorbed++;
 
 function populateWorldResources() {
+  for (const [type, x, z] of [
+    ['blue_mushroom', -2.5, -1.6], ['mushroom', 2.4, -2.0],
+    ['stone', -2.1, 1.5], ['iron', 2.8, 1.0],
+    ['spore', 0.8, 2.6], ['blue_mushroom', -3.5, 2.4],
+  ]) resourceManager.spawnResource(type, new THREE.Vector3(x, 0, z));
   resourceManager.spawnTestZone(player.position, 4, {
     minRadius: 3,
     maxRadius: 15,
@@ -283,6 +317,7 @@ function populateWorldResources() {
   // above so it never leaks back into the ambient scatter either.
 }
 populateWorldResources();
+const resourceLighting = createResourceLighting(scene, resourceManager, player);
 
 uiManager.updateMassUI(inventoryManager.getInventoryWeight(), inventoryManager.maxWeight);
 
@@ -530,6 +565,27 @@ for (const c of boundaryEnvironment.getColliders()) {
   collisionSystem.addStatic(c.x, c.z, c.radius);
 }
 
+function populateClearingResources() {
+  // Place these after static obstacles exist, so colonies remain reachable.
+  for (const clearing of CAVE_CLEARINGS) {
+    const mushroom = clearing.color === 'purple' ? 'mushroom' : 'blue_mushroom';
+    for (const [type, dx, dz] of [[mushroom, -2.1, -1.4], [mushroom, 1.7, -2], [mushroom, 2.4, 1.4], ['iron', -2.8, 1.6]]) {
+      for (let attempt = 0; attempt < 37; attempt++) {
+        const radius = attempt === 0 ? 0 : Math.ceil(attempt / 12) * 0.8;
+        const angle = attempt * Math.PI / 6;
+        const x = clearing.x + dx + Math.cos(angle) * radius;
+        const z = clearing.z + dz + Math.sin(angle) * radius;
+        if (!collisionSystem.isClear(x, z, 0.9)) continue;
+        if (resourceManager.resources.some(r => Math.hypot(r.mesh.position.x - x, r.mesh.position.z - z) < 0.85)) continue;
+        const resource = resourceManager.spawnResource(type, new THREE.Vector3(x, 0, z));
+        resource.caveClearing = true;
+        break;
+      }
+    }
+  }
+}
+populateClearingResources();
+
 onTerrainElevationReady(() => {
   applyTerrainElevation(groundGeometry);
 
@@ -538,7 +594,7 @@ onTerrainElevationReady(() => {
 
   fragmentExtractionPosition.y = getTerrainHeight(fragmentExtractionPosition.x, fragmentExtractionPosition.z);
   if (fragmentContestManager && fragmentContestManager.extractionZoneVisual) {
-    fragmentContestManager.extractionZoneVisual.position.y = fragmentExtractionPosition.y;
+    fragmentContestManager.realignToTerrain();
   }
 
   resourceManager.realignToTerrain();
@@ -1004,6 +1060,7 @@ function resetGame() {
   combatVFX.clear();
   slimeTrail.clear();
   populateWorldResources();
+  populateClearingResources();
 
   stoneClusterManager.clearAll();
   stoneClusterManager.populateWorldClusters({ exclusions: mapExclusions });
@@ -1169,6 +1226,7 @@ genomeFragmentController.onSecured = () => {
 
 // Dev-only inspection hook
 window.__hollowdrop = {
+  renderer,
   tutorialController,
   resetTutorial: () => tutorialController.reset(),
   player,
@@ -1400,7 +1458,10 @@ function animate() {
   });
 
   updateCamera(deltaTime);
+  resourceLighting.update(realDeltaTime);
 
+  dirLight.position.set(player.position.x - 8, player.position.y + 14, player.position.z + 6);
+  dirLight.target.position.copy(player.position);
   renderer.render(scene, camera);
 }
 

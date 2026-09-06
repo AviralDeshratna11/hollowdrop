@@ -82,7 +82,8 @@ export class PlayerController {
     this._baseScale = mesh.scale.clone();
     this._pulseTime = null;
     this._load = 0;
-    this._facingAngle = 0; // rotation.y - which way the model is facing
+    this._facingAngle = Math.PI; // greet the camera at spawn; movement turns toward travel
+    this.mesh.rotation.y = this._facingAngle;
 
     // Set fresh every frame by main.js from the current form (1 for everything except
     // Slime) - see the jelly-wobble constants above.
@@ -194,9 +195,9 @@ export class PlayerController {
    *  the previous life (flash, pulse, burden, death collapse) leaks into the next. */
   resetToBaseSlime() {
     this._deathTime = null;
-    this._facingAngle = 0;
+    this._facingAngle = Math.PI;
     this.mesh.scale.copy(this._baseScale);
-    this.mesh.rotation.set(0, 0, 0);
+    this.mesh.rotation.set(0, this._facingAngle, 0);
     this.activeMaterial.opacity = this._baseOpacity;
     this.activeMaterial.emissive.copy(this._baseEmissive);
     this.activeMaterial.emissiveIntensity = this._baseEmissiveIntensity;

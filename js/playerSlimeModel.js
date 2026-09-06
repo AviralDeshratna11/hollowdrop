@@ -80,7 +80,7 @@ const REACTION_CONFIG = {
 // further - those set the CHARACTER of the motion, not its intensity;
 // lobeAmplitude/inwardFactor/tailLength are the ones that actually scale it.
 const DISPLACEMENT_CONFIG = {
-  lobeAmplitude: 0.12,
+  lobeAmplitude: 0.065,
   lobeFrequency: 1.7,
   lobeSpeed: 0.55, // constant idle morph, not just a static bumpy cast - this IS the "no defined shape" ask
   lobeGain: 1.3,
@@ -195,6 +195,13 @@ export function createPlayerSlimeVisual(radius = 0.6) {
     },
   })
     .then(({ group: modelGroup, material }) => {
+      // Gentle surface normals and a wet highlight make the source mesh read as
+      // jelly, rather than hard, heavily embossed rock under the new key light.
+      material.normalScale.set(0.25, 0.25);
+      material.roughnessMap = null;
+      material.metalnessMap = null;
+      material.roughness = 0.30;
+      material.metalness = 0;
       applyJellyRimTreatment(material, {
         rimStrength: 0.9,
         rimPower: 2.2,
@@ -297,7 +304,9 @@ export function createPlayerSlimeVisual(radius = 0.6) {
 
     const breathe = Math.sin(breatheTime * REACTION_CONFIG.breatheSpeed) * REACTION_CONFIG.breatheAmount;
     const swell = THREE.MathUtils.clamp(load, 0, 1) * REACTION_CONFIG.loadSwell;
-    group.scale.setScalar(Math.max(1 + breathe + swell + widenScale + squintScale, 0.05));
+    const bodyScale = Math.max(1 + breathe + swell + widenScale + squintScale, 0.05);
+    // Lift the source mesh's low dome while preserving its collision footprint.
+    group.scale.set(bodyScale, bodyScale * 1.45, bodyScale);
   }
 
   function triggerWiden() {

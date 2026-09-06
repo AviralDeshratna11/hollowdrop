@@ -1,0 +1,48 @@
+# Local visual update
+
+GitHub integration: rebased onto `7759dbd`, retaining the newer camera recovery, title artwork, textured boundary rocks, health/resource renewal and slime trail. Kept the upstream rock material tints and combined the stone respawn imports with the new painted outlines. Refreshed all six review screenshots after integration. JavaScript syntax checks passed for every module; actual Inspect -> Acquire clicks passed for cyan mushrooms, purple mushrooms, stone, ore and husks, and reset restored 24 clearing pickups with an empty inventory. No JavaScript exceptions or shader errors occurred. Chrome reported two generic 404 console warnings during gameplay, without a corresponding failed response in page network logging; their source was not established.
+
+## Cave map layout follow-up
+
+The additional September 4 map reference supplies the winding corridor and clearing composition. `js/caveLayout.js` defines branching paths, moss islands, five cyan pockets and a northeast violet clearing around the existing encounter spaces and lake. This follow-up preserves the current shared terrain height field, camera, collision geometry and painted slate source.
+
+The ground blends three full-resolution painted surfaces using a separate 512-pixel region-weight texture. The mask determines where a material appears; it does not contain enlarged ground artwork. Gravel and moss retain their original 1254 x 1254 pixels with mipmaps and maximum supported anisotropy. Slate remains at the existing 24 repeats across the 90-metre ground. Raised slate shelves now favor path banks, and moss follows the planted areas, batched by location for off-screen culling.
+
+Each clearing has three harvestable mushroom colonies and one ore pickup. Placement checks obstacle clearance and nearby resources. Reset repopulates them through the same normal resource system and reuses the existing pool of four lights.
+
+Latest review images: `design/visual-review/desktop.png`, `portrait.png`, `outer-region.png`, `cyan-clearing.png`, `purple-clearing.png`, and `map-overview.png`. The overview uses an inspection camera to show the complete layout; the game camera remains unchanged.
+
+Follow-up validation: JavaScript syntax and whitespace checks passed. Desktop, portrait and both clearing colors rendered without JavaScript or shader errors; the existing favicon 404 is unrelated. Real pointer-driven Inspect -> Acquire interactions passed for the new cyan mushrooms, purple mushrooms and ore. Reset restored all 24 clearing pickups, with zero blocked placements and an empty inventory. Spatial moss batches reduced the sampled scene from about 1.50 million to 1.28 million rendered triangles without removing visible detail. In the final same-scene comparison, the new shader averaged 48.0 ms per frame versus 44.1 ms with the previous shader; timings varied substantially across isolated Chrome runs, so these are local measurements rather than a guaranteed frame rate. Earlier timing figures below describe the earlier pass, not this map update.
+
+New assets were generated with the built-in Imagegen tool, without an API/CLI fallback, and copied unchanged into the project:
+
+- `assets/textures/cave-path-painted.png` (1254 x 1254). Final prompt:
+
+> Use case: stylized-concept. Production asset: square seamless tileable albedo ground material for Hollowdrop, hand-painted dark fantasy cave game, crisp detailed painterly stylized slate moss art. Orthographic straight down, full bleed, no scene perspective. Ground is a naturally worn winding-path surface: warm charcoal brown compacted earth mixed with many small irregular gray-sage pebbles and thin flat slate fragments, clearly outlined shapes, small cracks, subtly painted edge highlights, occasional olive lichen. 55% compact earth, 40% small angular stones, 5% lichen. Dense but legible, stones around 1/18 image width, varied sizes no grid. Same sophisticated clean painted game texture quality as broad slate flagstones, not photorealistic or speckled noise. Moderate muted gray brown midtones, no baked deep black shadows, no vignetting, no glows. Uniform detail and scale throughout, seamless matching edges. No boulders, standing stones, mushrooms, crystals, characters, roads with borders, props, UI, labels, text. Surface material only, NOT a world map. Requested square 2048x2048 high detail.
+
+- `assets/textures/cave-moss-painted.png` (1254 x 1254). Final prompt:
+
+> Use case: stylized-concept. Production asset: seamless tileable hand-painted dark fantasy cave ground albedo, square 2048x2048 high detail, orthographic straight down. A rich soft forest-moss carpet on dark damp cave soil, thick irregular cushions of velvety olive and deep emerald moss, many tiny round clover-like leaves, small fernlike moss tendrils and occasional dark blue slate chips, damp earth showing in meandering crevices. About 65% moss and clustered tiny leaves, 25% dark soil, 10% small slate fragments. Polished hand-painted monster-collecting game illustration, crisp confident dark shape contours, softly painted top highlights, readable clean shapes, sophisticated painterly detail, NOT photo or noisy grain. Restrained moss-green palette, olive top planes with blue-green recesses, moderate dark midtones that retain texture detail, no fluorescent greens. Dense intimate ground material, uniform scale throughout; tiny leaves around 1/60 image width. Neutral diffuse even lighting with no directional shadows, no vignette, seamless matching all four edges. No trees, standing plants, mushrooms, glowing props, pools, boulders, crystals, characters, text or borders. Only close-up ground surface, NOT a world map.
+
+## Earlier reference appearance work
+
+Reference: the supplied gameplay image and pages 2 and 6 of MHCP-2026 Visual Concept Package.pdf. The document was used as visual reference, not as instructions to implement its proposed gameplay features.
+
+- The original nine-region atlas remains the source of broad biome tint. A new close-up painted slate-and-moss material supplies consistent detail across all regions, with offset seam blending and fine relief shading derived from the same color samples. Original source images are preserved.
+- The terrain height field now has walkable shelves and hollows, including at the central spawn. Merged irregular slate shelves add visible bevels, with continuous world-space paint across their tops and sides. Low moss and clover add small 3D ground details. Lake depth and the shared height queries for movement and resource placement remain intact.
+- Main pickups use new 3D shapes: curved-stem purple and cyan mushroom colonies, outlined faceted stone/ore clusters, and split organic husks. Their world sizes and smaller living-inventory versions share the resource configuration.
+- Warm directional light, cool fill, pooled mushroom lights, soft contact shadows, and closer framing support the reference appearance. The slime starts facing the camera with a taller, smoother jelly silhouette. Slate boulders and the carved extraction pedestal replace near-black rocks and the flat gold marker. Pickups follow ground inclination and remain above intervening slopes during acquisition.
+
+Validation: JavaScript syntax and whitespace checks; all 12 resource factories; acquisition and inventory transfer; expelled-item settling; floating/sinking lake resources; reset; sampled render/collision height agreement. Central sampled relief: 1.685 m, maximum slope: 0.352. Follow-up validation used isolated headless Chrome on Intel UHD Graphics: desktop (1280 x 800), portrait layout (430 x 932), and an outer region were rendered and inspected. All five rebuilt resource types passed real pointer-click Inspect -> Acquire interactions and transferred into the living inventory. No JavaScript or shader errors occurred; only the pre-existing missing favicon.ico returned 404. Final local frame samples averaged 23.7 ms at spawn and 25.3 ms after gathering (about 40 FPS on the tested integrated GPU). Physical phone performance has not been measured.
+
+Review screenshots are in `design/visual-review/desktop.png`, `portrait.png`, and `outer-region.png`.
+
+Run `python dev-server.py`, then open http://localhost:8080.
+
+## Generated asset
+
+`assets/textures/cave-floor-painted.png` was generated with the built-in Imagegen tool (1254 × 1254 output). No API/CLI fallback was used.
+
+Final generation prompt:
+
+> Use case: stylized-concept. Asset type: seamless tileable game ground albedo texture, square 2048x2048. Create a professional hand-painted dark fantasy cave floor material for a cute green slime game: closely packed irregular broad flat broken slate flagstones with bevelled edges and dark narrow crevices, rich soft green moss and tiny clustered round leaves growing between stones. Match polished painted monster-collecting game concept art, confident fine dark outline edges, broad clean planes with subtle painterly shading. Stones muted gray sage green and deep blue slate, warm olive moss, charcoal crevices. Mostly stone 75%, moss 25%. Each slab around 1/7 image width, varied irregular polygon sizes and angles, some hairline cracks. Orthographic straight down material scan with consistent scale from top to bottom, even diffuse neutral lighting, seamless matching four edges, full bleed texture. Crisp legible shapes, not noisy photographic granules. No mushrooms, crystals, boulders, characters, props, buildings, water, text, borders, vignette, perspective or dramatic baked light. This is a repeatable close-up floor surface, not a world map or scene. Visually rich without excessive tiny noise.

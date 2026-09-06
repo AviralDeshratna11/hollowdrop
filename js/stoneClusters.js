@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getTerrainHeight, isPointInLake } from './terrain.js?v=5.4';
+import { addPaintedOutline } from './referenceResourceModels.js';
 import { makeRng } from './worldDressing.js?v=5.3';
 import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
 
@@ -123,6 +124,7 @@ export class StoneClusterManager {
       const geom = stoneGeometries[i % stoneGeometries.length];
       const mat = stoneMaterials[Math.floor(this.rng() * stoneMaterials.length)].clone();
       const mesh = new THREE.Mesh(geom, mat);
+      addPaintedOutline(mesh, 1.05);
 
       attachOcclusionOutline(mesh, {
         color: 0x8a949e,

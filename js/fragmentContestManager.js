@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
+import { getTerrainHeight } from './terrain.js?v=5.4';
 
 export const DEBUG_FRAGMENT_CONTEST = false;
 
@@ -12,19 +13,36 @@ function createExtractionZoneMesh() {
   const group = new THREE.Group();
 
   const pedestalMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2a2410,
-    roughness: 0.55,
+    color: 0x66766b,
+    roughness: 0.94,
+    flatShading: true,
     emissive: 0xffcf6b,
-    emissiveIntensity: 0.25,
+    emissiveIntensity: 0.015,
   });
-  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.4, 16), pedestalMaterial);
-  pedestal.position.y = 0.2;
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.85, 0.18, 9), pedestalMaterial);
+  pedestal.position.y = 0.09;
+  pedestal.castShadow = pedestal.receiveShadow = true;
   group.add(pedestal);
+
+  // Carved concentric stonework stays subdued until the fragment powers it.
+  const carving = new THREE.Mesh(new THREE.RingGeometry(0.48, 0.515, 36), new THREE.MeshBasicMaterial({ color: 0x283d35, side: THREE.DoubleSide }));
+  carving.rotation.x = -Math.PI / 2;
+  carving.position.y = 0.183;
+  group.add(carving);
+  const runeMaterial = new THREE.MeshBasicMaterial({ color: 0xb7c59b });
+  const runeGeometry = new THREE.BoxGeometry(0.035, 0.008, 0.09);
+  for (let i = 0; i < 8; i++) {
+    const angle = i * Math.PI / 4;
+    const rune = new THREE.Mesh(runeGeometry, runeMaterial);
+    rune.position.set(Math.sin(angle) * 0.60, 0.185, Math.cos(angle) * 0.60);
+    rune.rotation.y = angle;
+    group.add(rune);
+  }
 
   const ringMaterial = new THREE.MeshBasicMaterial({
     color: 0xffcf6b,
     transparent: true,
-    opacity: 0.2,
+    opacity: 0.08,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -38,7 +56,7 @@ function createExtractionZoneMesh() {
   const beamMaterial = new THREE.MeshBasicMaterial({
     color: 0xffe9b8,
     transparent: true,
-    opacity: 0.08,
+    opacity: 0,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -68,7 +86,7 @@ export class FragmentContestManager {
     this.resetSpawnPosition = resetSpawnPosition.clone();
 
     this.extractionZoneVisual = createExtractionZoneMesh();
-    this.extractionZoneVisual.position.copy(this.extractionPosition);
+    this.realignToTerrain();
     scene.add(this.extractionZoneVisual);
 
     this._extractionActive = false;
@@ -78,6 +96,17 @@ export class FragmentContestManager {
     // orchestration (its own escape channel completing) - wired here rather than
     // through the constructor since RivalController exists first.
     rivalController.fragmentContestManager = this;
+  }
+
+  realignToTerrain() {
+    const { x, z } = this.extractionPosition;
+    this.extractionPosition.y = getTerrainHeight(x, z);
+    this.extractionZoneVisual.position.copy(this.extractionPosition);
+    const normal = new THREE.Vector3(
+      getTerrainHeight(x - 0.7, z) - getTerrainHeight(x + 0.7, z), 1.4,
+      getTerrainHeight(x, z - 0.7) - getTerrainHeight(x, z + 0.7)
+    ).normalize();
+    this.extractionZoneVisual.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
   }
 
   update(deltaTime) {
@@ -97,9 +126,9 @@ export class FragmentContestManager {
 
   _updateExtractionVisual(deltaTime) {
     const { ringMaterial, beamMaterial, pedestalMaterial, ring } = this.extractionZoneVisual.userData;
-    const targetRingOpacity = this._extractionActive ? 0.7 : 0.2;
-    const targetBeamOpacity = this._extractionActive ? 0.35 : 0.08;
-    const targetPedestalIntensity = this._extractionActive ? 1.1 : 0.25;
+    const targetRingOpacity = this._extractionActive ? 0.7 : 0.08;
+    const targetBeamOpacity = this._extractionActive ? 0.35 : 0;
+    const targetPedestalIntensity = this._extractionActive ? 0.7 : 0.015;
     const smooth = 1 - Math.exp(-4 * deltaTime);
     ringMaterial.opacity += (targetRingOpacity - ringMaterial.opacity) * smooth;
     beamMaterial.opacity += (targetBeamOpacity - beamMaterial.opacity) * smooth;
@@ -144,9 +173,9 @@ export class FragmentContestManager {
     this._extractionActive = false;
     this._resetTimer = null;
     const { ringMaterial, beamMaterial, pedestalMaterial } = this.extractionZoneVisual.userData;
-    ringMaterial.opacity = 0.2;
-    beamMaterial.opacity = 0.08;
-    pedestalMaterial.emissiveIntensity = 0.25;
+    ringMaterial.opacity = 0.08;
+    beamMaterial.opacity = 0;
+    pedestalMaterial.emissiveIntensity = 0.015;
   }
 
   /** What the objective indicator should currently point at - null while there's
