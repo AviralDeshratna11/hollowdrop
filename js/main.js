@@ -50,7 +50,7 @@ import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
 import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
-import { BoundaryEnvironment } from './boundaryEnvironment.js?v=5.7';
+import { BoundaryEnvironment } from './boundaryEnvironment.js?v=6.0';
 import { LakeBiome } from './lakeBiome.js?v=5.3';
 import { SlimeTrailSystem } from './slimeTrail.js?v=7.0';
 
