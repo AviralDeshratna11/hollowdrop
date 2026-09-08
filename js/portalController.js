@@ -37,6 +37,7 @@ export class PortalController {
   constructor({
     scene,
     playerController,
+    playerHealth = null,
     uiManager,
     collisionSystem,
     resourceManager,
@@ -45,6 +46,7 @@ export class PortalController {
   }) {
     this.scene = scene;
     this.playerController = playerController;
+    this.playerHealth = playerHealth;
     this.player = playerController.mesh;
     this.uiManager = uiManager;
     this.collisionSystem = collisionSystem;
@@ -162,6 +164,13 @@ export class PortalController {
   }
 
   /**
+   * Whether the portal is currently playing the absorption / transition sequence.
+   */
+  isTransitioning() {
+    return this.state === PORTAL_STATES.TRANSITIONING;
+  }
+
+  /**
    * Intentional player entry interaction.
    */
   enterPortal() {
@@ -173,7 +182,9 @@ export class PortalController {
     this.uiManager.hidePortalPrompt?.();
 
     // Lock player movement
+    // Lock player movement and grant invulnerability during absorption cutscene
     this.playerController.haltMovement();
+    this.playerHealth?.grantInvulnerability?.(this.config.transitionDuration + 2.0);
     this._playerInitialPos.copy(this.player.position);
 
     playPortalEnterSound();
@@ -509,6 +520,7 @@ export class PortalController {
 
     this.uiManager.hidePortalPrompt?.();
     this.uiManager.hidePortalDormantHint?.();
+    if (this.player) this.player.scale.setScalar(1.0);
   }
 
   /**

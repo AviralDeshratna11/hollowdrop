@@ -12,7 +12,8 @@ import {
   playApexHitSound,
   playApexDeathSound,
   playBiteHitSound,
-} from './soundEffects.js?v=5.3';
+  playArmorDeflectSound,
+} from './soundEffects.js?v=7.9';
 import { calculateAttackDamage } from './combatUtils.js?v=5.3';
 
 
@@ -207,13 +208,50 @@ export class ApexController {
   // --- Combat interface ---
 
   getDamageableEntities() {
-    return DAMAGEABLE_STATES.has(this.state) ? [this] : [];
+    return (DAMAGEABLE_STATES.has(this.state) || this.state === STATES.PHASE_TRANSITION) ? [this] : [];
   }
 
   takeDamage(amount, info = {}) {
+    // Detect projectile attacks (Stone/Iron projections or any other ranged projectile)
+    const isProjectile = info.isProjectile === true
+      || info.attackType === 'thrown_rock'
+      || info.attackType === 'projectile'
+      || info.sourceType === 'projectile'
+      || (info.attackType !== 'venom_bite' && info.attackType !== 'poison_expel' && info.attackType !== 'debug');
+
+    const isApexFury = this.phase >= 3 || (this.currentHealth / this.maxHealth <= APEX_CONFIG.phase3Threshold);
+
+    // Stage 3 / Apex Fury: 0 damage (completely immune to all projectiles)
+    if (isApexFury && isProjectile) {
+      playArmorDeflectSound();
+      this.resourceManager?.particles?.spawnBurst?.(this.mesh.position, 0x8899aa, 5);
+      if (DEBUG_APEX) {
+        console.log(`Murkmaw Apex Fury: IMMUNE to projectile (0 dmg). HP: ${this.currentHealth}/${this.maxHealth}`);
+      }
+      return { applied: false, damage: 0, immune: true };
+    }
+
+    // Ignore damage during non-damageable states (e.g. DORMANT, INTRO, BURROWED, DEAD, or during phase transition for non-projectiles)
     if (!DAMAGEABLE_STATES.has(this.state)) return false;
 
-    this.currentHealth = Math.max(0, this.currentHealth - amount);
+    let finalDamage = amount;
+
+    if (isProjectile) {
+      if (this.phase === 1) {
+        finalDamage = amount; // Stage 1: 100% normal damage
+      } else if (this.phase === 2) {
+        finalDamage = Math.max(1, Math.round(amount * 0.5)); // Stage 2: 50% damage
+      } else {
+        // Stage 3 fallback
+        finalDamage = 0;
+        playArmorDeflectSound();
+        this.resourceManager?.particles?.spawnBurst?.(this.mesh.position, 0x8899aa, 5);
+        return { applied: false, damage: 0, immune: true };
+      }
+    }
+
+    // Apply damage (100% in Stage 1, 50% in Stage 2, or normal damage for non-projectile attacks like Venom Rat Bite)
+    this.currentHealth = Math.max(0, this.currentHealth - finalDamage);
     this.uiManager.updateBossHealth(this.currentHealth / this.maxHealth);
     this._hitFlashTimer = 0;
     this._hitRecoilTimer = 0;
@@ -223,23 +261,23 @@ export class ApexController {
     playApexHitSound();
 
     if (DEBUG_APEX) {
-      console.log(`Hit Murkmaw: ${amount} dmg. HP: ${this.currentHealth}/${this.maxHealth}`);
+      console.log(`Hit Murkmaw: ${finalDamage} dmg (${isProjectile ? 'Stage ' + this.phase + ' Projectile' : (info.attackType || 'attack')}). HP: ${this.currentHealth}/${this.maxHealth}`);
     }
 
     if (this.currentHealth <= 0) {
       this._die();
-    } else if (this.phase === 1 && this.currentHealth / this.maxHealth <= APEX_CONFIG.phase2Threshold) {
-      this._enterPhaseTransition(2);
-    } else if (this.phase === 2 && this.currentHealth / this.maxHealth <= APEX_CONFIG.phase3Threshold) {
-      this._enterPhaseTransition(3);
+    } else if (this.currentHealth / this.maxHealth <= APEX_CONFIG.phase3Threshold) {
+      if (this.phase < 3) this._enterPhaseTransition(3);
+    } else if (this.currentHealth / this.maxHealth <= APEX_CONFIG.phase2Threshold) {
+      if (this.phase < 2) this._enterPhaseTransition(2);
     }
-    return true;
+    return { applied: true, damage: finalDamage, immune: false };
   }
 
   // --- Debug-only helpers ---
 
   debugForceAttack(type) {
-    if (!DEBUG_APEX || this.state !== STATES.COMBAT) return;
+    if (this.state !== STATES.COMBAT) return;
     if (type === 'charge') this._beginCharge();
     else if (type === 'slam') this._beginSlam();
     else if (type === 'toxic') this._beginToxic();
@@ -247,14 +285,20 @@ export class ApexController {
   }
 
   debugForcePhase2() {
-    if (!DEBUG_APEX || this.phase >= 2) return;
+    if (this.state === STATES.DORMANT) {
+      this.startEncounter();
+    }
+    if (this.phase >= 2) return;
     this.currentHealth = Math.min(this.currentHealth, this.maxHealth * APEX_CONFIG.phase2Threshold);
     this.uiManager.updateBossHealth(this.currentHealth / this.maxHealth);
     this._enterPhaseTransition(2);
   }
 
   debugForcePhase3() {
-    if (!DEBUG_APEX || this.phase >= 3) return;
+    if (this.state === STATES.DORMANT) {
+      this.startEncounter();
+    }
+    if (this.phase >= 3) return;
     this.currentHealth = Math.min(this.currentHealth, this.maxHealth * APEX_CONFIG.phase3Threshold);
     this.uiManager.updateBossHealth(this.currentHealth / this.maxHealth);
     this._enterPhaseTransition(3);
@@ -362,14 +406,23 @@ export class ApexController {
     return horizontalDistanceSq(this.mesh.position, this.player.position) < DISENGAGE_RADIUS_SQ;
   }
 
-  _updateBossHudVisibility() {
+  _updateBossHudVisibility(forceTitleUpdate = false) {
     const shouldShow = this._isPlayerInRange() && !this.playerHealth.isDead;
-    if (shouldShow === this._hudVisible) return;
-    this._hudVisible = shouldShow;
+    const title = (this.phase >= 3 || this.currentHealth / this.maxHealth <= APEX_CONFIG.phase3Threshold)
+      ? 'MURKMAW — APEX FURY'
+      : (this.phase === 2 || this.currentHealth / this.maxHealth <= APEX_CONFIG.phase2Threshold)
+        ? 'MURKMAW — ENRAGED APEX'
+        : 'MURKMAW — APEX PREDATOR';
+
     if (shouldShow) {
-      const title = this.phase === 3 ? 'MURKMAW — APEX FURY' : this.phase === 2 ? 'MURKMAW — ENRAGED APEX' : 'MURKMAW — APEX PREDATOR';
-      this.uiManager.showBossHealth(title);
-    } else {
+      if (!this._hudVisible || this._currentBossTitle !== title || forceTitleUpdate) {
+        this._hudVisible = true;
+        this._currentBossTitle = title;
+        this.uiManager.showBossHealth(title);
+      }
+    } else if (this._hudVisible) {
+      this._hudVisible = false;
+      this._currentBossTitle = null;
       this.uiManager.hideBossHealth();
     }
   }
@@ -665,7 +718,7 @@ export class ApexController {
     playApexRoarSound();
     this.screenShake?.add(0.5);
 
-    this._updateBossHudVisibility();
+    this._updateBossHudVisibility(true);
     if (DEBUG_APEX) console.log(`Murkmaw entering Phase ${newPhase}`);
   }
 

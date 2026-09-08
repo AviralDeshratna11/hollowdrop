@@ -26,8 +26,8 @@ import { createPlayerSlimeVisual } from './playerSlimeModel.js?v=5.3';
 import { PreyManager, DEBUG_PREY } from './preyManager.js?v=5.3';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js?v=5.3';
 import { CombatVFXSystem } from './combatVFX.js?v=5.3';
-import { ProjectileSystem } from './projectileSystem.js?v=5.3';
-import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js?v=5.3';
+import { ProjectileSystem } from './projectileSystem.js?v=8.0';
+import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js?v=8.0';
 import { ApexEncounterManager } from './apexEncounterManager.js?v=5.3';
 import { GenomeFragmentController, FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
 import { RivalController, DEBUG_RIVAL } from './rivalController.js?v=5.3';
@@ -579,6 +579,7 @@ for (const c of boundaryEnvironment.getColliders()) {
 const portalController = new PortalController({
   scene,
   playerController,
+  playerHealth,
   uiManager,
   collisionSystem,
   resourceManager,
@@ -835,7 +836,8 @@ const inventoryUI = new InventoryUI(inventoryManager, {
   burdenSystem,
   canOpen: () => gameFlowController.state === GAME_STATES.PLAYING
     && deathRespawnManager.isPlaying
-    && !playerFormController.isLocked,
+    && !playerFormController.isLocked
+    && !(portalController?.isTransitioning?.() ?? false),
   onOpen: () => {
     inputController.cancel();
     inventoryInteraction.cancelActiveGesture();
@@ -1037,6 +1039,7 @@ if (DEBUG_MUTATION_TIMER) {
 
 window.addEventListener('keydown', (e) => {
   if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (portalController?.isTransitioning?.()) return;
   if (e.code === 'Space' || e.key === 'q' || e.key === 'Q') {
     if (playerFormController.currentForm === PLAYER_FORMS.VENOM_RAT) {
       e.preventDefault();
@@ -1068,20 +1071,25 @@ if (DEBUG_PREDATOR_COMBAT) {
   });
 }
 
-if (DEBUG_APEX) {
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'b' || e.key === 'B') apexController.startEncounter();
+window.apexController = apexController;
+
+window.addEventListener('keydown', (e) => {
+  if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (portalController?.isTransitioning?.()) return;
+  if (e.key === 'b' || e.key === 'B') apexController.startEncounter();
+  if (e.key === 'p' || e.key === 'P') apexController.debugForcePhase2();
+  if (e.key === 'l' || e.key === 'L') apexController.debugForcePhase3();
+  if (DEBUG_APEX) {
     if (e.key === '1') apexController.debugForceAttack('charge');
     if (e.key === '2') apexController.debugForceAttack('slam');
     if (e.key === '3') apexController.debugForceAttack('toxic');
     if (e.key === '4') apexController.debugForceAttack('burrow');
-    if (e.key === 'p' || e.key === 'P') apexController.debugForcePhase2();
     if (e.key === 'k' || e.key === 'K') {
       apexController.takeDamage(calculateAttackDamage(30, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'g' || e.key === 'G') apexController.debugSetHealth(15);
-  });
-}
+  }
+});
 
 if (DEBUG_RIVAL) {
   window.addEventListener('keydown', (e) => {
@@ -1480,16 +1488,23 @@ function animate() {
   metabolismSystem.update(deltaTime);
   playerController.setHealthVisual(playerHealth.getHealthRatio());
 
-  const canAct = isPlayingState && deathRespawnManager.isPlaying && !playerFormController.isLocked;
-  if (canAct) {
-    const input = inputController.getMovementInput();
-    playerController.setTargetFromInput(input.x, input.y, input.magnitude);
+  const isPortalTransitioning = portalController?.isTransitioning?.() ?? false;
+  const canAct = isPlayingState && deathRespawnManager.isPlaying && !playerFormController.isLocked && !isPortalTransitioning;
+
+  if (isPortalTransitioning) {
+    inputController.cancel();
+    playerController.haltMovement();
   } else {
-    playerController.setTargetFromInput(0, 0, 0);
+    if (canAct) {
+      const input = inputController.getMovementInput();
+      playerController.setTargetFromInput(input.x, input.y, input.magnitude);
+    } else {
+      playerController.setTargetFromInput(0, 0, 0);
+    }
+    playerController.update(deltaTime);
+    collisionSystem.resolve(player.position, PLAYER_RADIUS, playerController.currentVelocity);
+    applyWorldBoundary();
   }
-  playerController.update(deltaTime);
-  collisionSystem.resolve(player.position, PLAYER_RADIUS, playerController.currentVelocity);
-  applyWorldBoundary();
 
   inventoryWheel.enabled = canAct;
   if (!canAct && inventoryWheel.isOpen) inventoryWheel.cancel();

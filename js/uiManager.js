@@ -774,8 +774,11 @@ export class UIManager {
     }
 
     if (onClick) {
+      this.portalActionButton.disabled = false;
       this._portalActionHandler = (e) => {
         e.stopPropagation();
+        if (this.portalActionButton) this.portalActionButton.disabled = true;
+        this.hidePortalPrompt();
         onClick();
       };
       this.portalActionButton.addEventListener('click', this._portalActionHandler);
