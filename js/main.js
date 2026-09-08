@@ -531,7 +531,7 @@ const mapExclusions = [
   { x: tree1Trunk.x, z: tree1Trunk.z, radius: 1.8 },
   { x: tree2Trunk.x, z: tree2Trunk.z, radius: 1.8 },
   { x: LAKE_CONFIG.center.x, z: LAKE_CONFIG.center.z, radius: 17.0 },
-  { x: 33.0, z: 2.0, radius: 5.5 }, // Biome Portal site clearance
+  { x: 38.0, z: 1.0, radius: 6.5 }, // Biome Portal site clearance
 ];
 
 const worldDressingResult = scatterWorldDressing(scene, {
@@ -583,7 +583,7 @@ const portalController = new PortalController({
   collisionSystem,
   resourceManager,
   config: {
-    position: { x: 33.0, z: 2.0 },
+    position: { x: 38.0, z: 1.0 },
     facingAngle: -Math.PI / 2,
     destinationBiomeId: 'sector7_ruins',
     destinationSpawnPosition: { x: 0, y: 0.6, z: 0 },
@@ -620,6 +620,12 @@ const portalController = new PortalController({
     }
   },
 });
+
+for (const c of portalController.getColliders()) {
+  if (!collisionSystem.staticColliders.some((sc) => Math.hypot(sc.x - c.x, sc.z - c.z) < 0.05)) {
+    collisionSystem.addStatic(c.x, c.z, c.radius);
+  }
+}
 
 function populateClearingResources() {
   // Place these after static obstacles exist, so colonies remain reachable.

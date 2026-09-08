@@ -19,12 +19,12 @@ export const PORTAL_STATES = {
 export const DEFAULT_PORTAL_CONFIG = {
   currentBiomeId: 'subterranean_cavern',
   destinationBiomeId: 'sector7_ruins',
-  // Placed at the natural eastern edge of the cavern, along the path past the clearings
-  position: { x: 33.0, z: 2.0 },
+  // Placed against the natural eastern cave wall, embedded into the rocky terrain
+  position: { x: 38.0, z: 1.0 },
   facingAngle: -Math.PI / 2, // Facing west toward the oncoming player
   destinationSpawnPosition: { x: 0, y: 0.6, z: 0 },
-  interactionRadius: 3.8,
-  discoveryRadius: 22.0,
+  interactionRadius: 5.0,
+  discoveryRadius: 24.0,
   activationDuration: 3.5,
   transitionDuration: 1.8,
 };
@@ -78,20 +78,35 @@ export class PortalController {
   }
 
   /**
+   * Returns an array of { x, z, radius } in world coordinates for all solid
+   * static portal obstacles (pillars, buttresses, and rear wall arc).
+   */
+  getColliders() {
+    const offsets = this.mesh?.userData?.colliderOffsets ?? [];
+    const rad = this.mesh ? this.mesh.rotation.y : (this.config.facingAngle ?? 0);
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const px = this.mesh ? this.mesh.position.x : this.config.position.x;
+    const pz = this.mesh ? this.mesh.position.z : this.config.position.z;
+
+    return offsets.map((offset) => ({
+      x: px + offset.x * cos + offset.z * sin,
+      z: pz - offset.x * sin + offset.z * cos,
+      radius: offset.radius,
+    }));
+  }
+
+  /**
    * Registers solid physical obstacles for the stone portal arch pillars and sealed doorway.
    */
   _registerColliders() {
     if (!this.collisionSystem || this._collidersRegistered) return;
-    const offsets = this.mesh.userData.colliderOffsets ?? [];
-    const rad = this.mesh.rotation.y;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
 
-    // Static pillars and back-stop wall
-    for (const offset of offsets) {
-      const wx = this.mesh.position.x + offset.x * cos + offset.z * sin;
-      const wz = this.mesh.position.z - offset.x * sin + offset.z * cos;
-      this.collisionSystem.addStatic(wx, wz, offset.radius);
+    // Static pillars, buttresses, and back-stop wall
+    for (const c of this.getColliders()) {
+      if (!this.collisionSystem.staticColliders.some((sc) => Math.hypot(sc.x - c.x, sc.z - c.z) < 0.05)) {
+        this.collisionSystem.addStatic(c.x, c.z, c.radius);
+      }
     }
 
     // Dynamic closed-door collider: while the portal is LOCKED or ACTIVATING,

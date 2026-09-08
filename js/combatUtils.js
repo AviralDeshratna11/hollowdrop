@@ -18,14 +18,16 @@ export const COMBAT_CONFIG = {
  * @returns {{ damage: number, isCrit: boolean, rawDamage: number }}
  */
 export function calculateAttackDamage(baseDamage, isPlayerAttack = false, critMultiplier = COMBAT_CONFIG.critMultiplier) {
-  // Integer offset between -varianceRange and +varianceRange (e.g. -5 to +5, 11 possible integers)
-  const offset = Math.floor(Math.random() * (COMBAT_CONFIG.varianceRange * 2 + 1)) - COMBAT_CONFIG.varianceRange;
-  let damage = Math.max(1, Math.round(baseDamage + offset));
-
   const isCrit = Boolean(isPlayerAttack && Math.random() < COMBAT_CONFIG.playerCritChance);
   if (isCrit) {
-    damage = Math.max(1, Math.round(damage * critMultiplier));
+    const rawDamage = baseDamage + COMBAT_CONFIG.varianceRange;
+    const damage = Math.max(1, Math.round(rawDamage * critMultiplier));
+    return { damage, isCrit: true, rawDamage };
   }
 
-  return { damage, isCrit, rawDamage: baseDamage + offset };
+  // Integer offset between -varianceRange and +varianceRange (e.g. -5 to +5, 11 possible integers)
+  const offset = Math.floor(Math.random() * (COMBAT_CONFIG.varianceRange * 2 + 1)) - COMBAT_CONFIG.varianceRange;
+  const rawDamage = baseDamage + offset;
+  const damage = Math.max(1, Math.round(rawDamage));
+  return { damage, isCrit: false, rawDamage };
 }

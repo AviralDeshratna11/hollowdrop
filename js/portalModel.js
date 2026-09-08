@@ -198,31 +198,81 @@ export function createBiomePortalVisual() {
     roughness: 0.4,
   });
 
-  // --- 1. Ground Threshold / Stepped Dias ---
+  // --- 1. Ground Threshold / Stepped Dais & Approach Stairs ---
   const daisGroup = new THREE.Group();
   portalRoot.add(daisGroup);
 
-  const stepGeom = new THREE.CylinderGeometry(3.6, 4.2, 0.4, 14);
+  // Subterranean foundation bed (extends deep into lower ground so base never floats)
+  const foundationGeom = new THREE.CylinderGeometry(3.6, 4.4, 1.4, 16);
+  const foundationMesh = new THREE.Mesh(foundationGeom, darkCragMaterial);
+  foundationMesh.position.set(0, -0.4, 0);
+  foundationMesh.receiveShadow = true;
+  daisGroup.add(foundationMesh);
+
+  // Upper dais stone landing (circular top where arch pillars stand)
+  const stepGeom = new THREE.CylinderGeometry(3.6, 4.0, 0.45, 16);
   const stepMesh = new THREE.Mesh(stepGeom, mossyStoneMaterial);
-  stepMesh.position.set(0, 0.15, 0);
+  stepMesh.position.set(0, 0.18, 0);
   stepMesh.receiveShadow = true;
   daisGroup.add(stepMesh);
 
-  // Irregular stone slabs leading up to the threshold
-  const slabGeom = new THREE.BoxGeometry(1.2, 0.22, 1.4);
+  // Stepped approach stairs leading up from the cave floor onto the raised stone platform
+  const stairsGroup = new THREE.Group();
+  daisGroup.add(stairsGroup);
+
+  // Tier 1: Lowest broad entrance step (meets the natural cave ground at z ~ 3.2)
+  const step1 = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.28, 1.2), mossyStoneMaterial);
+  step1.position.set(0, -0.12, 3.1);
+  step1.receiveShadow = true;
+  step1.castShadow = true;
+  stairsGroup.add(step1);
+
+  // Tier 2: Middle stone step (z ~ 2.1)
+  const step2 = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.3, 1.1), stoneMaterial);
+  step2.position.set(0, 0.08, 2.1);
+  step2.receiveShadow = true;
+  step2.castShadow = true;
+  stairsGroup.add(step2);
+
+  // Tier 3: Upper threshold step (z ~ 1.1, transitions onto the circular dais cap)
+  const step3 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.3, 1.1), mossyStoneMaterial);
+  step3.position.set(0, 0.26, 1.1);
+  step3.receiveShadow = true;
+  step3.castShadow = true;
+  stairsGroup.add(step3);
+
+  // Retaining side curb blocks framing the stairs (flanking left and right)
+  const curbGeom = new THREE.BoxGeometry(0.55, 0.45, 2.8);
+  const curbLeft = new THREE.Mesh(curbGeom, darkCragMaterial);
+  curbLeft.position.set(-1.85, 0.15, 2.1);
+  curbLeft.rotation.y = 0.05;
+  curbLeft.castShadow = true;
+  curbLeft.receiveShadow = true;
+  stairsGroup.add(curbLeft);
+
+  const curbRight = new THREE.Mesh(curbGeom, darkCragMaterial);
+  curbRight.position.set(1.85, 0.15, 2.1);
+  curbRight.rotation.y = -0.05;
+  curbRight.castShadow = true;
+  curbRight.receiveShadow = true;
+  stairsGroup.add(curbRight);
+
+  // Weathered decorative flagstones on the steps and dais surface
+  const slabGeom = new THREE.BoxGeometry(0.9, 0.14, 0.9);
   const slabPositions = [
-    [-1.3, 0.26, 1.1, 0.2],
-    [0.1, 0.28, 1.5, -0.15],
-    [1.4, 0.25, 1.0, 0.3],
-    [-0.8, 0.28, 0.2, -0.08],
-    [0.9, 0.29, 0.1, 0.12],
-    [-0.2, 0.32, -0.6, 0.04],
+    [-1.0, 0.28, 0.3, 0.15],
+    [0.9, 0.28, 0.2, -0.12],
+    [-0.2, 0.31, -0.5, 0.04],
+    [0.6, 0.30, 1.0, 0.08],
+    [-0.7, 0.29, 1.0, -0.05],
+    [0.0, 0.12, 2.0, 0.02],
+    [-0.8, -0.08, 3.0, -0.06],
+    [0.7, -0.08, 3.0, 0.05],
   ];
   for (const [sx, sy, sz, sRot] of slabPositions) {
     const slab = new THREE.Mesh(slabGeom, stoneMaterial);
     slab.position.set(sx, sy, sz);
     slab.rotation.y = sRot;
-    slab.scale.set(0.9 + Math.random() * 0.3, 1, 0.8 + Math.random() * 0.4);
     slab.receiveShadow = true;
     daisGroup.add(slab);
   }
@@ -311,6 +361,46 @@ export function createBiomePortalVisual() {
   keystoneGroup.add(centerKeystone);
 
   archGroup.add(keystoneGroup);
+
+  // --- 2b. Rocky Terrain Integration (Cave Bedrock Cliff, Flanks & Overhang) ---
+  // Embeds the ancient portal into the cavern's eastern rocky boundary wall,
+  // making it look as though the gateway was hewn directly into the subterranean bedrock.
+  const rockyTerrainGroup = new THREE.Group();
+  portalRoot.add(rockyTerrainGroup);
+
+  const rockyTerrainDefs = [
+    // Massive rear cliff bedrock wall (behind arch, sealing into cave perimeter)
+    { pos: [0.0, 3.0, -2.6], scale: [7.2, 5.8, 3.2], rot: [0.08, 0.05, -0.04], mat: darkCragMaterial },
+    { pos: [0.0, 6.8, -2.2], scale: [5.6, 4.4, 2.8], rot: [-0.05, 0.12, 0.06], mat: stoneMaterial },
+    { pos: [0.0, 8.2, -1.8], scale: [4.8, 3.2, 2.4], rot: [0.15, -0.08, 0.0], mat: darkCragMaterial },
+    // Left rear massive buttress
+    { pos: [-3.4, 3.2, -2.2], scale: [4.0, 6.5, 3.4], rot: [0.1, -0.25, 0.12], mat: mossyStoneMaterial },
+    { pos: [-4.6, 2.0, -1.4], scale: [3.2, 4.8, 3.0], rot: [0.18, 0.4, 0.22], mat: darkCragMaterial },
+    { pos: [-5.2, 1.0, 0.2], scale: [2.6, 2.8, 2.6], rot: [-0.1, 0.6, 0.15], mat: stoneMaterial },
+    // Right rear massive buttress
+    { pos: [3.4, 3.2, -2.2], scale: [4.0, 6.5, 3.4], rot: [0.08, 0.3, -0.15], mat: darkCragMaterial },
+    { pos: [4.6, 2.0, -1.4], scale: [3.2, 4.8, 3.0], rot: [-0.15, -0.35, -0.2], mat: mossyStoneMaterial },
+    { pos: [5.2, 1.0, 0.2], scale: [2.6, 2.8, 2.6], rot: [0.12, -0.5, -0.1], mat: stoneMaterial },
+    // Cave arch upper canopy & overhanging rock teeth
+    { pos: [-1.6, 7.4, -0.7], scale: [1.6, 2.6, 1.6], rot: [0.35, 0.2, -0.28], mat: darkCragMaterial },
+    { pos: [1.6, 7.2, -0.7], scale: [1.7, 2.8, 1.7], rot: [0.3, -0.25, 0.25], mat: darkCragMaterial },
+    { pos: [0.0, 7.8, -0.6], scale: [2.2, 1.8, 1.8], rot: [0.4, 0.0, 0.0], mat: mossyStoneMaterial },
+    // Base embedding rocks around the dais (integrating platform into cavern floor)
+    { pos: [-3.8, 0.35, 1.4], scale: [1.8, 0.9, 1.6], rot: [0.1, 0.8, -0.1], mat: mossyStoneMaterial },
+    { pos: [3.8, 0.35, 1.4], scale: [1.8, 0.9, 1.6], rot: [-0.1, -0.7, 0.1], mat: darkCragMaterial },
+    { pos: [-2.6, 0.25, 2.6], scale: [1.4, 0.6, 1.4], rot: [0.2, 0.3, 0.1], mat: stoneMaterial },
+    { pos: [2.6, 0.25, 2.6], scale: [1.4, 0.6, 1.4], rot: [-0.15, -0.4, 0.05], mat: mossyStoneMaterial },
+  ];
+
+  for (const def of rockyTerrainDefs) {
+    const rMesh = new THREE.Mesh(rockGeom, def.mat);
+    rMesh.position.set(...def.pos);
+    rMesh.scale.set(...def.scale);
+    rMesh.rotation.set(...def.rot);
+    rMesh.castShadow = true;
+    rMesh.receiveShadow = true;
+    rockyTerrainGroup.add(rMesh);
+  }
 
   // --- 3. Runes Embedded in Pillars ---
   const runes = [];
@@ -554,11 +644,30 @@ export function createBiomePortalVisual() {
     particleVelocities,
     cyanMushroomCapMat,
     purpleMushroomCapMat,
-    // Solid static collider coordinates for stone pillars and back wall
+    // Solid static collider coordinates for platform side curbs, pillars, and rear bedrock cliff
     colliderOffsets: [
-      { x: -2.2, z: 0, radius: 1.7 },
-      { x: 2.2, z: 0, radius: 1.7 },
-      { x: 0, z: -0.9, radius: 1.6 },
+      // 1. Side curbs and retaining flanks of the raised stone platform
+      // (central entrance at x in [-1.3, 1.3] is open so player walks up the stairs onto the platform)
+      { x: -2.1, z: 2.1, radius: 1.1 },
+      { x: 2.1, z: 2.1, radius: 1.1 },
+      { x: -3.2, z: 1.2, radius: 1.2 },
+      { x: 3.2, z: 1.2, radius: 1.2 },
+
+      // 2. Left pillar column, outer buttress boulder, and rocky flank
+      { x: -2.5, z: 0.0, radius: 1.6 },
+      { x: -4.2, z: -0.2, radius: 1.6 },
+
+      // 3. Right pillar column, outer buttress boulder, and rocky flank
+      { x: 2.5, z: 0.0, radius: 1.6 },
+      { x: 4.2, z: -0.2, radius: 1.6 },
+
+      // 4. Rear cliff bedrock wall sealing the gateway back into the cavern perimeter
+      { x: -3.0, z: -2.0, radius: 1.8 },
+      { x: -2.0, z: -1.0, radius: 1.4 },
+      { x: 3.0, z: -2.0, radius: 1.8 },
+      { x: 2.0, z: -1.0, radius: 1.4 },
+      { x: 0.0, z: -2.4, radius: 2.0 },
+      { x: 0.0, z: -1.3, radius: 1.5 },
     ],
   };
 
