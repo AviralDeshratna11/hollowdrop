@@ -882,12 +882,24 @@ export class RivalController {
   }
 
   _applyFireLizardIdle(deltaTime) {
-    const { legs, tailPivot } = this.fireLizardVisual.userData;
+    const { legs, tailPivot, mixer, action } = this.fireLizardVisual.userData;
     const isMoving =
       this.state === STATES.SEEK_FRAGMENT ||
       this.state === STATES.COMBAT ||
       this.state === STATES.PURSUE_PLAYER_CARRIER ||
       this.state === STATES.ESCAPE_WITH_FRAGMENT;
+
+    if (mixer) {
+      action?.setEffectiveWeight(THREE.MathUtils.damp(
+        action.getEffectiveWeight(),
+        isMoving ? 1 : 0,
+        12,
+        deltaTime,
+      ));
+      if (action) action.timeScale = isMoving ? 2.2 : 0.7;
+      mixer.update(deltaTime);
+    }
+
     const bobSpeed = isMoving ? 7 : 3;
     const legSwingAmount = isMoving ? 0.22 : 0.1;
     const legSwing = Math.sin(this._elapsed * bobSpeed) * legSwingAmount;

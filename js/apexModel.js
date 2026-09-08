@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import { createSlimeCreature, registerSlimeUpdater, weldVertices } from './slimeCreature.js?v=5.3';
+import { registerSlimeUpdater } from './slimeCreature.js?v=5.3';
+import { attachOcclusionOutline } from './occlusionOutline.js?v=5.3';
+import { createApexFace, shadeFacets } from './apexFace.js?v=5.3';
 
 /**
- * Murkmaw, the Apex Predator — Overhauled Eldritch Leviathan.
+ * Murkmaw, the Apex Predator — faceted crystal-armored centipede.
  *
  * 11-Segment undulating armored centipede with:
- * - Animated razor chitin mandibles that clamp, snap, and twitch.
- * - Jagged cranial horn crests and 5 glowing, pulsing slit eyes.
- * - Dorsal chitin spines and bioluminescent venom pustules along the spine.
+ * - Split armored jaws that flare and twitch around a recessed mouth.
+ * - Opaque purple armor and three glossy eyes inset into angular sockets.
+ * - Broad low-poly facets and chunky purple crystal spikes along the spine.
  * - Articulated scuttling chitin legs on EVERY segment with phase-lagged stepping waves.
  * - Dynamic enraged phase color shifts (Violet -> Neon Crimson -> Magma Orange).
  */
@@ -16,8 +18,8 @@ export const CENTIPEDE_CONFIG = {
   segmentCount: 11,
   headRadius: 0.72,
 
-  segmentScale: [0.95, 0.86, 1.18],
-  headScale: [1.02, 0.90, 1.25],
+  segmentScale: [0.95, 0.86, 0.98],
+  headScale: [1.03, 0.91, 0.94],
 
   segmentFalloff: 0.94,
   minSegmentScale: 0.38,
@@ -31,140 +33,70 @@ export const CENTIPEDE_CONFIG = {
   wavePerSegment: 0.78,
 };
 
-const weldSegmentGeometry = weldVertices;
-
-// Shared accessory geometries
+// Broad facets and chunky crystals replace the boss's animated slime membrane.
 const legGeometry = new THREE.CylinderGeometry(0.025, 0.055, 0.48, 6);
 legGeometry.rotateZ(0.15);
-const spineGeometry = new THREE.ConeGeometry(0.065, 0.38, 5);
-spineGeometry.rotateX(Math.PI / 2); // points forward/upward
-const hornGeometry = new THREE.ConeGeometry(0.08, 0.44, 5);
-hornGeometry.rotateX(-0.4); // curves backward
-const pustuleGeometry = new THREE.SphereGeometry(0.11, 10, 8);
-const mandibleGeometry = new THREE.ConeGeometry(0.09, 0.52, 5);
-mandibleGeometry.rotateZ(Math.PI / 2); // points sideways/forward
+const armorGeometry = shadeFacets(new THREE.IcosahedronGeometry(CENTIPEDE_CONFIG.headRadius, 1));
+const crystalGeometry = shadeFacets(new THREE.ConeGeometry(0.19, 0.42, 5).toNonIndexed());
 
+const crystalHighlight = new THREE.Color(0xe5b5ff);
 const tempWorld = new THREE.Vector3();
 const tempLocal = new THREE.Vector3();
 const tempAhead = new THREE.Vector3();
 
+function createArmor(material, axes) {
+  const group = new THREE.Group();
+  const mesh = new THREE.Mesh(armorGeometry, material);
+  mesh.scale.set(...axes);
+  group.add(mesh);
+  const outline = attachOcclusionOutline(mesh, { color: 0xa855f7, rimColor: 0xe9caff });
+  return { group, bodyMaterial: material, outline };
+}
+
+function addCrystal(parent, material, position, direction, scale = 1) {
+  const crystal = new THREE.Mesh(crystalGeometry, material);
+  crystal.position.set(...position);
+  crystal.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...direction).normalize());
+  crystal.scale.setScalar(scale);
+  parent.add(crystal);
+  return crystal;
+}
+
 /** Faces -Z at rotation.y = 0, the shared creature convention. */
 export function createApexMesh() {
   const group = new THREE.Group();
-
-  // --- Head slime core ---
-  const headSlime = createSlimeCreature({
-    radius: CENTIPEDE_CONFIG.headRadius,
-    bodyScale: CENTIPEDE_CONFIG.headScale,
-    maxSpeed: 2.2,
-    autoUpdate: false,
-
-    color: 0xa855f7,
-    emissive: 0x4c1d95,
-    emissiveIntensity: 0.75,
-    coreTint: 0x2e0a52,
-    coreStrength: 0.7,
-    opacity: 0.74,
-    rimStrength: 1.35,
-
-    lobeFrequency: 2.6,
-    lobeSpeed: 0.05,
-    lobeAmplitude: 0.16,
-    lobeGain: 1.9,
-    lobeSharpness: 2.8,
-    inwardFactor: 0.12,
-    detailFrequency: 4.2,
-    detailSpeed: 0.04,
-    detailAmplitude: 0.04,
-
-    eye: {
-      count: 3,
-      aspect: 0.22, // aggressive slit
-      radius: 0.26,
-      separation: 0.42,
-      height: 0.14,
-      depth: 0.52,
-      irisColor: 0x2b0008,
-      irisEmissive: 0xff1e11,
-      irisEmissiveIntensity: 4.0,
-      highlightRadius: 0.12,
-      gazeRange: 0.22,
-      blinkIntervalMin: 5.0,
-      blinkIntervalMax: 12.0,
-    },
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: 0xa855f7, emissive: 0x4c1d95, emissiveIntensity: 0.3,
+    roughness: 0.72, metalness: 0, flatShading: true, vertexColors: true,
+    opacity: 1, transparent: false, depthWrite: true,
   });
-
+  const crystalMaterial = new THREE.MeshStandardMaterial({
+    color: 0xbd69ff, emissive: 0x6b20b5, emissiveIntensity: 0.25,
+    roughness: 0.48, metalness: 0.04, flatShading: true, vertexColors: true,
+  });
+  const chitinMat = new THREE.MeshStandardMaterial({
+    color: 0x30104c, roughness: 0.75, flatShading: true,
+  });
   const bodyPivot = new THREE.Group();
   bodyPivot.position.y = 0.62;
   group.add(bodyPivot);
-
   const head = new THREE.Group();
   bodyPivot.add(head);
-  head.add(headSlime.group);
 
-  // --- Materials ---
-  const chitinMat = new THREE.MeshStandardMaterial({
-    color: 0x140420,
-    roughness: 0.45,
-    metalness: 0.35,
-    flatShading: true,
-  });
-
-  const pustuleMat = new THREE.MeshStandardMaterial({
-    color: 0xb23fff,
-    emissive: 0x8a2be2,
-    emissiveIntensity: 1.6,
-    transparent: true,
-    opacity: 0.88,
-    roughness: 0.2,
-  });
-
-  const hornMat = new THREE.MeshStandardMaterial({
-    color: 0x220536,
-    roughness: 0.35,
-    metalness: 0.4,
-    flatShading: true,
-  });
-
-  // --- Head Dressing: Mandibles, Cranial Crest & Extra Eyes ---
-  const mandiblePivotL = new THREE.Group();
-  mandiblePivotL.position.set(-0.38, -0.05, -0.5);
-  const mandibleMeshL = new THREE.Mesh(mandibleGeometry, chitinMat);
-  mandibleMeshL.rotation.y = 0.4;
-  mandibleMeshL.rotation.z = -0.3;
-  mandiblePivotL.add(mandibleMeshL);
-  head.add(mandiblePivotL);
-
-  const mandiblePivotR = new THREE.Group();
-  mandiblePivotR.position.set(0.38, -0.05, -0.5);
-  const mandibleMeshR = new THREE.Mesh(mandibleGeometry, chitinMat);
-  mandibleMeshR.rotation.y = -0.4;
-  mandibleMeshR.rotation.z = 0.3;
-  mandibleMeshR.scale.x = -1; // mirrored
-  mandiblePivotR.add(mandibleMeshR);
-  head.add(mandiblePivotR);
-
-  // Cranial Horn Crests
-  const hornL = new THREE.Mesh(hornGeometry, hornMat);
-  hornL.position.set(-0.28, 0.42, 0.1);
-  hornL.rotation.z = -0.35;
-  head.add(hornL);
-
-  const hornR = new THREE.Mesh(hornGeometry, hornMat);
-  hornR.position.set(0.28, 0.42, 0.1);
-  hornR.rotation.z = 0.35;
-  head.add(hornR);
-
-  const hornCenter = new THREE.Mesh(hornGeometry, hornMat);
-  hornCenter.position.set(0, 0.48, -0.05);
-  hornCenter.scale.setScalar(0.85);
-  head.add(hornCenter);
-
-  // Head dorsal pustules
-  const headPustule = new THREE.Mesh(pustuleGeometry, pustuleMat);
-  headPustule.position.set(0, 0.36, 0.25);
-  headPustule.scale.setScalar(1.25);
-  head.add(headPustule);
+  // The rear skull joins the first segment. The separate faceplate supplies real
+  // eye openings and an open jaw instead of stretching eyes over a solid sphere.
+  const headArmor = createArmor(bodyMaterial, CENTIPEDE_CONFIG.headScale);
+  headArmor.group.position.set(0, 0.15, 0.14);
+  head.add(headArmor.group);
+  const face = createApexFace(bodyMaterial, crystalMaterial);
+  head.add(face.group);
+  const faceOutline = attachOcclusionOutline(face.group, { color: 0xa855f7, rimColor: 0xe9caff });
+  const [mandiblePivotL, mandiblePivotR] = face.mandibles;
+  const headCrystal = addCrystal(head, crystalMaterial, [0, 0.85, 0.05], [0, 1, -0.1], 1.2);
+  addCrystal(head, crystalMaterial, [-0.72, 0.38, -0.14], [-1, 0.45, -0.1], 0.8);
+  addCrystal(head, crystalMaterial, [0.72, 0.38, -0.14], [1, 0.45, -0.1], 0.8);
+  addCrystal(head, crystalMaterial, [-0.42, 0.67, 0.12], [-0.5, 1, 0.1], 0.7);
+  addCrystal(head, crystalMaterial, [0.42, 0.67, 0.12], [0.5, 1, 0.1], 0.7);
 
   // Head scuttling legs
   const headLegs = [];
@@ -180,102 +112,48 @@ export function createApexMesh() {
     headLegs.push({ pivot, leg, isRight: lx > 0 });
   }
 
-  // --- Segments Construction ---
-  const segmentGeometryRaw = new THREE.IcosahedronGeometry(CENTIPEDE_CONFIG.headRadius, 12);
-  const segmentGeometry = weldSegmentGeometry(segmentGeometryRaw);
-  segmentGeometryRaw.dispose();
-
   const segments = [];
   const allSegmentLegs = [];
-  const allPustules = [headPustule];
+  const allCrystals = [headCrystal];
   let scale = 1;
-
   for (let i = 0; i < CENTIPEDE_CONFIG.segmentCount; i++) {
     scale = Math.max(scale * CENTIPEDE_CONFIG.segmentFalloff, CENTIPEDE_CONFIG.minSegmentScale);
-
-    const segSlime = createSlimeCreature({
-      radius: CENTIPEDE_CONFIG.headRadius,
-      geometry: segmentGeometry,
-      bodyScale: CENTIPEDE_CONFIG.segmentScale,
-      autoUpdate: false,
-      eye: { count: 0 },
-
-      color: 0xa855f7,
-      emissive: 0x4c1d95,
-      emissiveIntensity: 0.75,
-      coreTint: 0x2e0a52,
-      coreStrength: 0.7,
-      opacity: 0.76,
-      rimStrength: 1.35,
-
-      lobeFrequency: 2.6,
-      lobeSpeed: 0.05,
-      lobeAmplitude: 0.16,
-      lobeGain: 1.9,
-      lobeSharpness: 2.8,
-      inwardFactor: 0.12,
-      detailFrequency: 4.2,
-      detailSpeed: 0.04,
-      detailAmplitude: 0.04,
-      tailLength: 0,
-      streamlining: 0,
-    });
-
+    const armor = createArmor(bodyMaterial, CENTIPEDE_CONFIG.segmentScale);
     const pivot = new THREE.Group();
-    pivot.add(segSlime.group);
-    segSlime.group.scale.setScalar(scale);
+    pivot.add(armor.group);
+    armor.group.scale.setScalar(scale);
     pivot.position.y = 0.62;
     group.add(pivot);
 
-    // Attach dorsal spines to segment
-    const spineTop = new THREE.Mesh(spineGeometry, chitinMat);
-    spineTop.position.set(0, 0.42 * scale, 0);
-    spineTop.rotation.x = -Math.PI / 2 - 0.2;
-    spineTop.scale.setScalar(scale * 1.1);
-    segSlime.group.add(spineTop);
-
-    const spineL = new THREE.Mesh(spineGeometry, chitinMat);
-    spineL.position.set(-0.4 * scale, 0.18 * scale, 0);
-    spineL.rotation.y = -0.5;
-    spineL.rotation.z = 0.7;
-    spineL.scale.setScalar(scale * 0.9);
-    segSlime.group.add(spineL);
-
-    const spineR = new THREE.Mesh(spineGeometry, chitinMat);
-    spineR.position.set(0.4 * scale, 0.18 * scale, 0);
-    spineR.rotation.y = 0.5;
-    spineR.rotation.z = -0.7;
-    spineR.scale.setScalar(scale * 0.9);
-    segSlime.group.add(spineR);
-
-    // Glowing venom pustule along spine
-    const pustule = new THREE.Mesh(pustuleGeometry, pustuleMat);
-    pustule.position.set(0, 0.32 * scale, 0.1 * scale);
-    pustule.scale.setScalar(scale * 1.15);
-    segSlime.group.add(pustule);
-    allPustules.push(pustule);
+    // Accessories inherit taper exactly once from the armor group. Their bases
+    // intersect the shell so even the smallest tail spikes remain attached.
+    allCrystals.push(addCrystal(armor.group, crystalMaterial, [0, 0.64, 0], [0, 1, 0.15]));
+    addCrystal(armor.group, crystalMaterial, [-0.61, 0.21, -0.08], [-1, 0.4, 0], 0.8);
+    addCrystal(armor.group, crystalMaterial, [0.61, 0.21, -0.08], [1, 0.4, 0], 0.8);
+    addCrystal(armor.group, crystalMaterial, [-0.43, 0.48, 0.23], [-0.65, 0.9, 0.2], 0.62);
+    addCrystal(armor.group, crystalMaterial, [0.43, 0.48, 0.23], [0.65, 0.9, 0.2], 0.62);
 
     // Articulated legs on this segment (Left & Right)
     const legL = new THREE.Group();
-    legL.position.set(-0.48 * scale, -0.05 * scale, 0);
+    legL.position.set(-0.48, -0.05, 0);
     const legMeshL = new THREE.Mesh(legGeometry, chitinMat);
-    legMeshL.position.y = -0.22 * scale;
+    legMeshL.position.y = -0.22;
     legMeshL.rotation.z = 0.5;
-    legMeshL.scale.setScalar(scale * 1.05);
+    legMeshL.scale.setScalar(1.05);
     legL.add(legMeshL);
-    segSlime.group.add(legL);
+    armor.group.add(legL);
 
     const legR = new THREE.Group();
-    legR.position.set(0.48 * scale, -0.05 * scale, 0);
+    legR.position.set(0.48, -0.05, 0);
     const legMeshR = new THREE.Mesh(legGeometry, chitinMat);
-    legMeshR.position.y = -0.22 * scale;
+    legMeshR.position.y = -0.22;
     legMeshR.rotation.z = -0.5;
-    legMeshR.scale.setScalar(scale * 1.05);
+    legMeshR.scale.setScalar(1.05);
     legR.add(legMeshR);
-    segSlime.group.add(legR);
+    armor.group.add(legR);
 
     allSegmentLegs.push({ legL, legR, index: i, scale });
-    segments.push({ pivot, slime: segSlime, material: segSlime.bodyMaterial, scale });
+    segments.push({ pivot, armor, material: bodyMaterial, scale });
   }
 
   // Stand-in handles for backwards compatibility
@@ -334,14 +212,21 @@ export function createApexMesh() {
     }
 
     // Dynamic mandible idle twitch & clamp
-    const idleTwitch = Math.sin(elapsed * 5.0) * 0.08;
-    const flareAngle = THREE.MathUtils.lerp(0.35 + idleTwitch, 0.95, mandibleState);
-    mandiblePivotL.rotation.y = flareAngle;
-    mandiblePivotR.rotation.y = -flareAngle;
+    const idleTwitch = Math.sin(elapsed * 5.0) * 0.018;
+    const flareAngle = THREE.MathUtils.lerp(idleTwitch, 0.24, mandibleState);
+    mandiblePivotL.rotation.z = -flareAngle;
+    mandiblePivotR.rotation.z = flareAngle;
 
-    // Pustule pulse
-    const pustulePulse = 1.4 + Math.sin(elapsed * 4.2) * 0.55;
-    pustuleMat.emissiveIntensity = pustulePulse;
+    // Share the shell material so hit flashes, death, and reset also reach the tail.
+    // Crystal tint follows that material, including a reset after an enraged phase.
+    crystalMaterial.color.copy(bodyMaterial.color).lerp(crystalHighlight, 0.18);
+    crystalMaterial.emissive.copy(bodyMaterial.emissive);
+    // The eye intensity is the controller's death fade; include it so this idle
+    // pulse cannot relight the crystals after the controller has dimmed them.
+    crystalMaterial.emissiveIntensity = (0.25 + Math.sin(elapsed * 4.2) * 0.035)
+      * THREE.MathUtils.clamp(face.eyeMaterial.emissiveIntensity / 0.8, 0, 1);
+    headArmor.outline.update(deltaTime);
+    faceOutline.update(deltaTime);
 
     // Head leg scuttle
     for (let i = 0; i < headLegs.length; i++) {
@@ -392,57 +277,36 @@ export function createApexMesh() {
         legObj.legR.rotation.z = -Math.cos(legPhase + Math.PI) * 0.12;
       }
 
-      seg.material.emissive.copy(headSlime.bodyMaterial.emissive);
-      seg.material.emissiveIntensity = headSlime.bodyMaterial.emissiveIntensity;
-      seg.material.opacity = headSlime.bodyMaterial.opacity;
-
-      seg.slime.update(deltaTime, { speedRatio: 0 });
+      seg.armor.outline.update(deltaTime);
     }
-
-    headSlime.update(deltaTime);
   }
 
   registerSlimeUpdater({ group, update: updateChain });
 
-  // Function to smoothly switch enraged colors
   function setEnragedPhase(phaseNumber) {
     if (phaseNumber === 2) {
-      headSlime.bodyMaterial.color.setHex(0xd92638);
-      headSlime.bodyMaterial.emissive.setHex(0x8a0515);
-      pustuleMat.color.setHex(0xff3300);
-      pustuleMat.emissive.setHex(0xff1100);
-      pustuleMat.emissiveIntensity = 2.4;
-      for (const seg of segments) {
-        seg.material.color.setHex(0xd92638);
-        seg.material.emissive.setHex(0x8a0515);
-      }
+      bodyMaterial.color.setHex(0xd92638);
+      bodyMaterial.emissive.setHex(0x8a0515);
     } else if (phaseNumber === 3) {
-      headSlime.bodyMaterial.color.setHex(0xff5500);
-      headSlime.bodyMaterial.emissive.setHex(0xcc2200);
-      pustuleMat.color.setHex(0xffaa00);
-      pustuleMat.emissive.setHex(0xff6600);
-      pustuleMat.emissiveIntensity = 3.2;
-      for (const seg of segments) {
-        seg.material.color.setHex(0xff5500);
-        seg.material.emissive.setHex(0xcc2200);
-      }
+      bodyMaterial.color.setHex(0xff5500);
+      bodyMaterial.emissive.setHex(0xcc2200);
     }
   }
 
   // Contract for ApexController
   group.userData.body = bodyPivot;
   group.userData.head = head;
-  group.userData.bodyMaterial = headSlime.bodyMaterial;
-  group.userData.eyeMaterial = headSlime.eyeMaterial;
+  group.userData.bodyMaterial = bodyMaterial;
+  group.userData.eyeMaterial = face.eyeMaterial;
+  group.userData.eyes = face.eyes;
   group.userData.glandMaterial = glandMaterial;
   group.userData.coreGland = coreGland;
   group.userData.coreGlandMaterial = coreGlandMaterial;
   group.userData.legs = headLegs.map((hl) => hl.pivot);
   group.userData.glands = glands;
-  group.userData.slime = headSlime;
   group.userData.segments = segments;
-  group.userData.pustules = allPustules;
-  group.userData.pustuleMaterial = pustuleMat;
+  group.userData.pustules = allCrystals;
+  group.userData.pustuleMaterial = crystalMaterial;
   group.userData.setMandibleState = (state) => { mandibleState = state; };
   group.userData.setEnragedPhase = setEnragedPhase;
   group.userData.resetChain = seedHistory;
