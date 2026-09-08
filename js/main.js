@@ -1,9 +1,14 @@
 import * as THREE from 'three';
+import { createResourceLighting } from './resourceLighting.js';
+import { createPaintedGroundMaterial } from './paintedGround.js';
+import { createTerrainOutcrops } from './terrainOutcrops.js';
+import { CAVE_CLEARINGS } from './caveLayout.js';
+import { LANDMARK_SITES, createCaveLandmarks } from './caveLandmarks.js';
 import { InputController } from './inputController.js?v=5.3';
 import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
 import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js?v=5.3';
 import { ResourceManager } from './resourceManager.js?v=5.3';
-import { UIManager } from './uiManager.js?v=5.5';
+import { UIManager } from './uiManager.js?v=7.9';
 import { InventoryUI } from './inventoryUI.js?v=5.3';
 import { InventoryInteractionController } from './inventoryInteraction.js?v=5.3';
 import { InventoryWheelController } from './inventoryWheel.js?v=5.3';
@@ -28,25 +33,29 @@ import { GenomeFragmentController, FRAGMENT_STATES } from './genomeFragmentContr
 import { RivalController, DEBUG_RIVAL } from './rivalController.js?v=5.3';
 import { FragmentContestManager, DEBUG_FRAGMENT_CONTEST } from './fragmentContestManager.js?v=5.3';
 import { ObjectiveIndicatorController } from './objectiveIndicator.js?v=5.3';
-import { createRunStats } from './runStats.js?v=5.3';
+import { createRunStats } from './runStats.js?v=7.9';
 import { MemorySequenceController } from './memorySequenceController.js?v=5.3';
 import { RunCompleteController } from './runCompleteController.js?v=5.3';
-import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=5.3';
+import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=7.9';
 import { scatterWorldDressing, rockColliderRadius, realignDressingToTerrain } from './worldDressing.js?v=5.3';
 import { CollisionSystem } from './collision.js?v=5.3';
 import { updateSlimeCreatures } from './slimeCreature.js?v=5.3';
 import { TutorialController } from './tutorialController.js?v=5.5';
 import { ScreenShake } from './screenShake.js?v=5.3';
 import { DamageNumberController } from './damageNumbers.js?v=5.3';
-import { RadarController } from './radarController.js?v=5.3';
-import { RadarHUD } from './radarHUD.js?v=5.3';
-import { getTerrainHeight, applyTerrainElevation, initTextureElevation, onTerrainElevationReady, LAKE_CONFIG } from './terrain.js?v=5.4';
+import { RadarController } from './radarController.js?v=7.9';
+import { RadarHUD } from './radarHUD.js?v=7.9';
+import { getTerrainHeight, applyTerrainElevation, initTerrainHeightmap, onTerrainElevationReady, LAKE_CONFIG, GROUND_SIZE, GROUND_ATLAS_URL, GROUND_HEIGHTMAP_URL } from './terrain.js?v=5.4';
 import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
 import { assetLoadingManager } from './loadingManager.js?v=5.3';
 import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
-import { BoundaryEnvironment } from './boundaryEnvironment.js?v=5.3';
+import { BoundaryEnvironment } from './boundaryEnvironment.js?v=6.0';
 import { LakeBiome } from './lakeBiome.js?v=5.3';
+import { SlimeTrailSystem } from './slimeTrail.js?v=7.0';
+import { playCritHitSound } from './soundEffects.js?v=7.9';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
+import { PortalController } from './portalController.js?v=7.9';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -76,7 +85,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   CAMERA_FAR_BASE
 );
-const CAMERA_OFFSET = new THREE.Vector3(0, 11, 7); // top-down / slightly angled
+const CAMERA_OFFSET = new THREE.Vector3(0, 5.6, 5.0); // top-down / slightly angled
 const CAMERA_FOLLOW_SMOOTHING = 3.5; // lower = laggier camera, doesn't affect player physics
 
 // --- Equal map view across devices ------------------------------------------
@@ -106,7 +115,18 @@ let viewZoom = 1; // multiplies CAMERA_OFFSET everywhere it's used; set by updat
 /** Recompute viewZoom from the current window aspect, and push fog + far plane out with
  *  it. Called once at startup and from onResize() (covers orientation changes too). */
 function updateViewZoom() {
-  const aspect = window.innerWidth / window.innerHeight;
+  // Guarded because BOTH of these can be 0 before the first real layout - a background
+  // or just-restored tab, a 0-sized iframe, an embedded preview pane, some in-app
+  // browsers. 0/0 is NaN, and an unguarded NaN here does not stay local: it poisons
+  // viewZoom, then camera.aspect, then camera.position via the line below this
+  // function - and updateCamera() only ever LERPS position, so once it is NaN every
+  // subsequent frame lerps NaN into NaN and the game renders BLACK FOREVER. A later
+  // resize repairs aspect and viewZoom but cannot repair position, which is what made
+  // this so confusing to diagnose. Falling back to the framing contract's own aspect
+  // keeps every downstream value finite.
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const aspect = (vw > 0 && vh > 0) ? vw / vh : REFERENCE_ASPECT;
   viewZoom = THREE.MathUtils.clamp(REFERENCE_ASPECT / aspect, 1, CAMERA_MAX_ZOOM_OUT);
   scene.fog.near = FOG_NEAR_BASE * viewZoom;
   scene.fog.far = FOG_FAR_BASE * viewZoom;
@@ -133,15 +153,26 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 // those ramps actually readable (and keeps their hue instead of blowing out to white).
 // Nothing here depends on post-processing - this is the plain forward renderer.
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-// ACES darkens midtones relative to no tone mapping at all, so exposure and the two
-// light intensities below are lifted together to compensate. These three numbers are
-// the tuning knobs for overall scene brightness - adjust them as a group, not singly.
-renderer.toneMappingExposure = 1.45;
+// Warm key light models the rock facets; cool fill keeps the shaded silhouettes
+// readable. Moderate exposure preserves painted mids and saturated mushroom caps.
+renderer.toneMappingExposure = 1.18;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 // --- Lighting --------------------------------------------------------------
-scene.add(new THREE.AmbientLight(0x88ccaa, 0.85));
-const dirLight = new THREE.DirectionalLight(0xbfffe0, 1.35);
-dirLight.position.set(6, 14, 4);
+scene.add(new THREE.HemisphereLight(0xb4d4d5, 0x30382c, 1.15));
+const dirLight = new THREE.DirectionalLight(0xffecc6, 2.1);
+dirLight.position.set(-8, 14, 6);
+// A compact shadow volume follows the player, preserving contact detail on mobile.
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.left = dirLight.shadow.camera.bottom = -13;
+dirLight.shadow.camera.right = dirLight.shadow.camera.top = 13;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 45;
+dirLight.shadow.normalBias = 0.035;
+dirLight.shadow.bias = -0.0002;
+scene.add(dirLight.target);
 scene.add(dirLight);
 
 // Rim/back light. Every creature in this game is deliberately near-black (the Cave
@@ -151,7 +182,7 @@ scene.add(dirLight);
 // opposite the key, in a cool violet that the warm-green key never produces, so it
 // catches the top/back edge of a body and separates it from the floor behind it.
 // Low intensity on purpose: it should define an edge, not look like a second sun.
-const rimLight = new THREE.DirectionalLight(0x7d8cff, 0.75);
+const rimLight = new THREE.DirectionalLight(0x739de0, 0.65);
 rimLight.position.set(-8, 5, -9);
 scene.add(rimLight);
 
@@ -162,19 +193,16 @@ scene.add(rimLight);
 // within roughly 30-34 units of the origin, so a 90-unit plane (45-unit half-width)
 // covers all of it with margin to spare.
 //
-// The ground is a single 3072px generated 3x3 atlas, not one repeated tile. The nine generated
-// regions also exist as assets/textures/ground_tiles/cave_ground_generated_tile_r*c*.png for
-// inspection/reuse, but using the full atlas on this mesh keeps filtering continuous
-// across tile boundaries and avoids both mirror symmetry and visible edge seams.
-// terrain.js samples this same atlas over the same world bounds, so visible crags,
-// basins, and glowing patches line up with the 3D elevation the player walks on.
-const GROUND_SIZE = 90;
-const GROUND_SEGMENTS = 320;
+// Nine independently painted biomes are stitched into one continuous atlas.
+// The separate semantic height map shares its UVs and world bounds, so snow
+// brightness and mineral glow cannot create spurious mountains or pits.
+// The height field's shelves span metres; 35cm spacing preserves their shape.
+// Finer grids spend vertices on distant terrain outside the camera's view.
+const GROUND_SEGMENTS = 256;
 const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, GROUND_SEGMENTS, GROUND_SEGMENTS);
 
-const groundTexture = new THREE.TextureLoader(assetLoadingManager).load('assets/textures/cave_ground_generated_atlas.png?v=4', (tex) => {
-  initTextureElevation(tex.image);
-});
+const groundTexture = new THREE.TextureLoader(assetLoadingManager).load(GROUND_ATLAS_URL);
+new THREE.ImageLoader(assetLoadingManager).load(GROUND_HEIGHTMAP_URL, initTerrainHeightmap);
 groundTexture.wrapS = THREE.ClampToEdgeWrapping;
 groundTexture.wrapT = THREE.ClampToEdgeWrapping;
 groundTexture.colorSpace = THREE.SRGBColorSpace;
@@ -187,29 +215,45 @@ applyTerrainElevation(groundGeometry);
 
 const ground = new THREE.Mesh(
   groundGeometry,
-  new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1 })
+  createPaintedGroundMaterial(groundTexture, assetLoadingManager, renderer.capabilities.getMaxAnisotropy())
 );
 ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
 scene.add(ground);
+onTerrainElevationReady(() => createTerrainOutcrops(scene, ground.material));
 
 // --- Player root + swappable visuals -----------------------------------------
 const PLAYER_RADIUS = 0.6;
 const PLAYER_SPAWN_POSITION = new THREE.Vector3(0, PLAYER_RADIUS, 0);
 const player = new THREE.Group();
+player.renderOrder = 10;
 player.position.copy(PLAYER_SPAWN_POSITION);
 scene.add(player);
 
 const slimeVisual = new THREE.Group();
+slimeVisual.renderOrder = 10;
 player.add(slimeVisual);
+
+// A small invisible caster gives the jelly a soft contact shadow without
+// drawing its 167k-vertex source model again into the shadow map every frame.
+const slimeShadow = new THREE.Mesh(
+  new THREE.SphereGeometry(PLAYER_RADIUS * 0.90, 16, 10),
+  new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false })
+);
+slimeShadow.scale.y = 0.82;
+slimeShadow.castShadow = true;
+slimeVisual.add(slimeShadow);
 
 const amoeba = createPlayerSlimeVisual(PLAYER_RADIUS);
 const slimeMaterial = amoeba.bodyMaterial;
+amoeba.group.renderOrder = 10;
 slimeVisual.add(amoeba.group);
 
 // The player's own mutated form is the CUTE purple rat (per the reference art), distinct
 // from the boss's pink Venom Rat below - same mesh/gait/combat, only its look differs.
 const ratVisual = createRatMesh({ variant: 'cute' });
 const ratMaterial = ratVisual.userData.bodyMaterial;
+ratVisual.renderOrder = 10;
 ratVisual.visible = false;
 player.add(ratVisual);
 
@@ -252,6 +296,11 @@ const resourceManager = new ResourceManager(scene, inventoryManager, uiManager, 
 resourceManager.onAbsorbed = () => runStats.resourcesAbsorbed++;
 
 function populateWorldResources() {
+  for (const [type, x, z] of [
+    ['blue_mushroom', -2.5, -1.6], ['mushroom', 2.4, -2.0],
+    ['stone', -2.1, 1.5], ['iron', 2.8, 1.0],
+    ['spore', 0.8, 2.6], ['blue_mushroom', -3.5, 2.4],
+  ]) resourceManager.spawnResource(type, new THREE.Vector3(x, 0, z));
   resourceManager.spawnTestZone(player.position, 4, {
     minRadius: 3,
     maxRadius: 15,
@@ -272,6 +321,7 @@ function populateWorldResources() {
   // above so it never leaks back into the ambient scatter either.
 }
 populateWorldResources();
+const resourceLighting = createResourceLighting(scene, resourceManager, player);
 
 uiManager.updateMassUI(inventoryManager.getInventoryWeight(), inventoryManager.maxWeight);
 
@@ -369,6 +419,7 @@ if (DEBUG_MUTATION) {
 // --- Prey (Glow Beetle) + Venom Bite combat ------------------------------------
 const preyManager = new PreyManager(scene, playerController, playerFormController, resourceManager, uiManager, {
   onDefeated: () => runStats.preyDefeated++,
+  playerHealth, // defeating a beetle absorbs its essence and heals the player (primary heal source)
 });
 
 function populateWorldPrey() {
@@ -415,6 +466,10 @@ const rivalController = new RivalController({
   uiManager,
   onSpawned: () => {
     runStats.rivalEncountered = true;
+  },
+  onDefeated: () => {
+    runStats.rivalDefeated = true;
+    portalController.unlock();
   },
 });
 genomeFragmentController.rivalController = rivalController;
@@ -469,12 +524,14 @@ tree2.position.set(tree2Trunk.x, getTerrainHeight(tree2Trunk.x, tree2Trunk.z), t
 scene.add(tree2);
 
 const mapExclusions = [
+  ...LANDMARK_SITES.map(({ x, z, radius }) => ({ x, z, radius })),
   { x: PLAYER_SPAWN_POSITION.x, z: PLAYER_SPAWN_POSITION.z, radius: 7 },
   { x: fragmentExtractionPosition.x, z: fragmentExtractionPosition.z, radius: 5 },
   { x: apexArenaCenter.x, z: apexArenaCenter.z, radius: APEX_CONFIG.arenaRadius + 3 },
   { x: tree1Trunk.x, z: tree1Trunk.z, radius: 1.8 },
   { x: tree2Trunk.x, z: tree2Trunk.z, radius: 1.8 },
   { x: LAKE_CONFIG.center.x, z: LAKE_CONFIG.center.z, radius: 17.0 },
+  { x: 33.0, z: 2.0, radius: 5.5 }, // Biome Portal site clearance
 ];
 
 const worldDressingResult = scatterWorldDressing(scene, {
@@ -518,7 +575,75 @@ for (const c of boundaryEnvironment.getColliders()) {
   collisionSystem.addStatic(c.x, c.z, c.radius);
 }
 
+// --- Biome Portal (Unlocked upon Rival defeat) --------------------------------
+const portalController = new PortalController({
+  scene,
+  playerController,
+  uiManager,
+  collisionSystem,
+  resourceManager,
+  config: {
+    position: { x: 33.0, z: 2.0 },
+    facingAngle: -Math.PI / 2,
+    destinationBiomeId: 'sector7_ruins',
+    destinationSpawnPosition: { x: 0, y: 0.6, z: 0 },
+  },
+  onBiomeTransition: ({ fromBiomeId, toBiomeId }) => {
+    if (DEBUG_RIVAL) console.log(`[Portal] Transition: ${fromBiomeId} -> ${toBiomeId}`);
+    if (gameFlowController && typeof gameFlowController.endRun === 'function') {
+      gameFlowController.endRun({
+        biomeCompleted: 'Subterranean Cavern',
+        nextBiome: 'Sector-7 Ruins',
+        portalEntered: true,
+      });
+    } else if (gameFlowController && typeof gameFlowController._showResults === 'function') {
+      if (runStats) {
+        runStats.portalEntered = true;
+        runStats.biomeCleared = 'Subterranean Cavern';
+        runStats.nextBiome = 'Sector-7 Ruins';
+      }
+      uiManager?.setScreenFade?.(0);
+      gameFlowController._showResults();
+    } else if (uiManager && typeof uiManager.showRunComplete === 'function') {
+      uiManager.setScreenFade?.(0);
+      uiManager.showRunComplete({
+        portalEntered: true,
+        biomeCleared: 'Subterranean Cavern',
+        nextBiome: 'Sector-7 Ruins',
+        genomeFragmentsSecured: 1,
+        rivalDefeated: true,
+        runTimeFormatted: '00:00',
+        preyDefeated: 0,
+        predatorsDefeated: 0,
+        apexDefeated: 0,
+      }, () => window.location.reload());
+    }
+  },
+});
+
+function populateClearingResources() {
+  // Place these after static obstacles exist, so colonies remain reachable.
+  for (const clearing of CAVE_CLEARINGS) {
+    const mushroom = clearing.color === 'purple' ? 'mushroom' : 'blue_mushroom';
+    for (const [type, dx, dz] of [[mushroom, -2.1, -1.4], [mushroom, 1.7, -2], [mushroom, 2.4, 1.4], ['iron', -2.8, 1.6]]) {
+      for (let attempt = 0; attempt < 37; attempt++) {
+        const radius = attempt === 0 ? 0 : Math.ceil(attempt / 12) * 0.8;
+        const angle = attempt * Math.PI / 6;
+        const x = clearing.x + dx + Math.cos(angle) * radius;
+        const z = clearing.z + dz + Math.sin(angle) * radius;
+        if (!collisionSystem.isClear(x, z, 0.9)) continue;
+        if (resourceManager.resources.some(r => Math.hypot(r.mesh.position.x - x, r.mesh.position.z - z) < 0.85)) continue;
+        const resource = resourceManager.spawnResource(type, new THREE.Vector3(x, 0, z));
+        resource.caveClearing = true;
+        break;
+      }
+    }
+  }
+}
+
 onTerrainElevationReady(() => {
+  createCaveLandmarks(scene, collisionSystem);
+  populateClearingResources();
   applyTerrainElevation(groundGeometry);
 
   tree1.position.y = getTerrainHeight(tree1Trunk.x, tree1Trunk.z);
@@ -526,7 +651,7 @@ onTerrainElevationReady(() => {
 
   fragmentExtractionPosition.y = getTerrainHeight(fragmentExtractionPosition.x, fragmentExtractionPosition.z);
   if (fragmentContestManager && fragmentContestManager.extractionZoneVisual) {
-    fragmentContestManager.extractionZoneVisual.position.y = fragmentExtractionPosition.y;
+    fragmentContestManager.realignToTerrain();
   }
 
   resourceManager.realignToTerrain();
@@ -534,6 +659,7 @@ onTerrainElevationReady(() => {
   realignDressingToTerrain();
   boundaryEnvironment.realignToTerrain();
   lakeBiome.realignToTerrain();
+  portalController.realignToTerrain();
 });
 
 const tempColliderPos = new THREE.Vector3();
@@ -565,9 +691,16 @@ const radarController = new RadarController({
   rivalController,
   genomeFragmentController,
   resourceManager,
+  portalController,
 });
 const radarHUD = new RadarHUD(radarController, {
   onApexSignal: () => uiManager.showRadarSignal('APEX SIGNAL'),
+  onPortalSignal: () => {
+    if (portalController && !portalController.isDiscovered()) {
+      portalController._discovered = true;
+      uiManager.showPortalDiscovered?.('Ancient Gateway Located — Marked on Radar');
+    }
+  },
 });
 
 // --- Combat Controller ---------------------------------------------------------
@@ -582,6 +715,7 @@ playerFormController.playerCombatController = playerCombatController;
 const screenShake = new ScreenShake();
 const damageNumbers = new DamageNumberController(camera, canvas);
 const combatVFX = new CombatVFXSystem(scene);
+const slimeTrail = new SlimeTrailSystem(scene);
 apexController.combatVFX = combatVFX;
 apexController.screenShake = screenShake;
 
@@ -595,8 +729,12 @@ playerCombatController.onAttackConnected = () => {
   triggerHitstop(0.055);
   screenShake.add(0.22);
 };
-playerCombatController.onHit = (entity, damage) => {
-  damageNumbers.spawn(entity.mesh.position, damage, 'player');
+playerCombatController.onHit = (entity, damage, isCrit = false) => {
+  damageNumbers.spawn(entity.mesh.position, damage, 'player', isCrit);
+  if (isCrit) {
+    screenShake.add(0.12);
+    playCritHitSound();
+  }
 };
 playerCombatController.onBiteHit = (entity, hitPos, forwardDir) => {
   combatVFX.spawnBiteEffect(hitPos, forwardDir);
@@ -625,8 +763,12 @@ predatorController.aimPriority = 1;
 rivalController.aimPriority = 1;
 apexController.aimPriority = 2;
 
-projectileSystem.onHit = (entity, damage) => {
-  damageNumbers.spawn(entity.mesh.position, damage, 'player');
+projectileSystem.onHit = (entity, damage, isCrit = false) => {
+  damageNumbers.spawn(entity.mesh.position, damage, 'player', isCrit);
+  if (isCrit) {
+    screenShake.add(0.12);
+    playCritHitSound();
+  }
 };
 projectileSystem.onImpact = (position, hitSomething) => {
   if (!hitSomething) return;
@@ -713,6 +855,11 @@ const inventoryUI = new InventoryUI(inventoryManager, {
 const desiredCameraPos = new THREE.Vector3();
 const cameraLookTarget = new THREE.Vector3();
 
+/** True only if all three components are real numbers - see updateCamera()'s own note. */
+function isFiniteVec3(v) {
+  return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+}
+
 function updateCamera(deltaTime) {
   const zoom = memorySequenceController.getCameraZoom();
   const offsetScale = (1 - zoom) * viewZoom;
@@ -728,6 +875,16 @@ function updateCamera(deltaTime) {
   camera.lookAt(cameraLookTarget.x, 0, cameraLookTarget.z);
 
   camera.position.add(screenShake.offset);
+
+  // Belt and braces for the NaN trap described in updateViewZoom(). The guard up there
+  // removes the known cause; this makes ANY future cause survivable. Both of these
+  // smooth toward their target rather than being assigned, so a single non-finite frame
+  // - from a bad viewZoom, a bad shake offset, whatever - would otherwise persist for
+  // the rest of the session with nothing on screen and no error in the console.
+  // desiredCameraPos is always finite now, so snapping to it recovers within one frame.
+  // Costs three comparisons a frame; buys "the view can never get permanently stuck".
+  if (!isFiniteVec3(camera.position)) camera.position.copy(desiredCameraPos);
+  if (!isFiniteVec3(cameraLookTarget)) cameraLookTarget.copy(player.position);
 }
 
 // --- Random death-respawn selection --------------------------------------------
@@ -801,6 +958,7 @@ const deathRespawnManager = new DeathRespawnManager({
   genomeFragmentController,
   uiManager,
   respawnPosition: PLAYER_SPAWN_POSITION,
+  slimeTrail,
   // Death respawns land at a random valid spot; a new-run reset still uses
   // PLAYER_SPAWN_POSITION above so resetGame()'s player-centred resource scatter
   // re-centres correctly.
@@ -839,7 +997,7 @@ const OFFSCREEN_POSITION = new THREE.Vector3(9999, 9999, 9999);
 
 if (DEBUG_HEALTH) {
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'h' || e.key === 'H') playerHealth.takeDamage(20, null);
+    if (e.key === 'h' || e.key === 'H') playerHealth.takeDamage(calculateAttackDamage(20, false).damage, null);
     if (e.key === 'k' || e.key === 'K') playerHealth.takeDamage(playerHealth.currentHealth, null);
     if (e.key === 'r' || e.key === 'R') deathRespawnManager.forceRespawn();
   });
@@ -884,12 +1042,20 @@ window.addEventListener('keydown', (e) => {
       preyManager.spawnGlowBeetle(player.position.clone().add(new THREE.Vector3(2, 0, 2)));
     }
   }
+  if (e.key === 'e' || e.key === 'E') {
+    if (portalController && portalController.state === 'ACTIVE') {
+      const dist = portalController._getHorizontalDistanceToPlayer();
+      if (dist <= portalController.config.interactionRadius) {
+        portalController.enterPortal();
+      }
+    }
+  }
 });
 
 if (DEBUG_PREDATOR_COMBAT) {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'k' || e.key === 'K') {
-      predatorController.takeDamage(15, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
+      predatorController.takeDamage(calculateAttackDamage(15, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'h' || e.key === 'H') predatorController.debugHeal();
     if (e.key === 'j' || e.key === 'J') predatorController.debugTeleportNearPlayer();
@@ -905,7 +1071,7 @@ if (DEBUG_APEX) {
     if (e.key === '4') apexController.debugForceAttack('burrow');
     if (e.key === 'p' || e.key === 'P') apexController.debugForcePhase2();
     if (e.key === 'k' || e.key === 'K') {
-      apexController.takeDamage(30, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
+      apexController.takeDamage(calculateAttackDamage(30, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'g' || e.key === 'G') apexController.debugSetHealth(15);
   });
@@ -917,9 +1083,17 @@ if (DEBUG_RIVAL) {
     if (e.key === 'm' || e.key === 'M') rivalController.debugForceMutation();
     if (e.key === 'f' || e.key === 'F') rivalController.debugForceFireBreath();
     if (e.key === 'k' || e.key === 'K') {
-      rivalController.takeDamage(20, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
+      rivalController.takeDamage(calculateAttackDamage(20, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'o' || e.key === 'O') rivalController.debugForceSeekFragment();
+    if (e.key === 'u' || e.key === 'U') {
+      console.log('[DEBUG] Force unlocking Biome Portal');
+      portalController.unlock();
+    }
+    if (e.key === 'y' || e.key === 'Y') {
+      console.log('[DEBUG] Force entering Biome Portal');
+      portalController.enterPortal();
+    }
   });
 }
 
@@ -973,7 +1147,9 @@ function resetGame() {
   resourceManager.clearAll();
   resourceManager.particles.clear();
   combatVFX.clear();
+  slimeTrail.clear();
   populateWorldResources();
+  populateClearingResources();
 
   stoneClusterManager.clearAll();
   stoneClusterManager.populateWorldClusters({ exclusions: mapExclusions });
@@ -987,6 +1163,7 @@ function resetGame() {
   apexEncounterManager.reset();
 
   rivalController.reset();
+  portalController.reset();
 
   genomeFragmentController.reset();
   fragmentContestManager.reset();
@@ -1139,6 +1316,8 @@ genomeFragmentController.onSecured = () => {
 
 // Dev-only inspection hook
 window.__hollowdrop = {
+  renderer,
+  slimeTrail,
   tutorialController,
   resetTutorial: () => tutorialController.reset(),
   player,
@@ -1168,6 +1347,7 @@ window.__hollowdrop = {
   apexEncounterManager,
   genomeFragmentController,
   rivalController,
+  portalController,
   fragmentContestManager,
   objectiveIndicator,
   radarController,
@@ -1321,6 +1501,7 @@ function animate() {
     apexController.update(deltaTime);
     genomeFragmentController.update(deltaTime);
     rivalController.update(deltaTime);
+    portalController.update(deltaTime);
     fragmentContestManager.update(deltaTime);
     predatorController.update(deltaTime);
 
@@ -1345,6 +1526,14 @@ function animate() {
   screenShake.update(realDeltaTime);
   damageNumbers.update(realDeltaTime);
   combatVFX.update(realDeltaTime);
+  slimeTrail.update(
+    realDeltaTime,
+    player.position,
+    playerController.currentVelocity,
+    isPlayingState && canAct && playerFormController.currentForm === PLAYER_FORMS.SLIME
+  );
+  slimeTrail.update(realDeltaTime, rivalController?.mesh.position, null,
+    isPlayingState && !!rivalController?.isAlive?.() && rivalController.currentForm === 'SLIME', 'rival');
   boundaryEnvironment.update(realDeltaTime);
   lakeBiome.update(deltaTime, player.position, playerController);
 
@@ -1361,7 +1550,10 @@ function animate() {
   });
 
   updateCamera(deltaTime);
+  resourceLighting.update(realDeltaTime);
 
+  dirLight.position.set(player.position.x - 8, player.position.y + 14, player.position.z + 6);
+  dirLight.target.position.copy(player.position);
   renderer.render(scene, camera);
 }
 

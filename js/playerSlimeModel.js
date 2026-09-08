@@ -80,7 +80,7 @@ const REACTION_CONFIG = {
 // further - those set the CHARACTER of the motion, not its intensity;
 // lobeAmplitude/inwardFactor/tailLength are the ones that actually scale it.
 const DISPLACEMENT_CONFIG = {
-  lobeAmplitude: 0.12,
+  lobeAmplitude: 0.065,
   lobeFrequency: 1.7,
   lobeSpeed: 0.55, // constant idle morph, not just a static bumpy cast - this IS the "no defined shape" ask
   lobeGain: 1.3,
@@ -123,6 +123,7 @@ const DISPLACEMENT_CONFIG = {
  */
 export function createPlayerSlimeVisual(radius = 0.6) {
   const group = new THREE.Group();
+  group.renderOrder = 10;
 
   const placeholderMaterial = new THREE.MeshStandardMaterial({
     color: 0x8dffc4,
@@ -134,6 +135,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
     depthWrite: false,
   });
   const placeholderMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), placeholderMaterial);
+  placeholderMesh.renderOrder = 10;
   group.add(placeholderMesh);
 
   let placeholderOcclusion = attachOcclusionOutline(placeholderMesh, {
@@ -172,6 +174,7 @@ export function createPlayerSlimeVisual(radius = 0.6) {
   // Crossfade state - null outside the brief window right after the model arrives.
   let fadeTimer = null;
   let modelMaterial = null;
+  let modelBottom = -radius;
 
   api.ready = loadGltfCharacter({
     url: MODEL_URL,
@@ -193,6 +196,15 @@ export function createPlayerSlimeVisual(radius = 0.6) {
     },
   })
     .then(({ group: modelGroup, material }) => {
+      modelGroup.updateMatrixWorld(true);
+      modelBottom = new THREE.Box3().setFromObject(modelGroup).min.y;
+      // Gentle surface normals and a wet highlight make the source mesh read as
+      // jelly, rather than hard, heavily embossed rock under the new key light.
+      material.normalScale.set(0.25, 0.25);
+      material.roughnessMap = null;
+      material.metalnessMap = null;
+      material.roughness = 0.30;
+      material.metalness = 0;
       applyJellyRimTreatment(material, {
         rimStrength: 0.9,
         rimPower: 2.2,
@@ -217,6 +229,10 @@ export function createPlayerSlimeVisual(radius = 0.6) {
         hasDisplacement: !!displacement,
       });
       modelMaterial = material;
+      modelGroup.renderOrder = 10;
+      modelGroup.traverse((child) => {
+        if (child.isMesh) child.renderOrder = 10;
+      });
       group.add(modelGroup);
       fadeTimer = 0;
 
@@ -291,7 +307,12 @@ export function createPlayerSlimeVisual(radius = 0.6) {
 
     const breathe = Math.sin(breatheTime * REACTION_CONFIG.breatheSpeed) * REACTION_CONFIG.breatheAmount;
     const swell = THREE.MathUtils.clamp(load, 0, 1) * REACTION_CONFIG.loadSwell;
-    group.scale.setScalar(Math.max(1 + breathe + swell + widenScale + squintScale, 0.05));
+    const bodyScale = Math.max(1 + breathe + swell + widenScale + squintScale, 0.05);
+    // Lift the source mesh's low dome while preserving its collision footprint.
+    group.scale.set(bodyScale, bodyScale * 1.45, bodyScale);
+    // Anchor the visible underside instead of suspending a short mesh at the
+    // collision sphere's center. Breathing now expands upward from the floor.
+    group.position.y = -radius - modelBottom * group.scale.y + 0.015;
   }
 
   function triggerWiden() {

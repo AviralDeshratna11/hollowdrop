@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { playBiteSound, playBiteHitSound, playPoisonExpelSound } from './soundEffects.js?v=5.3';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
 
 export const DEBUG_COMBAT = false;
 
@@ -130,14 +131,17 @@ export class PlayerCombatController {
         if (distSq > 1e-6) tempToTarget.normalize();
         else tempToTarget.set(0, 0, 1);
 
-        entity.takeDamage(POISON_EXPEL_CONFIG.damage, {
+        const { damage, isCrit } = calculateAttackDamage(POISON_EXPEL_CONFIG.damage, true);
+
+        entity.takeDamage(damage, {
           sourceEntity: this.playerController,
           sourceType: 'player',
           attackType: 'poison_expel',
           knockbackForce: POISON_EXPEL_CONFIG.knockbackForce,
+          isCrit,
         });
 
-        this.onHit?.(entity, POISON_EXPEL_CONFIG.damage);
+        this.onHit?.(entity, damage, isCrit);
         hitCount++;
       }
     }
@@ -268,15 +272,17 @@ export class PlayerCombatController {
         }
 
         this._hitTargetsThisAttack.add(entity);
-        entity.takeDamage(VENOM_BITE_CONFIG.damage, {
+        const { damage, isCrit } = calculateAttackDamage(VENOM_BITE_CONFIG.damage, true);
+        entity.takeDamage(damage, {
           sourceEntity: this.playerController,
           sourceType: 'player',
           attackType: 'venom_bite',
           knockbackForce: VENOM_BITE_CONFIG.knockbackForce,
+          isCrit,
         });
 
         tempHitPos.copy(entity.mesh.position);
-        this.onHit?.(entity, VENOM_BITE_CONFIG.damage);
+        this.onHit?.(entity, damage, isCrit);
         this.onBiteHit?.(entity, tempHitPos, tempForward);
         hitAny = true;
       }

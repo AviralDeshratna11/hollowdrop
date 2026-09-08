@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="theme-color" content="#0a1410" />
 <link rel="stylesheet" href="style.css" />
+<!-- Preload title/opening screen background artwork so it paints immediately on first frame
+     alongside the static #title-screen markup, preventing any visual pop or fetch delay. -->
+<link rel="preload" href="assets/ui/title_screen_bg.jpg" as="image" />
 <!-- Unbounded: display font for #title-screen's own heading only (.title-name in
      style.css) - every other typeface in the game is self-hosted from fonts/ (see the
      @font-face rules at the top of style.css), but this one comes from Google Fonts instead of
@@ -77,8 +80,10 @@
       el.textContent += msg + '\n\n';
     }
     window.addEventListener('error', function (e) {
-      var detail = e.error && e.error.stack ? e.error.stack : (e.message || 'Unknown error');
-      showError('ERROR: ' + detail + '\n  at ' + (e.filename || '?') + ':' + e.lineno + ':' + e.colno);
+      var err = e.error;
+      var errMsg = err ? (err.name ? err.name + ': ' + (err.message || '') : (err.message || String(err))) : (e.message || 'Unknown error');
+      var stack = (err && err.stack) ? ('\n' + err.stack) : '';
+      showError('ERROR: ' + errMsg + stack + '\n  at ' + (e.filename || '?') + ':' + e.lineno + ':' + e.colno);
     });
     window.addEventListener('unhandledrejection', function (e) {
       var reason = e.reason && e.reason.stack ? e.reason.stack : e.reason;
@@ -179,6 +184,15 @@
   <div id="consume-action">
     <span id="consume-action-name"></span>
     <button id="consume-action-button" type="button">Consume</button>
+  </div>
+
+  <div id="portal-action" class="portal-action">
+    <div class="portal-action-glow" aria-hidden="true"></div>
+    <span id="portal-action-title">ANCIENT GATEWAY</span>
+    <button id="portal-action-button" type="button">
+      <span class="portal-action-icon" aria-hidden="true">❖</span>
+      <span id="portal-action-text">Go to Next Biome</span>
+    </button>
   </div>
 
   <div id="debug-recipe-panel"></div>
@@ -294,8 +308,6 @@
           <ellipse cx="176" cy="150" rx="8" ry="4.5" transform="rotate(100 176 150)" />
         </g>
       </svg>
-      <span class="radar-mushroom radar-mushroom--1"><i></i><i></i><i></i></span>
-      <span class="radar-mushroom radar-mushroom--2"><i></i><i></i></span>
 
       <div id="radar-display">
         <div class="radar-grid"></div>
@@ -334,6 +346,7 @@
     <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--dna"></span>DNA</div>
     <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--genome"></span>Genome Fragment</div>
     <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--rival"></span>Rival</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--portal"></span>Gateway</div>
   </div>
 </div>
 
@@ -443,6 +456,8 @@
      sits at a lower z-index than this screen's 50, so full opacity alone is what hides
      them completely - no extra JS/state wiring needed for that. -->
 <div id="title-screen" class="title-screen--visible">
+  <div class="title-atmosphere" aria-hidden="true"></div>
+  <p class="title-chapter">BENEATH THE FORGOTTEN WORLD</p>
   <div class="title-content">
     <h1 class="title-name">HOLLOWDROP</h1>
     <p class="title-subtitle">The Living Colony</p>
@@ -470,12 +485,21 @@
              everything else on this screen. -->
         <div class="title-loading-blob"></div>
       </div>
-      <p id="title-loading-status" class="title-loading-status">Calibrating membrane…</p>
+      <p id="title-loading-status" class="title-loading-status">A small life stirs…</p>
     </div>
 
     <button id="title-begin-button" type="button" hidden>TAP TO BEGIN</button>
   </div>
 </div>
+
+<section id="cavern-intro" role="dialog" aria-modal="true" aria-label="Enter the living cavern" hidden>
+  <video id="intro-video" playsinline muted preload="metadata" poster="assets/video/cavern-awakening-poster.jpg" src="assets/video/cavern-awakening.mp4"></video>
+  <div class="intro-vignette" aria-hidden="true"></div>
+  <div class="intro-top"><span>HOLLOWDROP <i> / </i> THE LIVING COLONY</span><button id="intro-sound" type="button" aria-pressed="false">Sound off</button></div>
+  <div class="intro-caption"><span class="intro-kicker">CHAPTER I</span><h2>The Hollow Awakens</h2><p>Even the smallest life leaves a trace.</p></div>
+  <button id="intro-skip" type="button">Enter cavern <span aria-hidden="true">→</span></button>
+  <div class="intro-progress-track" aria-hidden="true"><div id="intro-progress"></div></div>
+</section>
 
 <!-- Memory Reveal: shown once, ~0.6s after the Human Genome Fragment is secured (see
      MemorySequenceController / GameFlowController.onGenomeFragmentSecured). Content is
@@ -524,6 +548,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=5.5"></script>
+<script type="module" src="js/main.js?v=7.9"></script>
 </body>
 </html>

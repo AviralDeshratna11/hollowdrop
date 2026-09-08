@@ -4,6 +4,7 @@ import { createFireLizardMesh } from './fireLizardModel.js?v=5.3';
 import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
 import { FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
 import { getTerrainHeight } from './terrain.js?v=5.4';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
 
 export const DEBUG_RIVAL = false;
 
@@ -123,7 +124,7 @@ function playRivalEscapeWarning() {}
  * currently holds the Fragment or how it got there.
  */
 export class RivalController {
-  constructor({ scene, arenaCenter, arenaRadius, escapeTarget, playerController, playerHealth, resourceManager, genomeFragmentController, uiManager, onSpawned }) {
+  constructor({ scene, arenaCenter, arenaRadius, escapeTarget, playerController, playerHealth, resourceManager, genomeFragmentController, uiManager, onSpawned, onDefeated }) {
     this.scene = scene;
     this.arenaCenter = arenaCenter.clone();
     this.arenaRadius = arenaRadius;
@@ -135,6 +136,7 @@ export class RivalController {
     this.genomeFragmentController = genomeFragmentController;
     this.uiManager = uiManager;
     this.onSpawned = onSpawned; // optional - fires once per _spawn(), e.g. for run-stats tracking
+    this.onDefeated = onDefeated; // optional - fires once death animation completes and loot drops
     this.entityType = 'rival';
     this.fragmentContestManager = null; // set post-construction (main.js) - only used for onRivalEscapeSuccess()
 
@@ -664,12 +666,13 @@ export class RivalController {
   }
 
   _hitPlayer(amount) {
-    const hit = this.playerHealth.takeDamage(amount, this);
+    const { damage } = calculateAttackDamage(amount, false);
+    const hit = this.playerHealth.takeDamage(damage, this);
     if (hit) {
       // Same rule as the Rival's own carry stability (spec section 38): Fire Breath
       // always damages Health; it ALSO damages Fragment carry stability, only while
       // the Player is actually carrying (no-op otherwise).
-      this.genomeFragmentController.damagePlayerStability(amount);
+      this.genomeFragmentController.damagePlayerStability(damage);
       playPlayerHitSound();
       if (DEBUG_RIVAL) console.log(`Player hit by Rival Fire Breath! Health: ${this.playerHealth.currentHealth}`);
     }
@@ -774,6 +777,7 @@ export class RivalController {
     if (t >= 1 && this.mesh.visible) {
       this._dropLoot();
       this.mesh.visible = false;
+      this.onDefeated?.();
     }
   }
 

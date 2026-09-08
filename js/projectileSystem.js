@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RESOURCE_TYPES } from './resourceTypes.js?v=5.3';
 import { createResourceMesh } from './resourceModels.js?v=5.3';
 import { getTerrainHeight } from './terrain.js?v=5.4';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
 
 export const DEBUG_PROJECTILE = false;
 
@@ -443,14 +444,16 @@ export class ProjectileSystem {
 
       const hit = this._hitCheck(p);
       if (hit) {
-        hit.takeDamage(PROJECTILE_CONFIG.damage, {
+        const { damage, isCrit } = calculateAttackDamage(PROJECTILE_CONFIG.damage, true);
+        hit.takeDamage(damage, {
           sourceEntity: this.playerController,
           sourceType: 'player',
           attackType: 'thrown_rock',
           knockbackForce: PROJECTILE_CONFIG.knockbackForce,
+          isCrit,
         });
         playImpactSound();
-        this.onHit?.(hit, PROJECTILE_CONFIG.damage, p.mesh.position);
+        this.onHit?.(hit, damage, isCrit, p.mesh.position);
         this.onImpact?.(p.mesh.position, true);
         this._destroy(i);
         continue;

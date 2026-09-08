@@ -25,12 +25,14 @@ export const RADAR_TARGET_TYPES = {
   // The cargo dropped at the player's last death - a navigation beacon back to it,
   // sourced from DeathRespawnManager's tracked deathDrop (never re-discovered here).
   DEATH_DROP: 'death-drop',
+  PORTAL: 'portal',
 };
 
 // Higher wins ties are broken by distance (closer first) - see _scan(). Rival gets a
 // further boost while it's actually carrying the Fragment (spec section 71).
 const BASE_PRIORITY = {
   [RADAR_TARGET_TYPES.GENOME]: 5,
+  [RADAR_TARGET_TYPES.PORTAL]: 4.5,
   [RADAR_TARGET_TYPES.RIVAL]: 4,
   [RADAR_TARGET_TYPES.BOSS]: 3,
   [RADAR_TARGET_TYPES.ENEMY]: 2,
@@ -59,7 +61,7 @@ function horizontalDistanceSq(ax, az, bx, bz) {
  * otherwise no-ops, so calling it every frame from the main loop is cheap.
  */
 export class RadarController {
-  constructor({ player, predatorController, apexController, rivalController, genomeFragmentController, resourceManager, deathRespawnManager = null }) {
+  constructor({ player, predatorController, apexController, rivalController, genomeFragmentController, resourceManager, deathRespawnManager = null, portalController = null }) {
     this.player = player;
     this.predatorController = predatorController;
     this.apexController = apexController;
@@ -70,6 +72,7 @@ export class RadarController {
     // since DeathRespawnManager is built after the radar (same post-construction wiring
     // pattern the rest of main.js uses). Read defensively in collectTargets().
     this.deathRespawnManager = deathRespawnManager;
+    this.portalController = portalController;
 
     this.enabled = true;
     this._scanTimer = 0;
@@ -283,6 +286,25 @@ export class RadarController {
         clampToEdge: true,
         label: 'Dropped Cargo',
         priority: BASE_PRIORITY[RADAR_TARGET_TYPES.DEATH_DROP],
+      });
+    }
+
+    // --- Biome Portal / Ancient Gateway ---------------------------------------------
+    // Once discovered by the player (or awakened post-Rival), the portal becomes a
+    // permanent navigation beacon on the radar with edge-clamping enabled.
+    const portal = this.portalController;
+    if (portal && portal.isDiscovered && portal.isDiscovered()) {
+      const pos = portal.getPosition ? portal.getPosition() : portal.mesh.position;
+      const distanceSq = horizontalDistanceSq(pos.x, pos.z, px, pz);
+      const isPortalActive = portal.state === 'ACTIVE';
+      targets.push({
+        id: 'portal',
+        type: RADAR_TARGET_TYPES.PORTAL,
+        position: pos,
+        distanceSq,
+        clampToEdge: true,
+        label: isPortalActive ? 'Active Gateway' : 'Ancient Gateway',
+        priority: isPortalActive ? 4.8 : BASE_PRIORITY[RADAR_TARGET_TYPES.PORTAL],
       });
     }
 

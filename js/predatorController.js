@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createPredatorMesh } from './predatorModel.js?v=5.3';
 import { updateEntityHealthBar } from './entityHealthBar.js?v=5.3';
 import { getTerrainHeight } from './terrain.js?v=5.4';
+import { calculateAttackDamage } from './combatUtils.js?v=5.3';
 
 export const DEBUG_PREDATOR = false;
 export const DEBUG_PREDATOR_COMBAT = false;
@@ -569,7 +570,8 @@ export class PredatorController {
   _performHit() {
     // PlayerHealth centralizes validation, invulnerability, feedback, and knockback -
     // it derives the knockback direction itself from `this` (this.mesh.position).
-    const hit = this.playerHealth.takeDamage(PREDATOR_CONFIG.attackDamage, this);
+    const { damage } = calculateAttackDamage(PREDATOR_CONFIG.attackDamage, false);
+    const hit = this.playerHealth.takeDamage(damage, this);
     if (hit) {
       playPlayerHitSound();
       if (DEBUG_PREDATOR) console.log(`Player hit! Health: ${this.playerHealth.currentHealth}`);

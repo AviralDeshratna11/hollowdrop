@@ -1,4 +1,5 @@
-import { resetRunStats } from './runStats.js?v=5.3';
+import { resetRunStats } from './runStats.js?v=7.9';
+import { IntroSequence } from './introSequence.js';
 
 export const GAME_STATES = {
   TITLE: 'title',
@@ -60,6 +61,7 @@ export class GameFlowController {
     // still works if a caller doesn't have a model load to wait on.
     this._slimeReady = slimeReady ?? Promise.resolve();
     this._awaitingSlime = false;
+    this.intro = new IntroSequence();
 
     this.state = GAME_STATES.TITLE;
     this._runEndingStarted = false;
@@ -80,13 +82,15 @@ export class GameFlowController {
     if (this.state !== GAME_STATES.TITLE || this._awaitingSlime) return;
     this._awaitingSlime = true;
     this.uiManager.setTitleLoading(true);
+    const introFinished = this.intro.play();
+    this.uiManager.hideTitleScreen();
 
     // Race against a timeout rather than waiting on _slimeReady unconditionally - see
     // GAME_FLOW_CONFIG.maxModelWaitSeconds. Whichever settles first wins; the loser is
     // simply never observed (the model keeps loading in the background regardless, and
     // playerSlimeModel.js's own crossfade picks it up whenever it actually finishes).
     const timeout = new Promise((resolve) => setTimeout(resolve, GAME_FLOW_CONFIG.maxModelWaitSeconds * 1000));
-    Promise.race([this._slimeReady, timeout]).then(() => {
+    Promise.all([Promise.race([this._slimeReady, timeout]), introFinished]).then(() => {
       this._awaitingSlime = false;
       this.uiManager.setTitleLoading(false);
       this._beginFirstRun();
@@ -111,6 +115,23 @@ export class GameFlowController {
     this.runStats.genomeFragmentsSecured += 1;
     this.state = GAME_STATES.MEMORY; // freezes gameplay THIS frame - see main.js's isPlayingState gate
     this._memoryDelayTimer = GAME_FLOW_CONFIG.memoryTransitionDelay;
+  }
+
+  /**
+   * Authoritative entry point for completing the run via the Biome Portal (prototype ending).
+   */
+  endRun({ biomeCompleted = 'Subterranean Cavern', nextBiome = 'Sector-7 Ruins', portalEntered = true } = {}) {
+    if (this._runEndingStarted) return;
+    this._runEndingStarted = true;
+    this.runStats.portalEntered = portalEntered;
+    this.runStats.biomeCleared = biomeCompleted;
+    this.runStats.nextBiome = nextBiome;
+    if (this.runStats.genomeFragmentsSecured === 0 && this.runStats.rivalDefeated) {
+      this.runStats.genomeFragmentsSecured = 1;
+    }
+
+    this.uiManager.setScreenFade?.(0);
+    this._showResults();
   }
 
   _showResults() {

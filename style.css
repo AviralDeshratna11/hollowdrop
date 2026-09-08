@@ -758,40 +758,7 @@ html, body {
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
 }
 
-.radar-mushroom {
-  position: absolute;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  pointer-events: none;
-}
-
-.radar-mushroom i {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
-  background: radial-gradient(circle at 35% 30%, #cdf1ff, #4aa9e0 70%);
-  box-shadow: 0 0 6px rgba(120, 210, 255, 0.9);
-}
-
-.radar-mushroom i:nth-child(2) {
-  width: 9px;
-  height: 9px;
-}
-
-.radar-mushroom--1 {
-  top: -2%;
-  left: 12%;
-}
-
-.radar-mushroom--2 {
-  bottom: 2%;
-  left: -2%;
-}
-
-.species-radar--expanded .radar-frame-vine,
-.species-radar--expanded .radar-mushroom {
+.species-radar--expanded .radar-frame-vine {
   display: none;
 }
 
@@ -1118,6 +1085,31 @@ html, body {
   border: 1px solid rgba(159, 216, 255, 0.65);
 }
 
+.radar-blip--portal .radar-blip-inner {
+  color: var(--radar-cyan, #46f7ff);
+  width: 20px;
+  height: 20px;
+  top: -10px;
+  left: -10px;
+  background: radial-gradient(circle at 34% 30%, rgba(70, 247, 255, 0.45), rgba(70, 247, 255, 0.12) 70%);
+  border: 1px solid rgba(70, 247, 255, 0.85);
+  animation-duration: 1.6s;
+}
+
+.radar-blip--portal .radar-blip-inner::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(70, 247, 255, 0.6);
+  animation: radar-portal-spin 8s linear infinite;
+}
+
+@keyframes radar-portal-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Edge-clamped (boss/genome/rival past detectionRadius, spec section 23) reads
    slightly brighter - it's still communicating real direction, just at a distance. */
 .radar-blip--clamped .radar-blip-inner {
@@ -1254,6 +1246,7 @@ html, body {
 .radar-legend-icon--dna { background: var(--radar-dna); }
 .radar-legend-icon--genome { background: var(--radar-genome); }
 .radar-legend-icon--rival { background: var(--radar-rival); }
+.radar-legend-icon--portal { background: var(--radar-cyan, #46f7ff); box-shadow: 0 0 6px rgba(70, 247, 255, 0.6); }
 
 /* ==========================================================================
    Title / Memory Reveal / Run Complete
@@ -1278,11 +1271,14 @@ html, body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  /* Fully opaque: both explicit stops below carry no alpha, and the box's own
-     inset box-shadow (glow) blends against THIS background - already opaque by the
-     time it's applied - not against whatever sits behind the element, so it can't
-     reintroduce see-through the way a translucent gradient stop would. */
-  background: radial-gradient(circle at 50% 40%, rgb(var(--loading-bg-rgb)), rgb(var(--loading-bg-deep-rgb)) 100%);
+  /* Fully opaque with the custom portrait background artwork (assets/ui/title_screen_bg.jpg).
+     Layered with a subtle radial vignette (keeping center loading spinner & top title crisp and
+     readable) over the artwork, with the dynamic --loading-*-rgb gradient underneath as a fallback
+     during initial load/paint. */
+  background:
+    radial-gradient(circle at 50% 45%, rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.52) 100%),
+    url("assets/ui/title_screen_bg.jpg") center/cover no-repeat,
+    radial-gradient(circle at 50% 40%, rgb(var(--loading-bg-rgb)), rgb(var(--loading-bg-deep-rgb)) 100%);
   box-shadow: inset 0 0 min(30vw, 220px) rgb(var(--loading-accent-rgb) / 0.22);
   opacity: 0;
   pointer-events: none;
@@ -1776,6 +1772,15 @@ html, body {
   border-color: var(--memory-glow);
 }
 
+#pickup-notification.notification--portal {
+  color: var(--radar-cyan, #46f7ff);
+  border-color: rgba(70, 247, 255, 0.6);
+  background: rgba(4, 20, 24, 0.88);
+  box-shadow: 0 0 16px rgba(70, 247, 255, 0.35);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
 /* Consume action: a tiny contextual button that appears at the tapped item's own
    screen position (set inline via JS each frame it's visible). Positioned by its
    center so left/top can be the item's own point without extra offset math. */
@@ -1831,6 +1836,88 @@ html, body {
 
 #consume-action-button:active {
   background: var(--accent-dim);
+}
+
+/* Biome Portal Action Prompt */
+#portal-action {
+  position: fixed;
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px 12px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(10, 26, 25, 0.92) 0%, rgba(5, 16, 15, 0.96) 100%);
+  border: 1.5px solid rgba(56, 239, 223, 0.55);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 239, 223, 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#portal-action.portal-action--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.portal-action-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 22px;
+  background: radial-gradient(circle at 50% 0%, rgba(56, 239, 223, 0.2), transparent 70%);
+  pointer-events: none;
+}
+
+#portal-action-title {
+  font-family: var(--font-display, inherit);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(56, 239, 223, 0.6);
+}
+
+#portal-action-button {
+  min-height: 46px;
+  padding: 8px 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  border-radius: var(--radius-pill, 9999px);
+  background: linear-gradient(135deg, #38efdf 0%, #15b8cb 100%);
+  color: #081a17;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(28, 214, 232, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 0.12s ease, filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+#portal-action-button:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 16px rgba(28, 214, 232, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transform: scale(1.02);
+}
+
+#portal-action-button:active {
+  transform: scale(0.97);
+  filter: brightness(0.95);
+}
+
+.portal-action-icon {
+  font-size: 14px;
+  color: #062b25;
 }
 
 /* Inventory toggle button (bottom-right, always visible during gameplay) */
@@ -2820,6 +2907,19 @@ html, body {
   text-shadow: 0 0 12px rgb(var(--danger-soft-rgb) / 0.6), 0 1px 2px var(--bg-deep);
 }
 
+/* Critical damage dealt by the player - brilliant gold with intense bloom */
+.damage-number--crit {
+  color: #ffe600 !important;
+  font-size: 26px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+  text-shadow:
+    0 0 12px rgba(255, 230, 0, 0.9),
+    0 0 24px rgba(255, 170, 0, 0.7),
+    0 1px 3px var(--bg-deep) !important;
+  z-index: 16;
+}
+
 /* ==========================================================================
    Radial inventory wheel (inventoryWheel.js)
    --------------------------------------------------------------------------
@@ -3682,3 +3782,51 @@ html, body {
     transition: none;
   }
 }
+
+/* Cavern opening: quiet typography, a living portal, and a cinematic handoff. */
+#title-screen {
+  background: linear-gradient(180deg, #04100dcc, #0313110a 35%, #020e0b22 65%, #020b09f2),
+    url('assets/video/cavern-awakening-poster.jpg') center 58% / cover no-repeat, #031311;
+  box-shadow: inset 0 0 160px #03131099;
+}
+.title-atmosphere { position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse at 50% 68%, #8de8b319, transparent 55%); animation:cavern-breathe 8s ease-in-out infinite alternate; }
+.title-chapter { position:absolute; top:max(30px, env(safe-area-inset-top)); left:24px; right:24px; margin:0; color:#c2d8bf; font-size:10px; letter-spacing:.3em; }
+#title-screen .title-content { position:relative; width:min(600px,100%); min-height:min(75dvh,700px); justify-content:flex-start; padding-top:3vh; }
+#title-screen .title-name { font-family:Georgia, 'Times New Roman', serif; font-weight:400; font-size:clamp(34px,7.5vw,76px); letter-spacing:.13em; color:#f2f0d6; text-shadow:0 2px 25px #061410; }
+#title-screen .title-subtitle { color:#c7d7c4; font-size:11px; letter-spacing:.34em; text-transform:uppercase; }
+#title-screen .title-tagline { color:#d4d8c6; margin-top:16px; font-family:Georgia,serif; }
+#title-loading { margin-top:auto; margin-bottom:0; }
+#title-screen .title-loading-ring-wrap { width:76px; height:76px; }
+#title-screen .title-loading-blob { inset:26px; }
+#title-screen .title-loading-status { color:#d6dfcb; letter-spacing:.12em; font-size:11px; text-shadow:0 1px 8px #000; }
+#title-begin-button { margin-top:auto; border:1px solid #c5d9b966; border-radius:2px; min-width:240px; padding:17px 36px; background:linear-gradient(90deg,#06231dcc,#1b493dcc,#06231dcc); color:#f4f0d6; letter-spacing:.21em; font-size:11px; box-shadow:0 0 35px #82ffd317; }
+#title-begin-button::before, #title-begin-button::after { content:'\25c7'; margin:0 14px; color:#b9d3a3; }
+#cavern-intro { position:fixed; inset:0; z-index:1000; overflow:hidden; background:#020e0d url('assets/video/cavern-awakening-poster.jpg') center/cover no-repeat; color:#eeeeda; opacity:1; transition:opacity .7s ease; }
+#cavern-intro[hidden] { display:none; }
+#cavern-intro.intro-leaving { opacity:0; pointer-events:none; }
+#intro-video { position:absolute; width:100%; height:100%; object-fit:contain; background:#020e0de8; }
+.intro-vignette { position:absolute; inset:0; pointer-events:none; background:linear-gradient(180deg,#02100d99,transparent 22%,transparent 65%,#020d0bd9); }
+.intro-top { position:absolute; top:max(24px, env(safe-area-inset-top)); left:clamp(18px,4vw,60px); right:clamp(18px,4vw,60px); display:flex; align-items:center; justify-content:space-between; gap:18px; font-size:10px; letter-spacing:.17em; }
+.intro-top i { font-style:normal; opacity:.4; padding:0 12px; }
+#intro-sound, #intro-skip { color:#eff0dc; border:1px solid #bcd2b54d; border-radius:2px; background:#051e18b3; padding:11px 16px; font-family:inherit; font-size:11px; min-height:44px; cursor:pointer; }
+#intro-sound { white-space:nowrap; }
+.intro-caption { position:absolute; left:clamp(22px,6vw,90px); bottom:clamp(110px,15vh,170px); text-shadow:0 2px 20px #000; pointer-events:none; }
+.intro-kicker { color:#aacbb6; font-size:10px; letter-spacing:.32em; }
+.intro-caption h2 { font-family:Georgia,serif; font-weight:400; font-size:clamp(30px,5vw,60px); margin:14px 0; letter-spacing:.02em; }
+.intro-caption p { font-size:12px; color:#cbd8c9; letter-spacing:.06em; }
+#intro-skip { position:absolute; right:clamp(22px,4vw,60px); bottom:max(34px,env(safe-area-inset-bottom)); letter-spacing:.12em; }
+#intro-skip span { padding-left:22px; }
+.intro-progress-track { position:absolute; bottom:0; height:2px; width:100%; background:#a6c8b51a; }
+#intro-progress { width:100%; height:100%; background:#c4dec0; transform:scaleX(0); transform-origin:left; transition:transform .15s linear; box-shadow:0 0 12px #b4ffd2; }
+body.intro-playing #ui-overlay, body.intro-playing #action-stack { visibility:hidden; }
+#intro-skip:focus-visible, #intro-sound:focus-visible, #title-begin-button:focus-visible { outline:2px solid #e1e9ba; outline-offset:5px; }
+@keyframes cavern-breathe { to { opacity:.35; transform:scale(1.05); } }
+@media(max-width:600px) {
+  .intro-top > span { font-size:8px; letter-spacing:.1em; max-width:175px; line-height:1.8; }
+  .intro-top i { padding:0 4px; }
+  .intro-caption { bottom:120px; }
+  .intro-caption h2 { font-size:32px; }
+  #title-screen .title-content { min-height:76dvh; padding-top:8vh; }
+  .title-chapter { font-size:8px; letter-spacing:.22em; }
+}
+@media(prefers-reduced-motion:reduce) { .title-atmosphere { animation:none; } #cavern-intro { transition:none; } }
