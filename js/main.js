@@ -54,6 +54,7 @@ import { BoundaryEnvironment } from './boundaryEnvironment.js?v=6.0';
 import { LakeBiome } from './lakeBiome.js?v=5.3';
 import { SlimeTrailSystem } from './slimeTrail.js?v=7.0';
 import { playCritHitSound } from './soundEffects.js?v=7.9';
+import { AmbientMusicController } from './ambientMusic.js';
 import { calculateAttackDamage } from './combatUtils.js?v=5.3';
 import { PortalController } from './portalController.js?v=8.1';
 
@@ -1203,6 +1204,8 @@ function resetGame() {
   if (DEBUG_APEX || DEBUG_RIVAL || DEBUG_FRAGMENT_CONTEST) console.log('Game reset - new run started');
 }
 
+const ambientMusic = new AmbientMusicController();
+
 const gameFlowController = new GameFlowController({
   uiManager,
   memorySequenceController,
@@ -1210,6 +1213,7 @@ const gameFlowController = new GameFlowController({
   runStats,
   resetGame,
   slimeReady: amoeba.ready,
+  ambientMusic,
 });
 
 // --- Resource Interaction: Inspect -> Acquire ------------------------------------
@@ -1388,6 +1392,7 @@ window.__hollowdrop = {
   memorySequenceController,
   runCompleteController,
   loadingScreenController,
+  ambientMusic,
   resetGame,
   // Convenience read for a future radar/navigation system - the authoritative source is
   // DeathRespawnManager.getLastDeathLocation().

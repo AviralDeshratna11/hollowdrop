@@ -52,12 +52,13 @@ export const GAME_FLOW_CONFIG = {
  * ApexController.startEncounter() rather than owning the encounter itself.
  */
 export class GameFlowController {
-  constructor({ uiManager, memorySequenceController, runCompleteController, runStats, resetGame, slimeReady }) {
+  constructor({ uiManager, memorySequenceController, runCompleteController, runStats, resetGame, slimeReady, ambientMusic }) {
     this.uiManager = uiManager;
     this.memorySequenceController = memorySequenceController;
     this.runCompleteController = runCompleteController;
     this.runStats = runStats;
     this._resetGame = resetGame;
+    this._ambientMusic = ambientMusic;
     // Resolves once the player's real model has loaded (or failed to - it always
     // resolves, see playerSlimeModel.js) - defaults to already-resolved so this class
     // still works if a caller doesn't have a model load to wait on.
@@ -83,6 +84,10 @@ export class GameFlowController {
    *  guaranteed to resolve either way, never hang). */
   _handleBeginTap() {
     if (this.state !== GAME_STATES.TITLE || this._awaitingSlime) return;
+    // Started synchronously here, not after the intro/model-wait promise chain below -
+    // Safari in particular revokes the "user activation" that allows audio-with-sound
+    // once a setTimeout has elapsed, so this has to happen inside the click itself.
+    this._ambientMusic?.start();
     this._awaitingSlime = true;
     this.uiManager.setTitleLoading(true);
     const introFinished = this.intro.play();
