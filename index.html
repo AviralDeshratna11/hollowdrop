@@ -501,6 +501,15 @@
   <div class="intro-progress-track" aria-hidden="true"><div id="intro-progress"></div></div>
 </section>
 
+<section id="portal-cutscene" role="dialog" aria-modal="true" aria-label="Beyond the ancient gateway" hidden>
+  <video id="portal-cutscene-video" playsinline preload="metadata" src="assets/video/sector7-preview.mp4"></video>
+  <div class="intro-vignette" aria-hidden="true"></div>
+  <div class="intro-top"><span>SECTOR-7 RUINS <i> / </i> EXPEDITION PREVIEW</span><button id="cutscene-sound" type="button" aria-pressed="true">Sound on</button></div>
+  <div class="intro-caption"><span class="intro-kicker">EPILOGUE</span><h2>Beyond the Ancient Gateway</h2><p>The living colony surges into deep uncharted frontiers…</p></div>
+  <button id="cutscene-skip" type="button">Continue to Results <span aria-hidden="true">→</span></button>
+  <div class="intro-progress-track" aria-hidden="true"><div id="cutscene-progress"></div></div>
+</section>
+
 <!-- Memory Reveal: shown once, ~0.6s after the Human Genome Fragment is secured (see
      MemorySequenceController / GameFlowController.onGenomeFragmentSecured). Content is
      PLACEHOLDER NARRATIVE (see memorySequenceController.js's MEMORY_01) - final story
@@ -548,6 +557,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=8.2"></script>
+<script type="module" src="js/main.js?v=8.3"></script>
 </body>
 </html>
