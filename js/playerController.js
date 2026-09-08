@@ -352,7 +352,18 @@ export class PlayerController {
     const px = this.mesh.position.x;
     const pz = this.mesh.position.z;
     const baseRadius = this._baseScale ? this._baseScale.y * 0.6 : 0.6;
-    const groundY = getTerrainHeight(px, pz);
+    let groundY = getTerrainHeight(px, pz);
+
+    // Support player slime on top of the solid portal dais / approach stairs
+    let onPortalPlatform = false;
+    if (this.portalProvider?.getPlatformHeight) {
+      const portalHeight = this.portalProvider.getPlatformHeight(px, pz);
+      if (portalHeight !== null && portalHeight > groundY) {
+        groundY = portalHeight;
+        onPortalPlatform = true;
+      }
+    }
+
     let targetY = groundY + baseRadius;
 
     if (isPointInLake(px, pz)) {
@@ -389,6 +400,12 @@ export class PlayerController {
       const buoyancy = Math.max(0, 1.0 - (this._load / 0.35));
       tiltX *= (1.0 - waterFactor * buoyancy * 0.85);
       tiltZ *= (1.0 - waterFactor * buoyancy * 0.85);
+    }
+
+    // When standing on the level stone portal dais, dampen slope tilt so slime sits flat
+    if (onPortalPlatform) {
+      tiltX *= 0.1;
+      tiltZ *= 0.1;
     }
 
     this._slopeTiltX = tiltX;

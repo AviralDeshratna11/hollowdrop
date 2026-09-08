@@ -668,6 +668,10 @@ export function createBiomePortalVisual() {
       { x: 2.0, z: -1.0, radius: 1.4 },
       { x: 0.0, z: -2.4, radius: 2.0 },
       { x: 0.0, z: -1.3, radius: 1.5 },
+
+      // 5. Portal archway base & central gateway threshold:
+      // Firmly stops the player at the arch threshold and prevents penetrating or shifting downwards
+      { x: 0.0, z: -0.2, radius: 1.2 },
     ],
   };
 
