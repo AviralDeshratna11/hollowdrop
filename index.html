@@ -80,8 +80,10 @@
       el.textContent += msg + '\n\n';
     }
     window.addEventListener('error', function (e) {
-      var detail = e.error && e.error.stack ? e.error.stack : (e.message || 'Unknown error');
-      showError('ERROR: ' + detail + '\n  at ' + (e.filename || '?') + ':' + e.lineno + ':' + e.colno);
+      var err = e.error;
+      var errMsg = err ? (err.name ? err.name + ': ' + (err.message || '') : (err.message || String(err))) : (e.message || 'Unknown error');
+      var stack = (err && err.stack) ? ('\n' + err.stack) : '';
+      showError('ERROR: ' + errMsg + stack + '\n  at ' + (e.filename || '?') + ':' + e.lineno + ':' + e.colno);
     });
     window.addEventListener('unhandledrejection', function (e) {
       var reason = e.reason && e.reason.stack ? e.reason.stack : e.reason;
@@ -182,6 +184,15 @@
   <div id="consume-action">
     <span id="consume-action-name"></span>
     <button id="consume-action-button" type="button">Consume</button>
+  </div>
+
+  <div id="portal-action" class="portal-action">
+    <div class="portal-action-glow" aria-hidden="true"></div>
+    <span id="portal-action-title">ANCIENT GATEWAY</span>
+    <button id="portal-action-button" type="button">
+      <span class="portal-action-icon" aria-hidden="true">❖</span>
+      <span id="portal-action-text">Go to Next Biome</span>
+    </button>
   </div>
 
   <div id="debug-recipe-panel"></div>
@@ -335,6 +346,7 @@
     <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--dna"></span>DNA</div>
     <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--genome"></span>Genome Fragment</div>
     <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--rival"></span>Rival</div>
+    <div class="radar-legend-row"><span class="radar-legend-icon radar-legend-icon--portal"></span>Gateway</div>
   </div>
 </div>
 
@@ -536,6 +548,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=7.8"></script>
+<script type="module" src="js/main.js?v=7.9"></script>
 </body>
 </html>

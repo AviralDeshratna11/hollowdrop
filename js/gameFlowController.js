@@ -1,4 +1,4 @@
-import { resetRunStats } from './runStats.js?v=5.3';
+import { resetRunStats } from './runStats.js?v=7.9';
 import { IntroSequence } from './introSequence.js';
 
 export const GAME_STATES = {
@@ -115,6 +115,23 @@ export class GameFlowController {
     this.runStats.genomeFragmentsSecured += 1;
     this.state = GAME_STATES.MEMORY; // freezes gameplay THIS frame - see main.js's isPlayingState gate
     this._memoryDelayTimer = GAME_FLOW_CONFIG.memoryTransitionDelay;
+  }
+
+  /**
+   * Authoritative entry point for completing the run via the Biome Portal (prototype ending).
+   */
+  endRun({ biomeCompleted = 'Subterranean Cavern', nextBiome = 'Sector-7 Ruins', portalEntered = true } = {}) {
+    if (this._runEndingStarted) return;
+    this._runEndingStarted = true;
+    this.runStats.portalEntered = portalEntered;
+    this.runStats.biomeCleared = biomeCompleted;
+    this.runStats.nextBiome = nextBiome;
+    if (this.runStats.genomeFragmentsSecured === 0 && this.runStats.rivalDefeated) {
+      this.runStats.genomeFragmentsSecured = 1;
+    }
+
+    this.uiManager.setScreenFade?.(0);
+    this._showResults();
   }
 
   _showResults() {

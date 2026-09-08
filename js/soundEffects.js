@@ -806,4 +806,172 @@ export function playCritHitSound() {
   chimeOsc.stop(t + 0.22);
 }
 
+/**
+ * Deep cosmic energy awakening swell when the portal unlocks.
+ */
+export function playPortalAwakenSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  // Deep resonant bass drone rising
+  const bass = ctx.createOscillator();
+  const bassGain = ctx.createGain();
+  bass.type = 'sawtooth';
+  bass.frequency.setValueAtTime(55, t);
+  bass.frequency.exponentialRampToValueAtTime(110, t + 1.2);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(120, t);
+  filter.frequency.exponentialRampToValueAtTime(600, t + 1.0);
+
+  bassGain.gain.setValueAtTime(0.01, t);
+  bassGain.gain.linearRampToValueAtTime(0.35, t + 0.5);
+  bassGain.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+
+  bass.connect(filter);
+  filter.connect(bassGain);
+  bassGain.connect(ctx.destination);
+  bass.start(t);
+  bass.stop(t + 1.8);
+
+  // Ethereal high singing overtone
+  const shimmer = ctx.createOscillator();
+  const shimmerGain = ctx.createGain();
+  shimmer.type = 'sine';
+  shimmer.frequency.setValueAtTime(440, t + 0.2);
+  shimmer.frequency.exponentialRampToValueAtTime(880, t + 1.5);
+
+  shimmerGain.gain.setValueAtTime(0.01, t + 0.2);
+  shimmerGain.gain.linearRampToValueAtTime(0.2, t + 0.8);
+  shimmerGain.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+
+  shimmer.connect(shimmerGain);
+  shimmerGain.connect(ctx.destination);
+  shimmer.start(t + 0.2);
+  shimmer.stop(t + 2.0);
+}
+
+/**
+ * Crystalline harmonic chime as runes ignite sequentially.
+ */
+export function playPortalRuneLightSound(runeIndex = 0) {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  // Musical pentatonic scale for sequential runes
+  const frequencies = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51];
+  const freq = frequencies[runeIndex % frequencies.length];
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, t);
+  osc.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.15);
+
+  gain.gain.setValueAtTime(0.22, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + 0.35);
+}
+
+/**
+ * Powerful dimensional suction / warp transition sound.
+ */
+export function playPortalEnterSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  // Whoosh suction noise
+  const noise = ctx.createBufferSource();
+  noise.buffer = createNoiseBuffer(ctx, 1.6);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(300, t);
+  filter.frequency.exponentialRampToValueAtTime(3200, t + 1.2);
+  filter.Q.setValueAtTime(4.0, t);
+
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.1, t);
+  noiseGain.gain.linearRampToValueAtTime(0.4, t + 0.8);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
+
+  noise.connect(filter);
+  filter.connect(noiseGain);
+  noiseGain.connect(ctx.destination);
+  noise.start(t);
+
+  // Sub bass warp drop
+  const sub = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(150, t);
+  sub.frequency.exponentialRampToValueAtTime(30, t + 1.4);
+
+  subGain.gain.setValueAtTime(0.35, t);
+  subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+
+  sub.connect(subGain);
+  subGain.connect(ctx.destination);
+  sub.start(t);
+  sub.stop(t + 1.5);
+}
+
+/**
+ * Dull stone thud when interacting with dormant portal.
+ */
+export function playPortalDormantClickSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(90, t);
+  osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+
+  gain.gain.setValueAtTime(0.2, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + 0.12);
+}
+
+/**
+ * Resonant crystalline chime when the Ancient Gateway is discovered for the first time.
+ */
+export function playPortalDiscoveredSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  const freqs = [330, 495, 660];
+  freqs.forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t + idx * 0.08);
+
+    const delay = idx * 0.08;
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.linearRampToValueAtTime(0.18 / (idx + 1), t + delay + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + delay + 1.6);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t + delay);
+    osc.stop(t + delay + 1.6);
+  });
+}
+
+
 
