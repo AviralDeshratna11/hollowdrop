@@ -445,15 +445,27 @@ export class ProjectileSystem {
       const hit = this._hitCheck(p);
       if (hit) {
         const { damage, isCrit } = calculateAttackDamage(PROJECTILE_CONFIG.damage, true);
-        hit.takeDamage(damage, {
+        const hitResult = hit.takeDamage(damage, {
           sourceEntity: this.playerController,
           sourceType: 'player',
           attackType: 'thrown_rock',
+          isProjectile: true,
           knockbackForce: PROJECTILE_CONFIG.knockbackForce,
           isCrit,
         });
+
+        const isImmune = Boolean(hitResult && typeof hitResult === 'object' && (hitResult.immune || hitResult.damage === 0));
+        const wasApplied = (typeof hitResult === 'boolean')
+          ? hitResult
+          : Boolean(hitResult && hitResult.applied !== false && (hitResult.damage ?? damage) > 0);
+        const actualDamage = (hitResult && typeof hitResult === 'object' && typeof hitResult.damage === 'number')
+          ? hitResult.damage
+          : damage;
+
         playImpactSound();
-        this.onHit?.(hit, damage, isCrit, p.mesh.position);
+        if (wasApplied && !isImmune && actualDamage > 0) {
+          this.onHit?.(hit, actualDamage, isCrit, p.mesh.position);
+        }
         this.onImpact?.(p.mesh.position, true);
         this._destroy(i);
         continue;
