@@ -8,7 +8,7 @@ import { InputController } from './inputController.js?v=5.3';
 import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
 import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js?v=5.3';
 import { ResourceManager } from './resourceManager.js?v=5.3';
-import { UIManager } from './uiManager.js?v=5.5';
+import { UIManager } from './uiManager.js?v=7.9';
 import { InventoryUI } from './inventoryUI.js?v=5.3';
 import { InventoryInteractionController } from './inventoryInteraction.js?v=5.3';
 import { InventoryWheelController } from './inventoryWheel.js?v=5.3';
@@ -33,18 +33,18 @@ import { GenomeFragmentController, FRAGMENT_STATES } from './genomeFragmentContr
 import { RivalController, DEBUG_RIVAL } from './rivalController.js?v=5.3';
 import { FragmentContestManager, DEBUG_FRAGMENT_CONTEST } from './fragmentContestManager.js?v=5.3';
 import { ObjectiveIndicatorController } from './objectiveIndicator.js?v=5.3';
-import { createRunStats } from './runStats.js?v=5.3';
+import { createRunStats } from './runStats.js?v=7.9';
 import { MemorySequenceController } from './memorySequenceController.js?v=5.3';
 import { RunCompleteController } from './runCompleteController.js?v=5.3';
-import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=5.3';
+import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=7.9';
 import { scatterWorldDressing, rockColliderRadius, realignDressingToTerrain } from './worldDressing.js?v=5.3';
 import { CollisionSystem } from './collision.js?v=5.3';
 import { updateSlimeCreatures } from './slimeCreature.js?v=5.3';
 import { TutorialController } from './tutorialController.js?v=5.5';
 import { ScreenShake } from './screenShake.js?v=5.3';
 import { DamageNumberController } from './damageNumbers.js?v=5.3';
-import { RadarController } from './radarController.js?v=5.3';
-import { RadarHUD } from './radarHUD.js?v=5.3';
+import { RadarController } from './radarController.js?v=7.9';
+import { RadarHUD } from './radarHUD.js?v=7.9';
 import { getTerrainHeight, applyTerrainElevation, initTerrainHeightmap, onTerrainElevationReady, LAKE_CONFIG, GROUND_SIZE, GROUND_ATLAS_URL, GROUND_HEIGHTMAP_URL } from './terrain.js?v=5.4';
 import { StoneClusterManager } from './stoneClusters.js?v=5.3';
 import { createVastCanopyTree } from './treeModel.js?v=5.3';
@@ -53,8 +53,9 @@ import { LoadingScreenController } from './loadingScreenController.js?v=5.3';
 import { BoundaryEnvironment } from './boundaryEnvironment.js?v=6.0';
 import { LakeBiome } from './lakeBiome.js?v=5.3';
 import { SlimeTrailSystem } from './slimeTrail.js?v=7.0';
-import { playCritHitSound } from './soundEffects.js?v=5.3';
+import { playCritHitSound } from './soundEffects.js?v=7.9';
 import { calculateAttackDamage } from './combatUtils.js?v=5.3';
+import { PortalController } from './portalController.js?v=7.9';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -466,6 +467,10 @@ const rivalController = new RivalController({
   onSpawned: () => {
     runStats.rivalEncountered = true;
   },
+  onDefeated: () => {
+    runStats.rivalDefeated = true;
+    portalController.unlock();
+  },
 });
 genomeFragmentController.rivalController = rivalController;
 
@@ -526,6 +531,7 @@ const mapExclusions = [
   { x: tree1Trunk.x, z: tree1Trunk.z, radius: 1.8 },
   { x: tree2Trunk.x, z: tree2Trunk.z, radius: 1.8 },
   { x: LAKE_CONFIG.center.x, z: LAKE_CONFIG.center.z, radius: 17.0 },
+  { x: 33.0, z: 2.0, radius: 5.5 }, // Biome Portal site clearance
 ];
 
 const worldDressingResult = scatterWorldDressing(scene, {
@@ -569,6 +575,52 @@ for (const c of boundaryEnvironment.getColliders()) {
   collisionSystem.addStatic(c.x, c.z, c.radius);
 }
 
+// --- Biome Portal (Unlocked upon Rival defeat) --------------------------------
+const portalController = new PortalController({
+  scene,
+  playerController,
+  uiManager,
+  collisionSystem,
+  resourceManager,
+  config: {
+    position: { x: 33.0, z: 2.0 },
+    facingAngle: -Math.PI / 2,
+    destinationBiomeId: 'sector7_ruins',
+    destinationSpawnPosition: { x: 0, y: 0.6, z: 0 },
+  },
+  onBiomeTransition: ({ fromBiomeId, toBiomeId }) => {
+    if (DEBUG_RIVAL) console.log(`[Portal] Transition: ${fromBiomeId} -> ${toBiomeId}`);
+    if (gameFlowController && typeof gameFlowController.endRun === 'function') {
+      gameFlowController.endRun({
+        biomeCompleted: 'Subterranean Cavern',
+        nextBiome: 'Sector-7 Ruins',
+        portalEntered: true,
+      });
+    } else if (gameFlowController && typeof gameFlowController._showResults === 'function') {
+      if (runStats) {
+        runStats.portalEntered = true;
+        runStats.biomeCleared = 'Subterranean Cavern';
+        runStats.nextBiome = 'Sector-7 Ruins';
+      }
+      uiManager?.setScreenFade?.(0);
+      gameFlowController._showResults();
+    } else if (uiManager && typeof uiManager.showRunComplete === 'function') {
+      uiManager.setScreenFade?.(0);
+      uiManager.showRunComplete({
+        portalEntered: true,
+        biomeCleared: 'Subterranean Cavern',
+        nextBiome: 'Sector-7 Ruins',
+        genomeFragmentsSecured: 1,
+        rivalDefeated: true,
+        runTimeFormatted: '00:00',
+        preyDefeated: 0,
+        predatorsDefeated: 0,
+        apexDefeated: 0,
+      }, () => window.location.reload());
+    }
+  },
+});
+
 function populateClearingResources() {
   // Place these after static obstacles exist, so colonies remain reachable.
   for (const clearing of CAVE_CLEARINGS) {
@@ -607,6 +659,7 @@ onTerrainElevationReady(() => {
   realignDressingToTerrain();
   boundaryEnvironment.realignToTerrain();
   lakeBiome.realignToTerrain();
+  portalController.realignToTerrain();
 });
 
 const tempColliderPos = new THREE.Vector3();
@@ -638,9 +691,16 @@ const radarController = new RadarController({
   rivalController,
   genomeFragmentController,
   resourceManager,
+  portalController,
 });
 const radarHUD = new RadarHUD(radarController, {
   onApexSignal: () => uiManager.showRadarSignal('APEX SIGNAL'),
+  onPortalSignal: () => {
+    if (portalController && !portalController.isDiscovered()) {
+      portalController._discovered = true;
+      uiManager.showPortalDiscovered?.('Ancient Gateway Located — Marked on Radar');
+    }
+  },
 });
 
 // --- Combat Controller ---------------------------------------------------------
@@ -982,6 +1042,14 @@ window.addEventListener('keydown', (e) => {
       preyManager.spawnGlowBeetle(player.position.clone().add(new THREE.Vector3(2, 0, 2)));
     }
   }
+  if (e.key === 'e' || e.key === 'E') {
+    if (portalController && portalController.state === 'ACTIVE') {
+      const dist = portalController._getHorizontalDistanceToPlayer();
+      if (dist <= portalController.config.interactionRadius) {
+        portalController.enterPortal();
+      }
+    }
+  }
 });
 
 if (DEBUG_PREDATOR_COMBAT) {
@@ -1018,6 +1086,14 @@ if (DEBUG_RIVAL) {
       rivalController.takeDamage(calculateAttackDamage(20, true).damage, { sourceEntity: playerController, sourceType: 'debug', attackType: 'debug' });
     }
     if (e.key === 'o' || e.key === 'O') rivalController.debugForceSeekFragment();
+    if (e.key === 'u' || e.key === 'U') {
+      console.log('[DEBUG] Force unlocking Biome Portal');
+      portalController.unlock();
+    }
+    if (e.key === 'y' || e.key === 'Y') {
+      console.log('[DEBUG] Force entering Biome Portal');
+      portalController.enterPortal();
+    }
   });
 }
 
@@ -1087,6 +1163,7 @@ function resetGame() {
   apexEncounterManager.reset();
 
   rivalController.reset();
+  portalController.reset();
 
   genomeFragmentController.reset();
   fragmentContestManager.reset();
@@ -1270,6 +1347,7 @@ window.__hollowdrop = {
   apexEncounterManager,
   genomeFragmentController,
   rivalController,
+  portalController,
   fragmentContestManager,
   objectiveIndicator,
   radarController,
@@ -1423,6 +1501,7 @@ function animate() {
     apexController.update(deltaTime);
     genomeFragmentController.update(deltaTime);
     rivalController.update(deltaTime);
+    portalController.update(deltaTime);
     fragmentContestManager.update(deltaTime);
     predatorController.update(deltaTime);
 

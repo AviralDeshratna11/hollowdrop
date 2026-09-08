@@ -1,4 +1,4 @@
-import { RADAR_TARGET_TYPES } from './radarController.js?v=5.3';
+import { RADAR_TARGET_TYPES } from './radarController.js?v=7.9';
 
 // One simple, single-color line-art icon per target type (spec section 60 - "no emoji,
 // stylistically consistent"). fill/stroke both use currentColor so each blip's own CSS
@@ -15,6 +15,7 @@ const BLIP_ICONS = {
   // Same bag silhouette as the inventory-toggle button (index.html) - the dropped-cargo
   // marker reads as "your bag is over there".
   [RADAR_TARGET_TYPES.DEATH_DROP]: '<svg viewBox="0 0 24 24"><path d="M8.5 8 L9.5 4 A2.5 2.5 0 0 1 14.5 4 L15.5 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 8 H18 L16.7 18.5 A2.6 2.6 0 0 1 14.1 21 H9.9 A2.6 2.6 0 0 1 7.3 18.5 Z" fill="currentColor"/></svg>',
+  [RADAR_TARGET_TYPES.PORTAL]: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/><path d="M12 1v3.5M12 19.5V23M1 12h3.5M19.5 12H23M4.2 4.2l2.5 2.5M17.3 17.3l2.5 2.5M4.2 19.8l2.5-2.5M17.3 6.7l2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
 };
 
 const NEAREST_LABELS = {
@@ -24,6 +25,7 @@ const NEAREST_LABELS = {
   [RADAR_TARGET_TYPES.GENOME]: 'GENOME',
   [RADAR_TARGET_TYPES.RIVAL]: 'RIVAL',
   [RADAR_TARGET_TYPES.DEATH_DROP]: 'CARGO',
+  [RADAR_TARGET_TYPES.PORTAL]: 'GATEWAY',
 };
 
 const BLIP_LERP_RATE = 12; // matches this project's usual 1 - exp(-rate * dt) smoothing idiom
@@ -40,9 +42,10 @@ const PING_ANIMATION_MS = 900; // fallback removal if 'animationend' is ever mis
  * player movement/Bite/inventory - see _attachInteraction).
  */
 export class RadarHUD {
-  constructor(radarController, { onApexSignal } = {}) {
+  constructor(radarController, { onApexSignal, onPortalSignal } = {}) {
     this.radarController = radarController;
     this.onApexSignal = onApexSignal;
+    this.onPortalSignal = onPortalSignal;
 
     this.root = document.getElementById('species-radar');
     this.display = document.getElementById('radar-display');
@@ -59,6 +62,7 @@ export class RadarHUD {
     this._radiusPx = 1;
     this._blipPool = new Map(); // id -> { el, x, y, targetX, targetY, type }
     this._hasShownApexSignal = false;
+    this._hasShownPortalSignal = false;
 
     // One-time fill for the compact mini-legend's badges (index.html) - the SAME icon
     // svg each matching blip uses, so "what's that dot" and "what's in the legend"
@@ -88,6 +92,7 @@ export class RadarHUD {
     for (const entry of this._blipPool.values()) entry.el.remove();
     this._blipPool.clear();
     this._hasShownApexSignal = false;
+    this._hasShownPortalSignal = false;
     if (this.nearestEl) this.nearestEl.textContent = '';
     if (this.beam) this.beam.style.opacity = '0';
     if (this.playerMarker) this.playerMarker.style.transform = 'rotate(0rad)';
@@ -127,6 +132,11 @@ export class RadarHUD {
       if (blip.type === RADAR_TARGET_TYPES.BOSS && blip.firstDetection && !this._hasShownApexSignal) {
         this._hasShownApexSignal = true;
         this.onApexSignal?.();
+      }
+
+      if (blip.type === RADAR_TARGET_TYPES.PORTAL && blip.firstDetection && !this._hasShownPortalSignal) {
+        this._hasShownPortalSignal = true;
+        this.onPortalSignal?.();
       }
     }
 

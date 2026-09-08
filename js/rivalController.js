@@ -124,7 +124,7 @@ function playRivalEscapeWarning() {}
  * currently holds the Fragment or how it got there.
  */
 export class RivalController {
-  constructor({ scene, arenaCenter, arenaRadius, escapeTarget, playerController, playerHealth, resourceManager, genomeFragmentController, uiManager, onSpawned }) {
+  constructor({ scene, arenaCenter, arenaRadius, escapeTarget, playerController, playerHealth, resourceManager, genomeFragmentController, uiManager, onSpawned, onDefeated }) {
     this.scene = scene;
     this.arenaCenter = arenaCenter.clone();
     this.arenaRadius = arenaRadius;
@@ -136,6 +136,7 @@ export class RivalController {
     this.genomeFragmentController = genomeFragmentController;
     this.uiManager = uiManager;
     this.onSpawned = onSpawned; // optional - fires once per _spawn(), e.g. for run-stats tracking
+    this.onDefeated = onDefeated; // optional - fires once death animation completes and loot drops
     this.entityType = 'rival';
     this.fragmentContestManager = null; // set post-construction (main.js) - only used for onRivalEscapeSuccess()
 
@@ -776,6 +777,7 @@ export class RivalController {
     if (t >= 1 && this.mesh.visible) {
       this._dropLoot();
       this.mesh.visible = false;
+      this.onDefeated?.();
     }
   }
 

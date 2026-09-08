@@ -1085,6 +1085,31 @@ html, body {
   border: 1px solid rgba(159, 216, 255, 0.65);
 }
 
+.radar-blip--portal .radar-blip-inner {
+  color: var(--radar-cyan, #46f7ff);
+  width: 20px;
+  height: 20px;
+  top: -10px;
+  left: -10px;
+  background: radial-gradient(circle at 34% 30%, rgba(70, 247, 255, 0.45), rgba(70, 247, 255, 0.12) 70%);
+  border: 1px solid rgba(70, 247, 255, 0.85);
+  animation-duration: 1.6s;
+}
+
+.radar-blip--portal .radar-blip-inner::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(70, 247, 255, 0.6);
+  animation: radar-portal-spin 8s linear infinite;
+}
+
+@keyframes radar-portal-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Edge-clamped (boss/genome/rival past detectionRadius, spec section 23) reads
    slightly brighter - it's still communicating real direction, just at a distance. */
 .radar-blip--clamped .radar-blip-inner {
@@ -1221,6 +1246,7 @@ html, body {
 .radar-legend-icon--dna { background: var(--radar-dna); }
 .radar-legend-icon--genome { background: var(--radar-genome); }
 .radar-legend-icon--rival { background: var(--radar-rival); }
+.radar-legend-icon--portal { background: var(--radar-cyan, #46f7ff); box-shadow: 0 0 6px rgba(70, 247, 255, 0.6); }
 
 /* ==========================================================================
    Title / Memory Reveal / Run Complete
@@ -1746,6 +1772,15 @@ html, body {
   border-color: var(--memory-glow);
 }
 
+#pickup-notification.notification--portal {
+  color: var(--radar-cyan, #46f7ff);
+  border-color: rgba(70, 247, 255, 0.6);
+  background: rgba(4, 20, 24, 0.88);
+  box-shadow: 0 0 16px rgba(70, 247, 255, 0.35);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
 /* Consume action: a tiny contextual button that appears at the tapped item's own
    screen position (set inline via JS each frame it's visible). Positioned by its
    center so left/top can be the item's own point without extra offset math. */
@@ -1801,6 +1836,88 @@ html, body {
 
 #consume-action-button:active {
   background: var(--accent-dim);
+}
+
+/* Biome Portal Action Prompt */
+#portal-action {
+  position: fixed;
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px 12px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(10, 26, 25, 0.92) 0%, rgba(5, 16, 15, 0.96) 100%);
+  border: 1.5px solid rgba(56, 239, 223, 0.55);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 239, 223, 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#portal-action.portal-action--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.portal-action-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 22px;
+  background: radial-gradient(circle at 50% 0%, rgba(56, 239, 223, 0.2), transparent 70%);
+  pointer-events: none;
+}
+
+#portal-action-title {
+  font-family: var(--font-display, inherit);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(56, 239, 223, 0.6);
+}
+
+#portal-action-button {
+  min-height: 46px;
+  padding: 8px 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  border-radius: var(--radius-pill, 9999px);
+  background: linear-gradient(135deg, #38efdf 0%, #15b8cb 100%);
+  color: #081a17;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(28, 214, 232, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 0.12s ease, filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+#portal-action-button:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 16px rgba(28, 214, 232, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transform: scale(1.02);
+}
+
+#portal-action-button:active {
+  transform: scale(0.97);
+  filter: brightness(0.95);
+}
+
+.portal-action-icon {
+  font-size: 14px;
+  color: #062b25;
 }
 
 /* Inventory toggle button (bottom-right, always visible during gameplay) */

@@ -50,6 +50,11 @@ export class UIManager {
     // remains the sole owner of this element's content/positioning/candidate state.
     this.consumeActionEl = document.getElementById('consume-action');
 
+    this.portalActionEl = document.getElementById('portal-action');
+    this.portalActionButton = document.getElementById('portal-action-button');
+    this.portalActionText = document.getElementById('portal-action-text');
+    this._portalActionHandler = null;
+
     this.mutateButton = document.getElementById('mutate-button');
     this.debugRecipePanel = document.getElementById('debug-recipe-panel');
 
@@ -457,6 +462,11 @@ export class UIManager {
    *  re-enabled the next time this is called. */
   showRunComplete(stats, onPlayAgain) {
     if (!this.runCompleteOverlay) return;
+    const headingEl = this.runCompleteOverlay.querySelector('.run-complete-heading');
+    if (headingEl) {
+      headingEl.textContent = stats.portalEntered ? 'BIOME CONQUERED' : 'RUN COMPLETE';
+    }
+
     if (this.runCompleteStatsEl) this.runCompleteStatsEl.innerHTML = this._buildRunCompleteStatsHtml(stats);
     this.runCompleteOverlay.classList.add('run-complete-overlay--visible');
     if (this.runCompletePlayAgainButton) {
@@ -474,16 +484,24 @@ export class UIManager {
 
   hideRunComplete() {
     this.runCompleteOverlay?.classList.remove('run-complete-overlay--visible');
+    const headingEl = this.runCompleteOverlay?.querySelector('.run-complete-heading');
+    if (headingEl) {
+      headingEl.textContent = 'RUN COMPLETE';
+    }
   }
 
   _buildRunCompleteStatsHtml(stats) {
-    const rows = [
-      ['Human Genome Fragment', stats.genomeFragmentsSecured > 0 ? 'SECURED' : 'Not Secured'],
-    ];
+    const rows = [];
+    if (stats.portalEntered) {
+      rows.push(['Biome Cleared', stats.biomeCleared || 'Subterranean Cavern']);
+      rows.push(['Gateway', 'Sector-7 Ruins (Prototype End)']);
+    }
+    rows.push(['Human Genome Fragment', stats.genomeFragmentsSecured > 0 ? 'SECURED' : 'Not Secured']);
     if (stats.venomRatDiscovered) rows.push(['Mutation Discovered', 'VENOM RAT']);
     rows.push(['Prey Hunted', String(stats.preyDefeated)]);
     rows.push(['Predators Defeated', String(stats.predatorsDefeated)]);
     if (stats.apexDefeated > 0) rows.push(['Apex Defeated', 'MURKMAW']);
+    if (stats.rivalDefeated) rows.push(['Rival Form', 'CONQUERED']);
     rows.push(['Run Time', stats.runTimeFormatted]);
 
     return rows
@@ -510,6 +528,8 @@ export class UIManager {
     this._notificationActive = false;
     this.notification?.classList.remove('notification--visible');
     this.consumeActionEl?.classList.remove('consume-action--visible');
+    this.hidePortalPrompt();
+    this.hidePortalDormantHint();
     this.debugRecipePanel?.classList.remove('debug-recipe-panel--visible');
     this.hideMutationReady();
     this.hideRevertReady();
@@ -742,4 +762,58 @@ export class UIManager {
       this._notificationTimeout = setTimeout(() => this._drainNotificationQueue(), NOTIFICATION_GAP_MS);
     }, next.duration);
   }
+
+  /** Shows the portal interaction prompt when player is within proximity of the active portal. */
+  showPortalPrompt(text = 'Enter Next Biome', onClick = null) {
+    if (!this.portalActionEl || !this.portalActionButton) return;
+    if (this.portalActionText) this.portalActionText.textContent = text;
+
+    if (this._portalActionHandler) {
+      this.portalActionButton.removeEventListener('click', this._portalActionHandler);
+      this._portalActionHandler = null;
+    }
+
+    if (onClick) {
+      this._portalActionHandler = (e) => {
+        e.stopPropagation();
+        onClick();
+      };
+      this.portalActionButton.addEventListener('click', this._portalActionHandler);
+    }
+
+    this.portalActionEl.classList.add('portal-action--visible');
+  }
+
+  /** Hides the portal interaction prompt. */
+  hidePortalPrompt() {
+    if (!this.portalActionEl) return;
+    this.portalActionEl.classList.remove('portal-action--visible');
+    if (this._portalActionHandler && this.portalActionButton) {
+      this.portalActionButton.removeEventListener('click', this._portalActionHandler);
+      this._portalActionHandler = null;
+    }
+  }
+
+  /** Minimal diegetic feedback hint when approaching a locked portal. */
+  showPortalDormantHint(text = 'Ancient Gateway — Sealed by a fierce presence.') {
+    this._showNotification(text, 'notification--hint', 2500);
+  }
+
+  hidePortalDormantHint() {}
+
+  /** Discovery notification banner the first time player approaches portal. */
+  showPortalDiscovered(text = 'Ancient Gateway Discovered — Marked on Radar') {
+    this._showNotification(`❖ ${text}`, 'notification--portal', 4000);
+  }
+
+  /** Major progression notification banner upon portal awakening. */
+  showPortalAwakenedBanner(text = 'Ancient Gateway Awakened') {
+    this._showNotification(`❖ ${text}`, 'notification--pickup', 3500);
+  }
+
+  /** Banner upon entering next biome. */
+  showBiomeArrivalBanner(text = 'Entering Deep Abyss') {
+    this._showNotification(`✦ ${text}`, 'notification--hint', 4000);
+  }
 }
+
