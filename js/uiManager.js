@@ -140,16 +140,23 @@ export class UIManager {
   showThrowButton(onThrow) {
     if (!this.throwButton) return;
     this.throwButton.classList.add('throw-button--visible');
-    this.throwButton.onclick = (e) => {
+    let lastTriggerTime = 0;
+    const handleThrow = (e) => {
       e.preventDefault();
       e.stopPropagation(); // a tap here must never fall through to movement/inventory gestures
+      const now = performance.now();
+      if (now - lastTriggerTime < 120) return;
+      lastTriggerTime = now;
       onThrow();
     };
+    this.throwButton.onpointerdown = handleThrow;
+    this.throwButton.onclick = handleThrow;
   }
 
   hideThrowButton() {
     if (!this.throwButton) return;
     this.throwButton.classList.remove('throw-button--visible', 'throw-button--cooldown', 'throw-button--empty');
+    this.throwButton.onpointerdown = null;
     this.throwButton.onclick = null;
   }
 

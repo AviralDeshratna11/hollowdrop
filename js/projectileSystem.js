@@ -95,13 +95,14 @@ function playImpactSound() {}
  * they keep flying independently once released.
  */
 export class ProjectileSystem {
-  constructor({ scene, camera, playerController, inventoryManager, damageableSources, uiManager }) {
+  constructor({ scene, camera, playerController, inventoryManager, damageableSources, uiManager, portalProvider = null }) {
     this.scene = scene;
     this.camera = camera;
     this.playerController = playerController;
     this.inventoryManager = inventoryManager;
     this.damageableSources = damageableSources;
     this.uiManager = uiManager;
+    this.portalProvider = portalProvider;
 
     this.projectiles = [];
     this._cooldownTimer = 0;
@@ -128,6 +129,17 @@ export class ProjectileSystem {
     this.onHit = null;     // (entity, damage, worldPosition)
     this.onFired = null;   // (item)
     this.onImpact = null;  // (worldPosition, hitSomething)
+  }
+
+  _getGroundHeight(x, z) {
+    let groundY = getTerrainHeight(x, z);
+    if (this.portalProvider?.getPlatformHeight) {
+      const portalHeight = this.portalProvider.getPlatformHeight(x, z);
+      if (portalHeight !== null && portalHeight > groundY) {
+        groundY = portalHeight;
+      }
+    }
+    return groundY;
   }
 
   /** Flat ring on the ground under the target. World-space rather than a projected DOM
@@ -288,7 +300,7 @@ export class ProjectileSystem {
       // inside any raised ground, which is exactly where a boss fight tends to happen.
       this._reticle.position.set(
         target.mesh.position.x,
-        getTerrainHeight(target.mesh.position.x, target.mesh.position.z) + 0.08,
+        this._getGroundHeight(target.mesh.position.x, target.mesh.position.z) + 0.08,
         target.mesh.position.z
       );
       const locked = target === this._lockedTarget;
@@ -374,18 +386,34 @@ export class ProjectileSystem {
       this._solveAimPoint(target, this.playerController.mesh.position, tempAim);
       tempForward.copy(tempAim).sub(this.playerController.mesh.position);
       tempForward.y = 0;
-      if (tempForward.lengthSq() < 1e-6) this.playerController.getForwardDirection(tempForward);
-      else tempForward.normalize();
+      if (tempForward.lengthSq() < 1e-6) {
+        if (this.playerController?.targetVelocity && this.playerController.targetVelocity.lengthSq() > 1e-4) {
+          tempForward.copy(this.playerController.targetVelocity).normalize();
+        } else if (this.playerController?.currentVelocity && this.playerController.currentVelocity.lengthSq() > 1e-4) {
+          tempForward.copy(this.playerController.currentVelocity).normalize();
+        } else {
+          this.playerController.getForwardDirection(tempForward);
+        }
+      } else {
+        tempForward.normalize();
+      }
     } else {
-      // Nothing acquired - fall back to throwing where the body faces, so the button is
-      // never dead just because the area happens to be empty.
-      this.playerController.getForwardDirection(tempForward);
+      // Nothing acquired - prioritize current movement direction so throwing while moving feels natural and responsive,
+      // falling back to facing direction if stationary.
+      if (this.playerController?.targetVelocity && this.playerController.targetVelocity.lengthSq() > 1e-4) {
+        tempForward.copy(this.playerController.targetVelocity).normalize();
+      } else if (this.playerController?.currentVelocity && this.playerController.currentVelocity.lengthSq() > 1e-4) {
+        tempForward.copy(this.playerController.currentVelocity).normalize();
+      } else {
+        this.playerController.getForwardDirection(tempForward);
+      }
     }
 
     // Spend it FIRST. removeItem() subtracts the weight, so the burden lifts on the
     // press rather than on impact - the player feels lighter the instant they throw,
     // which is what makes this read as "dumping ballast" and not just "an attack".
     this.inventoryManager.removeItem(item.id);
+    this.uiManager?.updateMassUI?.(this.inventoryManager.getInventoryWeight(), this.inventoryManager.maxWeight);
     this._cooldownTimer = PROJECTILE_CONFIG.cooldown;
 
     const mesh = createResourceMesh(type, config.color);
@@ -396,7 +424,7 @@ export class ProjectileSystem {
     // Height is relative to the ground beneath, not absolute: the cavern floor has real
     // elevation (see terrain.js), so a fixed world Y put rocks underground wherever the
     // player was standing on high ground - which is most of the map.
-    mesh.position.y = getTerrainHeight(mesh.position.x, mesh.position.z) + PROJECTILE_CONFIG.spawnHeight;
+    mesh.position.y = this._getGroundHeight(mesh.position.x, mesh.position.z) + PROJECTILE_CONFIG.spawnHeight;
     this.scene.add(mesh);
 
     this.projectiles.push({
@@ -438,7 +466,7 @@ export class ProjectileSystem {
       // Re-seat on the terrain every frame rather than flying a flat line, so a rock
       // thrown across a rise stays visible over it instead of disappearing into it. The
       // hit check below is XZ-only, so this is purely how the throw reads.
-      p.mesh.position.y = getTerrainHeight(p.mesh.position.x, p.mesh.position.z) + PROJECTILE_CONFIG.spawnHeight;
+      p.mesh.position.y = this._getGroundHeight(p.mesh.position.x, p.mesh.position.z) + PROJECTILE_CONFIG.spawnHeight;
       p.mesh.rotateOnAxis(p.spinAxis, PROJECTILE_CONFIG.spinSpeed * deltaTime);
       p.travelled += step;
 

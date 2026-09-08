@@ -360,13 +360,6 @@ function buildInstances(scene, rocks, plants = [], { rockColor, plantBodyColor, 
  * every load.
  */
 export function buildArenaDressing(scene, center, radius, rng = makeRng(0x4a11)) {
-  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x140a1c, roughness: 1, transparent: true, opacity: 0.55 });
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(radius * 1.15, 32), groundMaterial);
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(center.x, getTerrainHeight(center.x, center.z) + 0.01, center.z);
-  scene.add(ground);
-  registeredGroundPlanes.push({ mesh: ground, center });
-
   const rocks = [];
   const rockCount = 6;
   for (let i = 0; i < rockCount; i++) {

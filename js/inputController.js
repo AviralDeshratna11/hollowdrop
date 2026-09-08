@@ -19,10 +19,15 @@ export class InputController {
     this.currentX = 0;
     this.currentY = 0;
     this._gestureGuard = null;
+    this.onSecondaryAction = null;
+    this._keys = new Set();
 
     this._onPointerDown = this._onPointerDown.bind(this);
     this._onPointerMove = this._onPointerMove.bind(this);
     this._onPointerEnd = this._onPointerEnd.bind(this);
+    this._onKeyDown = this._onKeyDown.bind(this);
+    this._onKeyUp = this._onKeyUp.bind(this);
+    this._onWindowBlur = this._onWindowBlur.bind(this);
 
     domElement.addEventListener('pointerdown', this._onPointerDown, { passive: false });
     domElement.addEventListener('pointermove', this._onPointerMove, { passive: false });
@@ -30,6 +35,25 @@ export class InputController {
     domElement.addEventListener('pointercancel', this._onPointerEnd, { passive: false });
     domElement.addEventListener('pointerleave', this._onPointerEnd, { passive: false });
     domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+    window.addEventListener('blur', this._onWindowBlur);
+  }
+
+  _onKeyDown(e) {
+    if (typeof document !== 'undefined' && document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      this._keys.add(e.code);
+    }
+  }
+
+  _onKeyUp(e) {
+    this._keys.delete(e.code);
+  }
+
+  _onWindowBlur() {
+    this._keys.clear();
   }
 
   /**
@@ -41,6 +65,14 @@ export class InputController {
   }
 
   _onPointerDown(e) {
+    // Secondary click (right click on mouse) triggers secondary action without disrupting movement
+    if (e.pointerType === 'mouse' && e.button !== 0) {
+      if (e.button === 2) {
+        this.onSecondaryAction?.(e);
+      }
+      return;
+    }
+
     // Only one active pointer controls movement at a time.
     if (this.activePointerId !== null) return;
     if (this._gestureGuard && this._gestureGuard(e)) return;
@@ -67,6 +99,10 @@ export class InputController {
 
   _onPointerEnd(e) {
     if (e.pointerId !== this.activePointerId) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) {
+      // Releasing a non-primary mouse button (e.g. right click throw) should not stop active left-drag movement
+      return;
+    }
     e.preventDefault();
     this.isDragging = false;
     this.activePointerId = null;
@@ -77,6 +113,7 @@ export class InputController {
   cancel() {
     this.isDragging = false;
     this.activePointerId = null;
+    this._keys.clear();
     this._hideJoystick();
   }
 
@@ -107,11 +144,30 @@ export class InputController {
   }
 
   /**
-   * Returns the current swipe as a normalized direction + 0..1 magnitude.
+   * Returns the current input as a normalized direction + 0..1 magnitude.
    * Screen-space dx/dy map directly to world x/z (see main.js), so:
    *   swipe right -> x > 0, swipe down -> y > 0
+   * Keyboard WASD / Arrow keys take priority when pressed.
    */
   getMovementInput() {
+    // 1. Check keyboard WASD / Arrow keys input first
+    let kx = 0;
+    let ky = 0;
+    if (this._keys.has('KeyW') || this._keys.has('ArrowUp')) ky -= 1;
+    if (this._keys.has('KeyS') || this._keys.has('ArrowDown')) ky += 1;
+    if (this._keys.has('KeyA') || this._keys.has('ArrowLeft')) kx -= 1;
+    if (this._keys.has('KeyD') || this._keys.has('ArrowRight')) kx += 1;
+
+    if (kx !== 0 || ky !== 0) {
+      const len = Math.hypot(kx, ky);
+      return {
+        x: kx / len,
+        y: ky / len,
+        magnitude: 1.0,
+      };
+    }
+
+    // 2. Fall back to pointer/touch drag input
     if (!this.isDragging) {
       return { x: 0, y: 0, magnitude: 0 };
     }
@@ -141,5 +197,8 @@ export class InputController {
     this.domElement.removeEventListener('pointerup', this._onPointerEnd);
     this.domElement.removeEventListener('pointercancel', this._onPointerEnd);
     this.domElement.removeEventListener('pointerleave', this._onPointerEnd);
+    window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('keyup', this._onKeyUp);
+    window.removeEventListener('blur', this._onWindowBlur);
   }
 }

@@ -4,11 +4,11 @@ import { createPaintedGroundMaterial } from './paintedGround.js';
 import { createTerrainOutcrops } from './terrainOutcrops.js';
 import { CAVE_CLEARINGS } from './caveLayout.js';
 import { LANDMARK_SITES, createCaveLandmarks } from './caveLandmarks.js';
-import { InputController } from './inputController.js?v=5.3';
-import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=5.3';
+import { InputController } from './inputController.js?v=8.2';
+import { PlayerController, PLAYER_MAX_SPEED } from './playerController.js?v=8.1';
 import { InventoryManager, MAX_WEIGHT } from './inventoryManager.js?v=5.3';
 import { ResourceManager } from './resourceManager.js?v=5.3';
-import { UIManager } from './uiManager.js?v=7.9';
+import { UIManager } from './uiManager.js?v=8.2';
 import { InventoryUI } from './inventoryUI.js?v=5.3';
 import { InventoryInteractionController } from './inventoryInteraction.js?v=5.3';
 import { InventoryWheelController } from './inventoryWheel.js?v=5.3';
@@ -26,9 +26,9 @@ import { createPlayerSlimeVisual } from './playerSlimeModel.js?v=5.3';
 import { PreyManager, DEBUG_PREY } from './preyManager.js?v=5.3';
 import { PlayerCombatController, DEBUG_COMBAT } from './playerCombatController.js?v=5.3';
 import { CombatVFXSystem } from './combatVFX.js?v=5.3';
-import { ProjectileSystem } from './projectileSystem.js?v=8.0';
+import { ProjectileSystem } from './projectileSystem.js?v=8.2';
 import { ApexController, DEBUG_APEX, APEX_CONFIG } from './apexController.js?v=8.0';
-import { ApexEncounterManager } from './apexEncounterManager.js?v=5.3';
+import { ApexEncounterManager } from './apexEncounterManager.js?v=8.0';
 import { GenomeFragmentController, FRAGMENT_STATES } from './genomeFragmentController.js?v=5.3';
 import { RivalController, DEBUG_RIVAL } from './rivalController.js?v=5.3';
 import { FragmentContestManager, DEBUG_FRAGMENT_CONTEST } from './fragmentContestManager.js?v=5.3';
@@ -37,7 +37,7 @@ import { createRunStats } from './runStats.js?v=7.9';
 import { MemorySequenceController } from './memorySequenceController.js?v=5.3';
 import { RunCompleteController } from './runCompleteController.js?v=5.3';
 import { GameFlowController, GAME_STATES } from './gameFlowController.js?v=7.9';
-import { scatterWorldDressing, rockColliderRadius, realignDressingToTerrain } from './worldDressing.js?v=5.3';
+import { scatterWorldDressing, rockColliderRadius, realignDressingToTerrain } from './worldDressing.js?v=8.0';
 import { CollisionSystem } from './collision.js?v=5.3';
 import { updateSlimeCreatures } from './slimeCreature.js?v=5.3';
 import { TutorialController } from './tutorialController.js?v=5.5';
@@ -55,7 +55,7 @@ import { LakeBiome } from './lakeBiome.js?v=5.3';
 import { SlimeTrailSystem } from './slimeTrail.js?v=7.0';
 import { playCritHitSound } from './soundEffects.js?v=7.9';
 import { calculateAttackDamage } from './combatUtils.js?v=5.3';
-import { PortalController } from './portalController.js?v=7.9';
+import { PortalController } from './portalController.js?v=8.1';
 
 const canvas = document.getElementById('game-canvas');
 
@@ -764,6 +764,7 @@ const projectileSystem = new ProjectileSystem({
   inventoryManager,
   damageableSources: [preyManager, predatorController, apexController, rivalController],
   uiManager,
+  portalProvider: portalController,
 });
 
 predatorController.aimPriority = 1;
@@ -783,6 +784,8 @@ projectileSystem.onImpact = (position, hitSomething) => {
   screenShake.add(0.14);
 };
 projectileSystem.onFired = () => {
+  uiManager.updateMassUI(inventoryManager.getInventoryWeight(), inventoryManager.maxWeight);
+  inventoryUI?.refresh?.();
   mutationSystem.onInventoryChanged();
 };
 
@@ -1040,10 +1043,13 @@ if (DEBUG_MUTATION_TIMER) {
 window.addEventListener('keydown', (e) => {
   if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   if (portalController?.isTransitioning?.()) return;
-  if (e.code === 'Space' || e.key === 'q' || e.key === 'Q') {
+  if (e.code === 'Space' || e.key === 'q' || e.key === 'Q' || e.key === 'f' || e.key === 'F') {
     if (playerFormController.currentForm === PLAYER_FORMS.VENOM_RAT) {
       e.preventDefault();
       playerCombatController.tryPoisonExpel();
+    } else if (playerFormController.currentForm === PLAYER_FORMS.SLIME) {
+      e.preventDefault();
+      projectileSystem.fire();
     }
   }
   if (DEBUG_COMBAT || DEBUG_PREY) {
@@ -1238,6 +1244,17 @@ const tutorialController = new TutorialController({
   projectileSystem,
   radarController,
 });
+
+inputController.onSecondaryAction = () => {
+  const isPortalTransitioning = portalController?.isTransitioning?.() ?? false;
+  const canAct = gameFlowController.state === GAME_STATES.PLAYING &&
+    deathRespawnManager.isPlaying &&
+    !playerFormController.isLocked &&
+    !isPortalTransitioning;
+  if (canAct && playerFormController.currentForm === PLAYER_FORMS.SLIME) {
+    projectileSystem.fire();
+  }
+};
 
 {
   const previousOnAbsorbed = resourceManager.onAbsorbed;

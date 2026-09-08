@@ -551,27 +551,27 @@ html, body {
   50% { transform: scale(1.35); color: var(--white); }
 }
 
-/* Boss HUD: a dedicated, more prominent bar for the Apex encounter - stacked directly
-   below the Mutation Timer (same centered stacking idiom), hidden until
-   ApexController.startEncounter() reveals it. A slightly bolder border/wider bar than
-   the mutation timer so it reads as "this is a bigger deal" without a different layout. */
+/* Boss HUD: a dedicated, prominent bar for the Apex encounter anchored at the
+   bottom of the screen, hidden until ApexController.startEncounter() reveals it. */
 #boss-health-ui {
-  position: absolute;
-  top: calc(max(14px, env(safe-area-inset-top)) + 184px);
+  position: fixed;
+  bottom: max(20px, calc(env(safe-area-inset-bottom) + 16px));
   left: 50%;
-  z-index: 15;
+  z-index: 25;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 8px 20px;
+  gap: 6px;
+  padding: 8px 24px 10px;
   border-radius: 14px;
   background: var(--surface-boss);
   border: 1px solid var(--glow-energy-critical);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(176, 92, 255, 0.15);
   backdrop-filter: blur(var(--blur-hud));
+  -webkit-backdrop-filter: blur(var(--blur-hud));
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, -6px);
+  transform: translate(-50%, 12px);
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
@@ -583,16 +583,18 @@ html, body {
 #boss-health-name {
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--warning-pale);
+  text-shadow: 0 0 8px rgba(255, 148, 61, 0.4);
 }
 
 .boss-health-bar {
-  width: 180px;
-  height: 9px;
+  width: clamp(220px, 36vw, 340px);
+  height: 10px;
   border-radius: var(--radius-pill);
   background: rgb(var(--white-rgb) / 0.12);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
@@ -602,6 +604,7 @@ html, body {
   transform: scaleX(1);
   transform-origin: left center;
   background: linear-gradient(90deg, var(--warning-hot), var(--danger-hot));
+  box-shadow: 0 0 8px rgba(255, 42, 75, 0.5);
 }
 
 /* Rival escape channel: stacked below the boss HUD (same centered idiom), hidden
@@ -2190,6 +2193,9 @@ html, body {
   justify-content: center;
   box-sizing: border-box;
   cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
   opacity: 0;
   transform: scale(0.85);
   pointer-events: none;

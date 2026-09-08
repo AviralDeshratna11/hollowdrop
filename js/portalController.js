@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createBiomePortalVisual } from './portalModel.js?v=7.9';
+import { createBiomePortalVisual } from './portalModel.js?v=8.1';
 import { getTerrainHeight } from './terrain.js?v=5.4';
 import {
   playPortalAwakenSound,
@@ -76,6 +76,11 @@ export class PortalController {
     this.mesh.rotation.y = this.config.facingAngle;
     this.scene.add(this.mesh);
 
+    // Link elevation support to player controller so slime stands supported on portal base
+    if (this.playerController) {
+      this.playerController.portalProvider = this;
+    }
+
     this._registerColliders();
   }
 
@@ -104,7 +109,7 @@ export class PortalController {
   _registerColliders() {
     if (!this.collisionSystem || this._collidersRegistered) return;
 
-    // Static pillars, buttresses, and back-stop wall
+    // Static pillars, buttresses, rear wall, and portal base threshold collider
     for (const c of this.getColliders()) {
       if (!this.collisionSystem.staticColliders.some((sc) => Math.hypot(sc.x - c.x, sc.z - c.z) < 0.05)) {
         this.collisionSystem.addStatic(c.x, c.z, c.radius);
@@ -112,19 +117,63 @@ export class PortalController {
     }
 
     // Dynamic closed-door collider: while the portal is LOCKED or ACTIVATING,
-    // the central doorway / stone seal is 100% solid, preventing the player
-    // from walking through the closed gateway.
+    // the central doorway / stone seal is 100% solid. Radius 1.2 matches
+    // the arch doorway opening without protruding onto the approach stairs.
     this.collisionSystem.addDynamicProvider(() => {
       if (!this.mesh || !this.mesh.visible) return null;
       if (this.state === PORTAL_STATES.LOCKED || this.state === PORTAL_STATES.ACTIVATING) {
         return [
-          { x: this.mesh.position.x, z: this.mesh.position.z, radius: 1.85 },
+          { x: this.mesh.position.x, z: this.mesh.position.z, radius: 1.2 },
         ];
       }
       return null;
     });
 
     this._collidersRegistered = true;
+  }
+
+  /**
+   * Computes the vertical elevation of the raised stone portal base/dais and approach stairs
+   * at a given world (x, z) coordinate. Returns null if outside the portal platform.
+   */
+  getPlatformHeight(worldX, worldZ) {
+    if (!this.mesh || !this.mesh.visible) return null;
+
+    const rad = this.mesh.rotation.y;
+    const dx = worldX - this.mesh.position.x;
+    const dz = worldZ - this.mesh.position.z;
+    const cos = Math.cos(-rad);
+    const sin = Math.sin(-rad);
+    const localX = dx * cos + dz * sin;
+    const localZ = -dx * sin + dz * cos;
+
+    const distToCenter = Math.hypot(localX, localZ);
+
+    // 1. Approach stairs leading up onto the stone platform (localX within [-1.6, 1.6])
+    if (Math.abs(localX) <= 1.6 && localZ >= 0.55 && localZ <= 3.7) {
+      if (localZ <= 1.65) {
+        // Tier 3: Upper threshold step
+        return this.mesh.position.y + 0.41;
+      } else if (localZ <= 2.65) {
+        // Tier 2: Middle stone step
+        return this.mesh.position.y + 0.23;
+      } else {
+        // Tier 1: Lowest broad entrance step
+        const t = (3.7 - localZ) / (3.7 - 2.65);
+        return this.mesh.position.y + 0.02 + t * 0.12;
+      }
+    }
+
+    // 2. Upper dais stone landing (circular top where arch pillars stand)
+    if (distToCenter <= 3.6) {
+      if (distToCenter > 3.2) {
+        const edgeT = (3.6 - distToCenter) / 0.4;
+        return this.mesh.position.y + 0.405 * edgeT;
+      }
+      return this.mesh.position.y + 0.405;
+    }
+
+    return null;
   }
 
   /**
@@ -527,6 +576,9 @@ export class PortalController {
    * Safe cleanup of Three.js objects and textures.
    */
   destroy() {
+    if (this.playerController && this.playerController.portalProvider === this) {
+      this.playerController.portalProvider = null;
+    }
     if (this.mesh && this.mesh.parent) {
       this.mesh.parent.remove(this.mesh);
     }
