@@ -8,23 +8,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="theme-color" content="#0a1410" />
-<link rel="stylesheet" href="style.css?v=8.0" />
+<link rel="stylesheet" href="style.css?v=8.1" />
 <!-- Preload title/opening screen background artwork so it paints immediately on first frame
      alongside the static #title-screen markup, preventing any visual pop or fetch delay. -->
 <link rel="preload" href="assets/ui/title_screen_bg.jpg" as="image" />
-<!-- Unbounded: display font for #title-screen's own heading only (.title-name in
-     style.css) - every other typeface in the game is self-hosted from fonts/ (see the
-     @font-face rules at the top of style.css), but this one comes from Google Fonts instead of
-     joining them there. That's a deliberate exception, not an oversight: the game
-     already depends on jsdelivr for the entire Three.js engine and GLTFLoader's import
-     chain below, so one more CDN font is a small addition next to that, and
-     font-display: swap (part of Google's stylesheet) means a slow/failed fetch just
-     shows the fallback in --font-ui/system-ui until/if it arrives - never a broken or
-     blank title, unlike the raster-background approach the inventory panel's own
-     comments describe trying and dropping for exactly that failure mode. -->
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700&display=swap" rel="stylesheet" />
 <!-- Must precede the modulepreload hints below: a module preload that itself resolves
      a bare specifier (GLTFLoader.js does `import * as THREE from 'three'`) needs the
      importmap already registered in the document, or the browser can't resolve "three"
@@ -457,11 +444,8 @@
      them completely - no extra JS/state wiring needed for that. -->
 <div id="title-screen" class="title-screen--visible">
   <div class="title-atmosphere" aria-hidden="true"></div>
-  <p class="title-chapter">BENEATH THE FORGOTTEN WORLD</p>
   <div class="title-content">
     <h1 class="title-name">HOLLOWDROP</h1>
-    <p class="title-subtitle">The Living Colony</p>
-    <p class="title-tagline">Absorb. Adapt. Survive.</p>
 
     <!-- Visible by default (hidden is only ever set by LoadingScreenController, and
          only AFTER the ring has visibly filled to 100% - see that file's completion
