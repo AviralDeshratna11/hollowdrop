@@ -1,10 +1,12 @@
 import { resetRunStats } from './runStats.js?v=7.9';
 import { IntroSequence } from './introSequence.js';
+import { EndingCutscene } from './endingCutscene.js?v=8.3';
 
 export const GAME_STATES = {
   TITLE: 'title',
   PLAYING: 'playing',
   MEMORY: 'memory',
+  CUTSCENE: 'cutscene',
   // A transformation reveal. Separate from MEMORY rather than reusing it so the two can
   // never fight over the same state: MEMORY belongs to the run's ending and hands off to
   // RUN_COMPLETE, whereas a REVEAL always returns to PLAYING.
@@ -62,6 +64,7 @@ export class GameFlowController {
     this._slimeReady = slimeReady ?? Promise.resolve();
     this._awaitingSlime = false;
     this.intro = new IntroSequence();
+    this.endingCutscene = new EndingCutscene();
 
     this.state = GAME_STATES.TITLE;
     this._runEndingStarted = false;
@@ -130,8 +133,13 @@ export class GameFlowController {
       this.runStats.genomeFragmentsSecured = 1;
     }
 
+    this.state = GAME_STATES.CUTSCENE;
     this.uiManager.setScreenFade?.(0);
-    this._showResults();
+
+    const cutscenePromise = this.endingCutscene?.play?.() ?? Promise.resolve();
+    cutscenePromise.then(() => {
+      this._showResults();
+    });
   }
 
   _showResults() {

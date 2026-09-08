@@ -3835,4 +3835,83 @@ body.intro-playing #ui-overlay, body.intro-playing #action-stack { visibility:hi
   #title-screen .title-content { min-height:76dvh; padding-top:8vh; }
   .title-chapter { font-size:8px; letter-spacing:.22em; }
 }
-@media(prefers-reduced-motion:reduce) { .title-atmosphere { animation:none; } #cavern-intro { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .title-atmosphere { animation:none; } #cavern-intro, #portal-cutscene { transition:none; } }
+
+/* Post-Portal Ending Cutscene: cinematic preview of Sector-7 Ruins and future gameplay */
+#portal-cutscene {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  background: #020e0d;
+  color: #eeeeda;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.65s ease;
+}
+#portal-cutscene.cutscene-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+#portal-cutscene.cutscene-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+#portal-cutscene[hidden] {
+  display: none;
+}
+#portal-cutscene-video {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #020e0de8;
+}
+#cutscene-sound, #cutscene-skip {
+  color: #eff0dc;
+  border: 1px solid #bcd2b54d;
+  border-radius: 2px;
+  background: #051e18b3;
+  padding: 11px 16px;
+  font-family: inherit;
+  font-size: 11px;
+  min-height: 44px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+#cutscene-sound:hover, #cutscene-skip:hover {
+  background: #082d24d9;
+  border-color: #8de8b3;
+}
+#cutscene-sound {
+  white-space: nowrap;
+}
+#cutscene-skip {
+  position: absolute;
+  right: clamp(22px, 4vw, 60px);
+  bottom: max(34px, env(safe-area-inset-bottom));
+  letter-spacing: 0.12em;
+}
+#cutscene-skip span {
+  padding-left: 14px;
+}
+#cutscene-progress {
+  width: 100%;
+  height: 100%;
+  background: #8de8b3;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.15s linear;
+  box-shadow: 0 0 12px #8de8b3;
+}
+body.cutscene-playing #ui-layer,
+body.cutscene-playing #action-stack,
+body.cutscene-playing #screen-fade {
+  visibility: hidden;
+}
+#cutscene-skip:focus-visible, #cutscene-sound:focus-visible {
+  outline: 2px solid #8de8b3;
+  outline-offset: 5px;
+}
